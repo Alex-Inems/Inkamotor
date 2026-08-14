@@ -130,7 +130,21 @@ export async function syncImapInbox(limit = 40): Promise<{ synced: number }> {
           },
           { onConflict: "message_id" },
         );
-        if (!error) synced += 1;
+        if (!error) {
+          synced += 1;
+          // Anyone who emails the inbox is added to the newsletter list
+          void import("@/lib/brevo")
+            .then(({ upsertSubscriber }) =>
+              upsertSubscriber({
+                email: fromEmail,
+                name: from?.name || parsed?.from?.value?.[0]?.name || null,
+                source: "inbox",
+              }),
+            )
+            .catch(() => {
+              /* don't fail IMAP sync if list update fails */
+            });
+        }
       }
     } finally {
       lock.release();

@@ -60,6 +60,16 @@ export async function POST(request: Request) {
       page: String(body.page ?? body.path ?? "/"),
       channel: "contact_form",
     });
+
+    // Also add form contacts to the newsletter subscriber list
+    void import("@/lib/brevo")
+      .then(({ upsertSubscriber }) =>
+        upsertSubscriber({ email, name, source: "website_form" }),
+      )
+      .catch(() => {
+        /* ignore */
+      });
+
     return Response.json({ ok: true, id });
   } catch (err) {
     return jsonError(502, {
