@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { AnalyticsOverviewCharts } from "@/components/ad-analytics";
-import { BarChart, ConversionFunnel, DonutChart, LineChart } from "@/components/charts";
+import { BarChart, DonutChart, LineChart } from "@/components/charts";
 import { EmptyHint, KpiCard, PageHeader, Panel, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import {
   getDashboardStats,
   invoiceTotal,
-  summarizeCampaigns,
   type Lead,
   type Sale,
 } from "@/lib/demo-data";
@@ -119,7 +117,6 @@ export default function OverviewPage() {
   const money = (n: number, compact = true) =>
     formatMoney(n, "USD", compact, locale);
   const num = (n: number, compact = false) => formatNumber(n, compact, locale);
-  const adAll = summarizeCampaigns(metaCampaigns);
   const recentLeads = [...leads]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
@@ -256,13 +253,13 @@ export default function OverviewPage() {
             hint={t("overview.openFollowUpsHint", { n: stats.openFollowUps })}
           />
         </Link>
-        <KpiCard
-          label={t("overview.metaAds")}
-          value={money(stats.metaSpend)}
-          hint={t("overview.active", {
-            n: metaCampaigns.filter((c) => c.status === "active").length,
-          })}
-        />
+        <Link href="/newsletter" className="block">
+          <KpiCard
+            label="Newsletters"
+            value={num(newsletters.length)}
+            hint="Brevo campaigns"
+          />
+        </Link>
         <KpiCard
           label={t("overview.outstanding")}
           value={money(stats.outstanding)}
@@ -313,54 +310,23 @@ export default function OverviewPage() {
         )}
         <Panel title="Quick links">
           <div className="flex flex-col gap-2 text-sm">
-            <Link href="/analytics" className="text-sand hover:text-gold">
-              Live Search Console analytics
+            <Link href="/inbox" className="text-sand hover:text-gold">
+              Inbox & Namecheap mailbox sync
+            </Link>
+            <Link href="/newsletter" className="text-sand hover:text-gold">
+              Newsletter (Brevo)
+            </Link>
+            <Link href="/invoices" className="text-sand hover:text-gold">
+              Invoices (email via Brevo)
             </Link>
             <Link href="/setup" className="text-sand hover:text-gold">
               Env / integration setup
-            </Link>
-            <Link href="/inbox" className="text-sand hover:text-gold">
-              Inbox & mailbox sync
             </Link>
           </div>
         </Panel>
       </div>
 
-      {metaCampaigns.length > 0 ? (
-        <div className="mt-6">
-          <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <h2 className="font-display text-lg font-bold">
-                {t("overview.paidMedia")}
-              </h2>
-              <p className="text-sm text-mute">
-                {t("overview.paidMediaMeta", {
-                  impressions: num(adAll.impressions, true),
-                  clicks: num(adAll.clicks, true),
-                  conversions: adAll.conversions,
-                  ctr: formatPercent(adAll.ctr, 2),
-                  cvr: formatPercent(adAll.cvr, 2),
-                })}
-              </p>
-            </div>
-            <Link
-              href="/analytics"
-              className="text-xs font-semibold text-sand hover:text-gold"
-            >
-              {t("overview.openAnalytics")}
-            </Link>
-          </div>
-          <div className="space-y-4">
-            <ConversionFunnel
-              title={t("overview.allFunnel")}
-              impressions={adAll.impressions}
-              clicks={adAll.clicks}
-              conversions={adAll.conversions}
-            />
-            <AnalyticsOverviewCharts meta={metaCampaigns} />
-          </div>
-        </div>
-      ) : null}
+      {/* Paid media / Meta charts paused until Meta + Google env are ready */}
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <Panel

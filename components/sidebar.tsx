@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { InkamotoLogo } from "@/components/brand";
 import { currentUser, currentWorkspace } from "@/lib/session";
 import { useT } from "@/lib/i18n";
@@ -29,6 +30,32 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const t = useT();
+  const [hiddenNav, setHiddenNav] = useState<string[]>([
+    "/analytics",
+    "/search-console",
+    "/ads/meta",
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/features")
+      .then((r) => r.json())
+      .then((json: { hiddenNav?: string[] }) => {
+        if (!cancelled) setHiddenNav(json.hiddenNav ?? []);
+      })
+      .catch(() => {
+        /* keep safe defaults */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const visibleNav = useMemo(
+    () => nav.filter((item) => !hiddenNav.includes(item.href)),
+    [hiddenNav],
+  );
+
   return (
     <aside
       id="app-nav"
@@ -67,7 +94,7 @@ export function Sidebar({
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
-        {nav.map((item) => {
+        {visibleNav.map((item) => {
           const active =
             item.href === "/"
               ? pathname === "/"

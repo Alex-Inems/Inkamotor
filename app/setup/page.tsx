@@ -4,7 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { btnSecondary } from "@/components/modal";
 import { EmptyHint, PageHeader, Panel, StatusBadge } from "@/components/ui";
 
-type IntegrationStatus = { ready: boolean; missing: string[] };
+type IntegrationStatus = {
+  ready: boolean;
+  paused?: boolean;
+  missing: string[];
+};
 
 type SetupResponse = {
   status: Record<string, IntegrationStatus>;
@@ -28,16 +32,27 @@ const GUIDES: Record<
     after: "Paste supabase/schema.sql in SQL Editor → Run once.",
   },
   googleSearchConsole: {
-    title: "Google Search Console",
+    title: "Google Search Console (paused)",
     where:
-      "console.cloud.google.com → enable Search Console API → OAuth client → OAuth Playground refresh token",
+      "Paused until env is filled. console.cloud.google.com → Search Console API → OAuth + refresh token",
     keys: [
       "GOOGLE_CLIENT_ID",
       "GOOGLE_CLIENT_SECRET",
       "GOOGLE_REFRESH_TOKEN",
       "GSC_SITE_URL",
     ],
-    after: 'Scope: webmasters.readonly · GSC_SITE_URL=sc-domain:inkamototours.com',
+    after: "Hidden from nav while paused. Scope: webmasters.readonly",
+  },
+  metaAds: {
+    title: "Meta Ads (paused)",
+    where: "No Meta ad account under Business yet — left paused on purpose.",
+    keys: [
+      "META_APP_ID",
+      "META_APP_SECRET",
+      "META_ACCESS_TOKEN",
+      "META_AD_ACCOUNT_ID",
+    ],
+    after: "Hidden from nav until Meta is wired.",
   },
   brevo: {
     title: "Brevo (mail + newsletter)",
@@ -122,12 +137,15 @@ export default function SetupPage() {
             {Object.entries(GUIDES).map(([key, guide]) => {
               const st = data.status[key];
               const ready = st?.ready ?? false;
+              const paused = st?.paused ?? !ready;
               return (
                 <Panel key={key}>
                   <div className="flex items-start justify-between gap-3">
                     <h2 className="font-display text-lg text-ink">{guide.title}</h2>
-                    <StatusBadge tone={ready ? "success" : "warning"}>
-                      {ready ? "Ready" : "Needs env"}
+                    <StatusBadge
+                      tone={ready ? "success" : paused ? "warning" : "warning"}
+                    >
+                      {ready ? "Ready" : "Paused"}
                     </StatusBadge>
                   </div>
                   <p className="mt-2 text-sm text-mute">{guide.where}</p>
