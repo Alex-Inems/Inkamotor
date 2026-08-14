@@ -1,26 +1,225 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* inkamototours.com brand tokens */
+  --canvas: #1c1b19;
+  --panel: #252422;
+  --ink: #f7f4ee;
+  --mute: #b8b3a8;
+  --line: #3a3834;
+  --ash: #161616;
+  --accent: #31595d;
+  --accent-deep: #244246;
+  --accent-soft: #2a3f42;
+  --pink: #e1736c;
+  --pink-deep: #c45d57;
+  --gold: #ecbb5a;
+  --sand: #d0ad74;
+  --cream: #f4e5c1;
+  --purple: #624e8a;
+  --wine: #9f2627;
+  --green: #65814f;
+  --sale: #9f2627;
+  --background: var(--canvas);
+  --foreground: var(--ink);
 }
 
 @theme inline {
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-line: var(--line);
+  --color-ash: var(--ash);
+  --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-accent-soft: var(--accent-soft);
+  --color-pink: var(--pink);
+  --color-pink-deep: var(--pink-deep);
+  --color-gold: var(--gold);
+  --color-sand: var(--sand);
+  --color-cream: var(--cream);
+  --color-purple: var(--purple);
+  --color-wine: var(--wine);
+  --color-green: var(--green);
+  --color-sale: var(--sale);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-staatliches);
+  --font-sans: var(--font-inria);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
+  scroll-behavior: smooth;
+  overflow-x: clip;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inria), "Inria Sans", Arial, sans-serif;
+  overflow-x: clip;
+  touch-action: manipulation;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+input,
+select,
+textarea,
+button {
+  max-width: 100%;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--gold) 35%, transparent);
+  color: var(--ash);
+}
+
+.color-stripe {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  height: 6px;
+  width: 100%;
+}
+
+.color-stripe span:nth-child(1) {
+  background: #31595d;
+}
+.color-stripe span:nth-child(2) {
+  background: #e1736c;
+}
+.color-stripe span:nth-child(3) {
+  background: #624e8a;
+}
+.color-stripe span:nth-child(4) {
+  background: #ecbb5a;
+}
+.color-stripe span:nth-child(5) {
+  background: #9f2627;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+}
+
+.data-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.data-table th {
+  padding: 0.75rem 1rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mute);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent) 18%, var(--panel));
+}
+
+.shadow-xl {
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.shadow-lg {
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+}
+
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .data-table {
+    min-width: 480px;
+    font-size: 0.8125rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.7rem 0.75rem;
+  }
+}
+
+.invoice-sheet {
+  width: 210mm;
+  min-height: 297mm;
+  max-width: 100%;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm;
+  }
+
+  body.printing-invoice {
+    background: #fff !important;
+  }
+
+  body.printing-invoice * {
+    visibility: hidden;
+  }
+
+  body.printing-invoice .invoice-sheet,
+  body.printing-invoice .invoice-sheet * {
+    visibility: visible;
+  }
+
+  body.printing-invoice .invoice-sheet {
+    position: absolute;
+    inset: 0;
+    width: 210mm;
+    min-height: auto;
+    box-shadow: none;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
+
+@keyframes login-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.login-modal-enter {
+  animation: login-in 0.45s ease-out;
 }
