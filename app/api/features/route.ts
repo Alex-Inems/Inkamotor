@@ -9,13 +9,8 @@ export async function GET() {
 
   return Response.json({
     features: byId,
-    /** Routes to hide from nav while paused / missing env */
-    hiddenNav: [
-      ...(byId.googleSearchConsole?.paused
-        ? ["/search-console", "/analytics"]
-        : []),
-      ...(byId.metaAds?.paused ? ["/ads/meta"] : []),
-    ],
-    hint: "Paused features stay hidden until their env vars are filled.",
+    /** Always hide Google / Meta routes — no env required for those. */
+    hiddenNav: ["/search-console", "/analytics", "/ads/meta"],
+    hint: "Google + Meta are paused. Only Supabase / Brevo / IMAP / webhook are checked.",
   });
 }

@@ -1,42 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { PausedFeature } from "@/components/paused-feature";
-import AnalyticsLivePage from "./analytics-live";
 
+/** Analytics / Google — paused. Live UI kept in analytics-live.tsx (not mounted). */
 export default function AnalyticsPage() {
-  const [paused, setPaused] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    fetch("/api/features")
-      .then((r) => r.json())
-      .then(
-        (json: {
-          features?: { googleSearchConsole?: { paused?: boolean } };
-        }) => {
-          setPaused(Boolean(json.features?.googleSearchConsole?.paused));
-        },
-      )
-      .catch(() => setPaused(true));
-  }, []);
-
-  if (paused === null) {
-    return (
-      <PausedFeature
-        title="Analytics"
-        description="Checking integration status…"
-      />
-    );
-  }
-
-  if (paused) {
-    return (
-      <PausedFeature
-        title="Analytics"
-        description="Google Search Console analytics are paused until Google env vars are added."
-      />
-    );
-  }
-
-  return <AnalyticsLivePage />;
+  return (
+    <PausedFeature
+      title="Analytics"
+      description="Google and Meta analytics are commented out for now — no Google or Meta env required."
+    />
+  );
 }
+
+// import { useEffect, useState } from "react";
+// import AnalyticsLivePage from "./analytics-live";
+// ... feature-gated live page disabled while Google is paused.

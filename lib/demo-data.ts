@@ -939,6 +939,9 @@ export const sales: Sale[] = [
 
 export const googleCampaigns: AdCampaign[] = [];
 
+// Meta Ads demo campaigns — paused (no Meta env / UI for now)
+export const metaCampaigns: AdCampaign[] = [];
+/*
 export const metaCampaigns: AdCampaign[] = [
   {
     id: "mad_01",
@@ -1009,6 +1012,7 @@ export const metaCampaigns: AdCampaign[] = [
     endDate: null,
   },
 ];
+*/
 
 export const invoices: Invoice[] = [
   {

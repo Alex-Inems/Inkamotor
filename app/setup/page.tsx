@@ -31,29 +31,17 @@ const GUIDES: Record<
     keys: ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
     after: "Paste supabase/schema.sql in SQL Editor → Run once.",
   },
-  googleSearchConsole: {
-    title: "Google Search Console (paused)",
-    where:
-      "Paused until env is filled. console.cloud.google.com → Search Console API → OAuth + refresh token",
-    keys: [
-      "GOOGLE_CLIENT_ID",
-      "GOOGLE_CLIENT_SECRET",
-      "GOOGLE_REFRESH_TOKEN",
-      "GSC_SITE_URL",
-    ],
-    after: "Hidden from nav while paused. Scope: webmasters.readonly",
-  },
-  metaAds: {
-    title: "Meta Ads (paused)",
-    where: "No Meta ad account under Business yet — left paused on purpose.",
-    keys: [
-      "META_APP_ID",
-      "META_APP_SECRET",
-      "META_ACCESS_TOKEN",
-      "META_AD_ACCOUNT_ID",
-    ],
-    after: "Hidden from nav until Meta is wired.",
-  },
+  // Google / Meta guides commented out — no env required for now.
+  // googleSearchConsole: {
+  //   title: "Google Search Console (paused)",
+  //   where: "console.cloud.google.com → Search Console API → OAuth + refresh token",
+  //   keys: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN", "GSC_SITE_URL"],
+  // },
+  // metaAds: {
+  //   title: "Meta Ads (paused)",
+  //   where: "Meta Business Manager → ad account",
+  //   keys: ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID"],
+  // },
   brevo: {
     title: "Brevo (mail + newsletter)",
     where: "brevo.com → Settings → SMTP & API → API keys · verify sender",

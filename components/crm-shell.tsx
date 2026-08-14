@@ -13,11 +13,11 @@ const pageKeys: Record<string, string> = {
   "/": "nav.overview",
   "/inbox": "nav.inbox",
   "/follow-ups": "nav.followUps",
-  "/analytics": "nav.analytics",
+  // "/analytics": "nav.analytics", // Google paused
   "/leads": "pages.leads.title",
   "/sales": "nav.sales",
-  "/search-console": "nav.searchConsole",
-  "/ads/meta": "nav.metaAds",
+  // "/search-console": "nav.searchConsole", // Google paused
+  // "/ads/meta": "nav.metaAds", // Meta paused
   "/invoices": "nav.invoices",
   "/newsletter": "nav.newsletter",
   "/setup": "nav.setup",

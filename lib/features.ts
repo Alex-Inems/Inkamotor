@@ -6,8 +6,8 @@ export type FeatureId =
   | "supabase"
   | "brevo"
   | "imap"
-  | "googleSearchConsole"
-  | "metaAds"
+  // | "googleSearchConsole" // paused — not required
+  // | "metaAds" // paused — not required
   | "webhook";
 
 export type FeatureState = {
@@ -19,12 +19,20 @@ export type FeatureState = {
 };
 
 export function getFeatureStates(): FeatureState[] {
-  const googleMissing = missingEnv([
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET",
-    "GOOGLE_REFRESH_TOKEN",
-    "GSC_SITE_URL",
-  ]);
+  // Google / Meta env checks commented out — not required for now.
+  // const googleMissing = missingEnv([
+  //   "GOOGLE_CLIENT_ID",
+  //   "GOOGLE_CLIENT_SECRET",
+  //   "GOOGLE_REFRESH_TOKEN",
+  //   "GSC_SITE_URL",
+  // ]);
+  // const metaMissing = missingEnv([
+  //   "META_APP_ID",
+  //   "META_APP_SECRET",
+  //   "META_ACCESS_TOKEN",
+  //   "META_AD_ACCOUNT_ID",
+  // ]);
+
   const supabaseMissing = missingEnv([
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
@@ -42,9 +50,6 @@ export function getFeatureStates(): FeatureState[] {
     "IMAP_PASSWORD",
   ]);
   const webhookMissing = missingEnv(["WEBHOOK_SECRET"]);
-
-  // Meta Ads: no env wired yet — always paused for now
-  const metaPaused = true;
 
   return [
     {
@@ -68,25 +73,20 @@ export function getFeatureStates(): FeatureState[] {
       missing: imapMissing,
       label: "Namecheap IMAP",
     },
-    {
-      id: "googleSearchConsole",
-      ready: googleMissing.length === 0,
-      paused: googleMissing.length > 0,
-      missing: googleMissing,
-      label: "Google Search Console",
-    },
-    {
-      id: "metaAds",
-      ready: false,
-      paused: metaPaused,
-      missing: [
-        "META_APP_ID",
-        "META_APP_SECRET",
-        "META_ACCESS_TOKEN",
-        "META_AD_ACCOUNT_ID",
-      ],
-      label: "Meta Ads",
-    },
+    // {
+    //   id: "googleSearchConsole",
+    //   ready: false,
+    //   paused: true,
+    //   missing: [],
+    //   label: "Google Search Console",
+    // },
+    // {
+    //   id: "metaAds",
+    //   ready: false,
+    //   paused: true,
+    //   missing: [],
+    //   label: "Meta Ads",
+    // },
     {
       id: "webhook",
       ready: webhookMissing.length === 0,

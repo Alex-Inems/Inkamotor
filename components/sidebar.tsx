@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import { InkamotoLogo } from "@/components/brand";
 import { currentUser, currentWorkspace } from "@/lib/session";
 import { useT } from "@/lib/i18n";
@@ -12,9 +11,10 @@ const nav = [
   { href: "/follow-ups", key: "nav.followUps", icon: FollowUpIcon },
   { href: "/leads", key: "nav.leads", icon: LeadsIcon },
   { href: "/sales", key: "nav.sales", icon: SalesIcon },
-  { href: "/analytics", key: "nav.analytics", icon: AnalyticsIcon },
-  { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
-  { href: "/ads/meta", key: "nav.metaAds", icon: MetaIcon },
+  // Google / Meta — paused (no env required)
+  // { href: "/analytics", key: "nav.analytics", icon: AnalyticsIcon },
+  // { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
+  // { href: "/ads/meta", key: "nav.metaAds", icon: MetaIcon },
   { href: "/invoices", key: "nav.invoices", icon: InvoiceIcon },
   { href: "/newsletter", key: "nav.newsletter", icon: NewsletterIcon },
   { href: "/setup", key: "nav.setup", icon: SetupIcon },
@@ -30,31 +30,7 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const t = useT();
-  const [hiddenNav, setHiddenNav] = useState<string[]>([
-    "/analytics",
-    "/search-console",
-    "/ads/meta",
-  ]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/features")
-      .then((r) => r.json())
-      .then((json: { hiddenNav?: string[] }) => {
-        if (!cancelled) setHiddenNav(json.hiddenNav ?? []);
-      })
-      .catch(() => {
-        /* keep safe defaults */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const visibleNav = useMemo(
-    () => nav.filter((item) => !hiddenNav.includes(item.href)),
-    [hiddenNav],
-  );
+  const visibleNav = nav;
 
   return (
     <aside

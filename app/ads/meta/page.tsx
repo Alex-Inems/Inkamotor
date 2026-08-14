@@ -2,11 +2,14 @@
 
 import { PausedFeature } from "@/components/paused-feature";
 
+/** Meta Ads — paused. No META_* env required. */
 export default function MetaAdsPage() {
   return (
     <PausedFeature
       title="Meta Ads"
-      description="Meta Ads is paused — no ad account env is wired yet. Use Inbox, Invoices, and Newsletter for Brevo + Namecheap testing."
+      description="Meta Ads is commented out for now — no Meta env required. Use Inbox, Invoices, and Newsletter for Brevo + Namecheap."
     />
   );
 }
+
+// Previous Meta Ads demo UI removed from mount while paused.
