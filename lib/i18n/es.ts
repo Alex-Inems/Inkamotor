@@ -7,7 +7,7 @@ export const es: Messages = {
   },
   nav: {
     overview: "Resumen",
-    inbox: "Bandeja del sitio",
+    inbox: "Bandeja",
     followUps: "Seguimientos",
     leads: "Leads",
     sales: "Ventas",
@@ -129,17 +129,17 @@ export const es: Messages = {
   },
   pages: {
     inbox: {
-      title: "Bandeja del sitio",
+      title: "Bandeja",
       description:
-        "Preguntas y seguimientos de inkamototours.com — formulario, roadbooks y circuitos — llegan aquí para leads y ventas.",
+        "Correo entrante, tus respuestas y mensajes del formulario web.",
       banner:
-        "Sincronización en vivo desde inkamototours.com — cada pregunta, chat y formulario aparece aquí para seguimiento, captura de lead y venta.",
+        "El correo y las preguntas del sitio llegan aquí para seguimiento, leads y ventas.",
       converted: "Convertidas a leads",
       riderChat: "Chat rider",
       wholesale: "Grupos / B2B",
       search: "Buscar consultas…",
       allStatuses: "Todos los estados",
-      inquiriesFrom: "{n} consultas desde inkamototours.com",
+      inquiriesFrom: "{n} mensajes del formulario",
       channel: "Canal",
       received: "Recibido",
       empty: "Ninguna consulta coincide con estos filtros.",
@@ -238,10 +238,10 @@ export const es: Messages = {
       printPdf: "Imprimir",
       downloadPdf: "Descargar PDF",
       emailQueued:
-        "Brevo aceptó el email a {email}. Si no llega, verifica el remitente en Brevo y la carpeta de spam.",
+        "Email aceptado para {email}. Si no llega, revisa spam o pide verificar el remitente.",
       emailFailed: "Email no enviado — factura sigue en borrador",
       markSentNoEmail: "Marcar enviada (sin email)",
-      emailAfterCreate: "Enviar por Brevo al crear",
+      emailAfterCreate: "Enviar al cliente al crear",
     },
     newsletter: {
       title: "Newsletter",

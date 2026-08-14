@@ -1,5 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { missingBrevoEnv, sendTransactionalEmail } from "@/lib/brevo";
+import { saveMailReply } from "@/lib/mail/replies";
+import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +12,8 @@ type Body = {
   message?: string;
   /** Original subject for Re: prefix */
   inReplyToSubject?: string;
+  relatedMailId?: string;
+  relatedInquiryId?: string;
 };
 
 export async function POST(request: Request) {
@@ -61,7 +65,33 @@ export async function POST(request: Request) {
       htmlContent: html,
       textContent: message,
     });
-    return Response.json({ ok: true, subject });
+
+    let reply = null;
+    if (missingSupabaseEnv().length === 0) {
+      try {
+        reply = await saveMailReply({
+          toEmail: to,
+          toName: body.toName,
+          subject,
+          bodyText: message,
+          relatedMailId: body.relatedMailId,
+          relatedInquiryId: body.relatedInquiryId,
+        });
+      } catch (storeErr) {
+        // Still report send success; storage may need mail_replies migration
+        return Response.json({
+          ok: true,
+          subject,
+          reply: null,
+          storeWarning:
+            storeErr instanceof Error
+              ? storeErr.message
+              : "Reply sent but not saved — run supabase/mail_replies.sql",
+        });
+      }
+    }
+
+    return Response.json({ ok: true, subject, reply });
   } catch (err) {
     return jsonError(502, {
       error: err instanceof Error ? err.message : "Could not send reply",

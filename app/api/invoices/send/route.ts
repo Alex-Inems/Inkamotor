@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       ok: true,
       queued: true,
       to,
-      hint: "Brevo accepted the message. Delivery still needs a verified sender — check spam if it does not arrive.",
+      hint: "Email accepted. If it doesn’t arrive, check spam or verify the sender address.",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not send invoice email";

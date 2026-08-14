@@ -31,7 +31,7 @@ export async function POST() {
   if (missing.length > 0) {
     return jsonError(503, {
       error:
-        "Add Supabase + IMAP (Namecheap) keys to .env.local, run schema.sql, then Sync inbox.",
+        "Inbox isn’t connected yet. Ask your admin to finish mail setup.",
       code: "missing_credentials",
       missing,
     });

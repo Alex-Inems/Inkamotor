@@ -237,14 +237,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addNewsletter = useCallback(
     (_input: NewNewsletterInput) => {
-      pushToast("Use the Newsletter page to send via Brevo");
+      pushToast("Use the Newsletter page to send campaigns");
     },
     [pushToast],
   );
 
   const updateNewsletterStatus = useCallback(
     (_id: string, _status: NewsletterStatus) => {
-      pushToast("Newsletter status is managed in Brevo");
+      pushToast("Newsletter status updates from your email account");
     },
     [pushToast],
   );

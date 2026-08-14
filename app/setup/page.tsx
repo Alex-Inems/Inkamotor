@@ -43,7 +43,7 @@ const GUIDES: Record<
   //   keys: ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID"],
   // },
   brevo: {
-    title: "Brevo (mail + newsletter)",
+    title: "Email sending (replies + newsletter)",
     where: "brevo.com → Settings → SMTP & API → API keys · verify sender",
     keys: [
       "BREVO_API_KEY",
@@ -51,13 +51,13 @@ const GUIDES: Record<
       "BREVO_SENDER_NAME",
       "BREVO_LIST_ID",
     ],
-    after: "List ID: Contacts → Lists. Needed to send newsletters from CRM.",
+    after: "Powers outbound replies, invoice email, and newsletters.",
   },
   imap: {
-    title: "Namecheap mailbox (inbox replies)",
+    title: "Incoming mailbox (inbox)",
     where: "Private Email → mail.privateemail.com · SSL 993",
     keys: ["IMAP_HOST", "IMAP_PORT", "IMAP_USER", "IMAP_PASSWORD"],
-    after: "Use contact@inkamototours.com mailbox password.",
+    after: "Mailbox for contact@inkamototours.com — fills the Inbox tab.",
   },
   webhook: {
     title: "Site form webhook (optional)",

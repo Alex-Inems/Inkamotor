@@ -119,7 +119,7 @@ export default function NewsletterPage() {
         pushToast((json as ApiError).error || "Send failed");
         return;
       }
-      pushToast("Campaign sent via Brevo");
+      pushToast("Campaign sent");
       setOpenAdd(false);
       setForm({ name: "", subject: "", preview: "", html: "" });
       await load();
@@ -160,12 +160,12 @@ export default function NewsletterPage() {
         <KpiCard
           label="Avg open rate"
           value={formatPercent(avgOpen)}
-          hint="From Brevo stats"
+          hint="From campaign stats"
         />
         <KpiCard
-          label="Brevo"
+          label="Status"
           value="Live"
-          hint="Campaigns from your account"
+          hint="Synced from your account"
         />
       </div>
 
@@ -179,12 +179,12 @@ export default function NewsletterPage() {
       </div>
 
       <div className="mt-4">
-        <Panel title={`${filtered.length} campaigns (live from Brevo)`}>
+        <Panel title={`${filtered.length} campaigns`}>
           {loading ? (
             <EmptyHint>Loading campaigns…</EmptyHint>
           ) : filtered.length === 0 ? (
             <EmptyHint>
-              No campaigns yet. Add BREVO_API_KEY + BREVO_LIST_ID, then create a campaign.
+              No campaigns yet. Create one to email your list.
             </EmptyHint>
           ) : (
             <div className="table-wrap">
@@ -234,7 +234,7 @@ export default function NewsletterPage() {
         </Panel>
       </div>
 
-      <Modal open={openAdd} title="Send newsletter (Brevo)" onClose={() => setOpenAdd(false)} wide>
+      <Modal open={openAdd} title="Send newsletter" onClose={() => setOpenAdd(false)} wide>
         <form className="grid gap-3" onSubmit={submit}>
           <Field label="Internal name">
             <input
@@ -267,11 +267,11 @@ export default function NewsletterPage() {
             />
           </Field>
           <p className="text-xs text-mute">
-            Sends now to BREVO_LIST_ID. Free plan: max 300 emails/day.
+            Sends now to your subscriber list.
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="submit" className={btnPrimary} disabled={sending}>
-              {sending ? "Sending…" : "Send via Brevo"}
+              {sending ? "Sending…" : "Send newsletter"}
             </button>
             <button
               type="button"

@@ -422,8 +422,8 @@ export default function InvoicesPage() {
             </Field>
           </div>
           <p className="text-xs text-mute sm:col-span-2">
-            Saved as <strong>draft</strong>. Use Email to client after Brevo
-            sender is verified — status becomes sent only when Brevo accepts it.
+            Saved as <strong>draft</strong>. Use Email to client when ready —
+            status becomes sent after the email goes out successfully.
           </p>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button type="submit" className={btnPrimary}>

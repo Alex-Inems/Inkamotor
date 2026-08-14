@@ -31,6 +31,21 @@ create table if not exists mail_messages (
 create index if not exists mail_messages_received_idx
   on mail_messages (received_at desc);
 
+-- Outbound replies sent via Brevo from the CRM Inbox
+create table if not exists mail_replies (
+  id uuid primary key default gen_random_uuid(),
+  to_name text,
+  to_email text not null,
+  subject text not null default '',
+  body_text text not null default '',
+  related_mail_id uuid,
+  related_inquiry_id text,
+  sent_at timestamptz not null default now()
+);
+
+create index if not exists mail_replies_sent_idx
+  on mail_replies (sent_at desc);
+
 create table if not exists site_inquiries (
   id text primary key,
   name text not null,
@@ -139,6 +154,7 @@ create table if not exists newsletter_campaigns (
 
 alter table sync_runs enable row level security;
 alter table mail_messages enable row level security;
+alter table mail_replies enable row level security;
 alter table site_inquiries enable row level security;
 alter table leads enable row level security;
 alter table follow_ups enable row level security;

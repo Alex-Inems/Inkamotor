@@ -18,7 +18,7 @@ export function PausedFeature({
       </div>
       <EmptyHint>
         This area is paused until its environment variables are configured.
-        Focus on Inbox, Invoices, and Newsletter for Brevo + Namecheap testing.{" "}
+        Focus on Inbox, Invoices, and Newsletter for now.{" "}
         <Link href="/setup" className="text-sand hover:text-gold">
           Open Setup
         </Link>

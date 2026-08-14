@@ -131,15 +131,15 @@ export const fr: Messages = {
     inbox: {
       title: "Boîte de réception",
       description:
-        "Questions et relances depuis inkamototours.com — formulaire, roadbooks et circuits — arrivent ici pour pistes et ventes.",
+        "Courrier entrant, vos réponses et messages du formulaire web.",
       banner:
-        "Sync live depuis inkamototours.com — chaque question, chat et formulaire apparaît ici pour relance, capture de piste et vente.",
+        "Le courrier et les questions du site arrivent ici pour relance, pistes et ventes.",
       converted: "Converties en pistes",
       riderChat: "Chat rider",
       wholesale: "Groupe / B2B",
       search: "Rechercher des demandes…",
       allStatuses: "Tous les statuts",
-      inquiriesFrom: "{n} demandes depuis inkamototours.com",
+      inquiriesFrom: "{n} messages du formulaire",
       channel: "Canal",
       received: "Reçu",
       empty: "Aucune demande ne correspond à ces filtres.",
@@ -238,10 +238,10 @@ export const fr: Messages = {
       printPdf: "Imprimer",
       downloadPdf: "Télécharger PDF",
       emailQueued:
-        "Brevo a accepté l’email vers {email}. S’il n’arrive pas, vérifiez l’expéditeur dans Brevo et les spams.",
+        "Email accepté pour {email}. S’il n’arrive pas, vérifiez les spams ou demandez de vérifier l’expéditeur.",
       emailFailed: "Email non envoyé — facture restée en brouillon",
       markSentNoEmail: "Marquer envoyée (sans email)",
-      emailAfterCreate: "Envoyer via Brevo après création",
+      emailAfterCreate: "Envoyer au client après création",
     },
     newsletter: {
       title: "Newsletter",

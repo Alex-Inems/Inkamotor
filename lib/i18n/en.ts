@@ -5,7 +5,7 @@ export const en = {
   },
   nav: {
     overview: "Overview",
-    inbox: "Site inbox",
+    inbox: "Inbox",
     followUps: "Follow-ups",
     leads: "Leads & Qs",
     sales: "Sales",
@@ -127,17 +127,17 @@ export const en = {
   },
   pages: {
     inbox: {
-      title: "Site inbox",
+      title: "Inbox",
       description:
-        "Questions and follow-ups from inkamototours.com — contact form, roadbook requests, and tour questions — land here for leads and sales.",
+        "Incoming mail, your replies, and website form messages — follow up, convert leads, and close sales.",
       banner:
-        "Live sync from inkamototours.com — every site question, chat, and form submission appears in this inbox for follow-up, lead capture, and sales.",
+        "Mail and website questions land here for follow-up, lead capture, and sales.",
       converted: "Converted to leads",
       riderChat: "Rider chat",
       wholesale: "Wholesale",
       search: "Search inquiries…",
       allStatuses: "All statuses",
-      inquiriesFrom: "{n} inquiries from inkamototours.com",
+      inquiriesFrom: "{n} website form messages",
       channel: "Channel",
       received: "Received",
       empty: "No inquiries match these filters.",
@@ -236,10 +236,10 @@ export const en = {
       printPdf: "Print",
       downloadPdf: "Download PDF",
       emailQueued:
-        "Brevo accepted the email to {email}. If it doesn’t arrive, verify the sender in Brevo and check spam.",
+        "Email accepted for {email}. If it doesn’t arrive, check spam or ask your admin to verify the sender.",
       emailFailed: "Email not sent — invoice left as draft",
       markSentNoEmail: "Mark sent (no email)",
-      emailAfterCreate: "Email via Brevo after create",
+      emailAfterCreate: "Email to client after create",
     },
     newsletter: {
       title: "Newsletter",

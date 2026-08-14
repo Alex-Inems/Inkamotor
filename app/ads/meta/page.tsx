@@ -7,7 +7,7 @@ export default function MetaAdsPage() {
   return (
     <PausedFeature
       title="Meta Ads"
-      description="Meta Ads is commented out for now — no Meta env required. Use Inbox, Invoices, and Newsletter for Brevo + Namecheap."
+      description="Meta Ads is paused for now. Use Inbox, Invoices, and Newsletter."
     />
   );
 }

@@ -64,14 +64,14 @@ export function getFeatureStates(): FeatureState[] {
       ready: brevoMissing.length === 0,
       paused: brevoMissing.length > 0,
       missing: brevoMissing,
-      label: "Brevo",
+      label: "Email sending",
     },
     {
       id: "imap",
       ready: imapMissing.length === 0,
       paused: imapMissing.length > 0,
       missing: imapMissing,
-      label: "Namecheap IMAP",
+      label: "Incoming mailbox",
     },
     // {
     //   id: "googleSearchConsole",

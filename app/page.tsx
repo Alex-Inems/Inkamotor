@@ -257,7 +257,7 @@ export default function OverviewPage() {
           <KpiCard
             label="Newsletters"
             value={num(newsletters.length)}
-            hint="Brevo campaigns"
+            hint="Newsletters"
           />
         </Link>
         <KpiCard
@@ -311,16 +311,16 @@ export default function OverviewPage() {
         <Panel title="Quick links">
           <div className="flex flex-col gap-2 text-sm">
             <Link href="/inbox" className="text-sand hover:text-gold">
-              Inbox & Namecheap mailbox sync
+              Inbox & replies
             </Link>
             <Link href="/newsletter" className="text-sand hover:text-gold">
-              Newsletter (Brevo)
+              Newsletter
             </Link>
             <Link href="/invoices" className="text-sand hover:text-gold">
-              Invoices (email via Brevo)
+              Invoices
             </Link>
             <Link href="/setup" className="text-sand hover:text-gold">
-              Env / integration setup
+              Setup
             </Link>
           </div>
         </Panel>
