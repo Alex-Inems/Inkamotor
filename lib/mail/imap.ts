@@ -197,6 +197,12 @@ export async function syncImapInbox(
     await client.logout();
     await logSync("ok", synced, null, startedAt);
     const { added } = await autoSubscribe(senders, "inbox");
+    try {
+      const { syncLeadsFromInbox } = await import("@/lib/crm/inbox-leads");
+      await syncLeadsFromInbox();
+    } catch {
+      /* leads sync is best-effort */
+    }
     return { synced, subscribed: added };
   } catch (err) {
     const message = err instanceof Error ? err.message : "IMAP sync failed";

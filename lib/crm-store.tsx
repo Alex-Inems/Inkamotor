@@ -196,7 +196,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         },
         `Lead added: ${input.name}`,
       );
-      return snap.leads[0]?.id ?? "";
+      return snap.leads.find((l) => l.email.toLowerCase() === input.email.trim().toLowerCase())
+        ?.id ?? snap.leads[0]?.id ?? "";
     },
     [mutate],
   );

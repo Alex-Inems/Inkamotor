@@ -118,6 +118,13 @@ function mapInvoice(row: Record<string, unknown>): Invoice {
 }
 
 export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
+  try {
+    const { syncLeadsFromInbox } = await import("@/lib/crm/inbox-leads");
+    await syncLeadsFromInbox();
+  } catch {
+    /* Inbox may be empty or mail tables missing — still load the rest. */
+  }
+
   const sb = getSupabase();
   const [inquiries, leads, followUps, sales, invoices] = await Promise.all([
     sb.from("site_inquiries").select("*").order("created_at", { ascending: false }),
@@ -137,13 +144,15 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
 
   return {
     ...emptySnapshot(),
-    siteInquiries: (inquiries.data ?? []).map((r) =>
-      mapInquiry(r as Record<string, unknown>),
-    ),
-    leads: (leads.data ?? []).map((r) => mapLead(r as Record<string, unknown>)),
-    followUps: (followUps.data ?? []).map((r) =>
-      mapFollowUp(r as Record<string, unknown>),
-    ),
+    siteInquiries: (inquiries.data ?? [])
+      .map((r) => mapInquiry(r as Record<string, unknown>))
+      .filter((i) => !/^inq_\d+$/.test(i.id)),
+    leads: (leads.data ?? [])
+      .map((r) => mapLead(r as Record<string, unknown>))
+      .filter((l) => !/^ld_10\d{2}$/.test(l.id)),
+    followUps: (followUps.data ?? [])
+      .map((r) => mapFollowUp(r as Record<string, unknown>))
+      .filter((f) => !/^fu_\d+$/.test(f.id)),
     sales: (sales.data ?? []).map((r) => mapSale(r as Record<string, unknown>)),
     invoices: (invoices.data ?? []).map((r) =>
       mapInvoice(r as Record<string, unknown>),
@@ -157,22 +166,26 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
 
   switch (mutation.op) {
     case "addLead": {
-      const id = `ld_${Date.now()}`;
-      const { error } = await sb.from("leads").insert({
-        id,
-        name: mutation.input.name,
-        email: mutation.input.email,
-        phone: mutation.input.phone,
-        company: mutation.input.company,
-        source: mutation.input.source,
-        status: mutation.input.status,
-        value: mutation.input.value,
-        currency: "USD",
-        owner: mutation.input.owner,
-        created_at: day,
-        last_contact: day,
-        notes: mutation.input.notes,
-      });
+      const email = mutation.input.email.trim().toLowerCase();
+      const id = `ld_${email}`;
+      const { error } = await sb.from("leads").upsert(
+        {
+          id,
+          name: mutation.input.name,
+          email,
+          phone: mutation.input.phone,
+          company: mutation.input.company,
+          source: mutation.input.source,
+          status: mutation.input.status,
+          value: mutation.input.value,
+          currency: "USD",
+          owner: mutation.input.owner,
+          created_at: day,
+          last_contact: day,
+          notes: mutation.input.notes,
+        },
+        { onConflict: "id" },
+      );
       if (error) throw new Error(error.message);
       break;
     }

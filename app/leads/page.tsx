@@ -100,10 +100,10 @@ const statusCopy: Record<LeadStatus, { title: string; blurb: string }> = {
 };
 
 const sourceCopy: Record<LeadSource, string> = {
-  website: "yangaa.store form, chat, or product question",
+  website: "Website form",
   google: "Google Ads campaign",
   meta: "Meta Ads campaign",
-  organic: "Organic / SEO visit",
+  organic: "Direct email / other",
   referral: "Partner or customer referral",
   manual: "Added manually by the team",
 };
