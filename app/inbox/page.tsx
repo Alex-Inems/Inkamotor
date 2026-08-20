@@ -128,7 +128,7 @@ function dayLabel(iso: string) {
 }
 
 export default function InboxPage() {
-  const { addFollowUp, addSale, leads, pushToast, refreshCrm } = useCrm();
+  const { addSale, leads, pushToast, refreshCrm } = useCrm();
   const [mail, setMail] = useState<MailMessage[]>([]);
   const [replies, setReplies] = useState<MailReply[]>([]);
   const [conn, setConn] = useState<InboxStatus | null>(null);
@@ -145,6 +145,7 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const [opened, setOpened] = useState<string[]>([]);
   const threadRef = useRef<HTMLDivElement>(null);
+  const pendingChat = useRef<string | null>(null);
 
   useEffect(() => {
     try {
@@ -153,6 +154,12 @@ export default function InboxPage() {
     } catch {
       /* first run */
     }
+  }, []);
+
+  useEffect(() => {
+    pendingChat.current =
+      new URLSearchParams(window.location.search).get("chat")?.toLowerCase() ??
+      null;
   }, []);
 
   useEffect(() => {
@@ -265,6 +272,16 @@ export default function InboxPage() {
       }),
     [mail, replies, ownAddresses, opened],
   );
+
+  useEffect(() => {
+    const email = pendingChat.current;
+    if (!email || rooms.length === 0) return;
+    if (!rooms.some((r) => r.email === email)) return;
+    pendingChat.current = null;
+    setActiveEmail(email);
+    setDetailsOpen(false);
+    setOpened((prev) => (prev.includes(email) ? prev : [...prev, email]));
+  }, [rooms]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -719,7 +736,13 @@ export default function InboxPage() {
                 <>
                   <p className="text-sm text-ink">
                     {activeLead
-                      ? `${activeLead.status.charAt(0).toUpperCase()}${activeLead.status.slice(1)}`
+                      ? {
+                          new: "Need reply",
+                          contacted: "Talking",
+                          qualified: "Ready to book",
+                          won: "Booked",
+                          lost: "Not booked",
+                        }[activeLead.status]
                       : "Saved from Inbox on the next sync"}
                   </p>
                   <Link
@@ -730,20 +753,6 @@ export default function InboxPage() {
                   </Link>
                 </>
               )}
-              <DetailAction
-                label="Create follow-up"
-                onClick={() =>
-                  void addFollowUp({
-                    title: `Follow up: ${activeName}`,
-                    relatedTo: activeName,
-                    relatedType: "lead",
-                    relatedId: activeLead?.id ?? active.email,
-                    dueAt: new Date().toISOString().slice(0, 10),
-                    owner: "Team",
-                    notes: `From inbox message: ${active.lastSubject}`,
-                  })
-                }
-              />
               <DetailAction
                 label="Create sale"
                 onClick={() =>

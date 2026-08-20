@@ -62,10 +62,10 @@ export const fr: Messages = {
   },
   overview: {
     description:
-      "Les demandes inkamototours.com arrivent ici — {inquiries} demandes ouvertes, {followUps} relances, {leads} pistes web.",
-    bannerTitle: "Site → CRM :",
+      "Boîte et pistes inkamototours.com — {inquiries} messages non lus, {leads} personnes dans le pipeline.",
+    bannerTitle: "Boîte → Pistes :",
     banner:
-      "Formulaire de contact, roadbooks et questions circuits depuis inkamototours.com synchronisent la boîte de réception, puis deviennent relances, pistes et ventes.",
+      "Formulaires et e-mails arrivent dans la boîte. Tout le monde sauf Promos est une piste. Répondez là, puis marquez Réservé dans Pistes à la réservation.",
     profitability: "Rentabilité · inkamototours.com",
     netProfit: "Bénéfice net (après coûts + pubs)",
     profitMargin: "Marge",

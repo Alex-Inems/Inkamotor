@@ -62,10 +62,10 @@ export const es: Messages = {
   },
   overview: {
     description:
-      "Las consultas de inkamototours.com llegan aquí — {inquiries} abiertas, {followUps} seguimientos, {leads} leads web.",
-    bannerTitle: "Sitio → CRM:",
+      "Bandeja y leads de inkamototours.com — {inquiries} mensajes sin leer, {leads} personas en el pipeline.",
+    bannerTitle: "Bandeja → Leads:",
     banner:
-      "Formulario, roadbooks y preguntas de circuitos de inkamototours.com entran en la bandeja y se convierten en seguimientos, leads y ventas.",
+      "Formularios y emails llegan a Bandeja. Todos menos Promos son leads. Responde ahí y marca Reservado en Leads cuando compren.",
     profitability: "Rentabilidad · inkamototours.com",
     netProfit: "Beneficio neto (tras costes + ads)",
     profitMargin: "Margen",

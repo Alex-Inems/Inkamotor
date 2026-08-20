@@ -60,10 +60,10 @@ export const en = {
   },
   overview: {
     description:
-      "inkamototours.com inquiries flow here — {inquiries} open inquiries, {followUps} follow-ups, {leads} website leads.",
-    bannerTitle: "Site → CRM:",
+      "Inbox and leads from inkamototours.com — {inquiries} unread messages, {leads} people in the pipeline.",
+    bannerTitle: "Inbox → Leads:",
     banner:
-      "Contact form, roadbook requests, and tour questions from inkamototours.com sync into Site inbox, then become follow-ups, leads, and sales.",
+      "Website forms and emails land in Inbox. Everyone except Promos is a lead. Reply there, mark Booked on Leads when they buy.",
     profitability: "Profitability · inkamototours.com",
     netProfit: "Net profit (after costs + ads)",
     profitMargin: "Profit margin",

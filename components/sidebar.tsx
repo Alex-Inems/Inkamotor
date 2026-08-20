@@ -8,7 +8,6 @@ import { useT } from "@/lib/i18n";
 const nav = [
   { href: "/", key: "nav.overview", icon: OverviewIcon },
   { href: "/inbox", key: "nav.inbox", icon: InboxIcon },
-  { href: "/follow-ups", key: "nav.followUps", icon: FollowUpIcon },
   { href: "/leads", key: "nav.leads", icon: LeadsIcon },
   { href: "/sales", key: "nav.sales", icon: SalesIcon },
   // Google / Meta — paused (no env required)
@@ -172,27 +171,6 @@ function InboxIcon({ active }: { active?: boolean }) {
         stroke="currentColor"
         strokeWidth="1.4"
         strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function FollowUpIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <circle
-        cx="8"
-        cy="8"
-        r="5.5"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        opacity={active === false ? 0.85 : 1}
-      />
-      <path
-        d="M8 5v3.2L10.2 10"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
       />
     </svg>
   );

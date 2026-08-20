@@ -169,19 +169,7 @@ export default function OverviewPage() {
 
   return (
     <div>
-      <PageHeader
-        title={hello}
-        description={t("overview.description", {
-          inquiries: mail.filter((m) => !m.isRead).length,
-          followUps: stats.openFollowUps,
-          leads: stats.websiteLeads,
-        })}
-      />
-
-      <div className="mb-4 border border-accent/40 bg-accent-soft px-4 py-3 text-sm">
-        <span className="font-semibold">{t("overview.bannerTitle")}</span>{" "}
-        {t("overview.banner")}
-      </div>
+      <PageHeader title={hello} />
 
       <div className="mb-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
         <div className="border border-green/30 bg-[linear-gradient(135deg,#24383a_0%,#252422_55%,#1c1b19_100%)] p-5 sm:p-6">
@@ -273,7 +261,7 @@ export default function OverviewPage() {
           <KpiCard
             label="Inbox"
             value={num(mail.filter((m) => !m.isRead).length)}
-            hint={t("overview.openFollowUpsHint", { n: stats.openFollowUps })}
+            hint="Unread messages"
           />
         </Link>
         <Link href="/newsletter" className="block">
@@ -409,12 +397,19 @@ export default function OverviewPage() {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{lead.name}</p>
                     <p className="truncate text-xs text-mute">
-                      {formatDate(lead.createdAt, locale)} ·{" "}
-                      {money(lead.value, false)}
+                      {formatDate(lead.createdAt, locale)} · {lead.email}
                     </p>
                   </div>
                   <StatusBadge tone={leadTone(lead.status)}>
-                    {lead.status}
+                    {lead.status === "new"
+                      ? "Need reply"
+                      : lead.status === "contacted"
+                        ? "Talking"
+                        : lead.status === "qualified"
+                          ? "Ready"
+                          : lead.status === "won"
+                            ? "Booked"
+                            : "Not booked"}
                   </StatusBadge>
                 </li>
               ))}
