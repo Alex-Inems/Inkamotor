@@ -9,7 +9,7 @@ const nav = [
   { href: "/", key: "nav.overview", icon: OverviewIcon },
   { href: "/inbox", key: "nav.inbox", icon: InboxIcon },
   { href: "/leads", key: "nav.leads", icon: LeadsIcon },
-  { href: "/sales", key: "nav.sales", icon: SalesIcon },
+  { href: "/bookings", key: "nav.sales", icon: SalesIcon },
   // Google / Meta — paused (no env required)
   // { href: "/analytics", key: "nav.analytics", icon: AnalyticsIcon },
   // { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
@@ -106,12 +106,12 @@ export function Sidebar({
               {currentUser.name}
             </p>
             <p className="truncate text-xs text-mute">
-              {currentUser.role} · {t("common.online")}
+              {t("common.admin")} · {t("common.online")}
             </p>
           </div>
           <span
             className="ml-auto h-2 w-2 shrink-0 bg-green"
-            title="Online"
+            title={t("common.online")}
           />
         </div>
       </div>

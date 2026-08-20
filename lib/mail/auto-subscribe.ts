@@ -1,4 +1,6 @@
 import { addContactToList, missingBrevoEnv, subscriberListId } from "@/lib/brevo";
+import { isBulkMail } from "@/lib/mail/clean";
+import { isSystemSender } from "@/lib/mail/extract";
 
 /** Automated / system senders that should never join the newsletter list. */
 const BLOCKED_LOCAL_PARTS = [
@@ -16,14 +18,35 @@ const BLOCKED_LOCAL_PARTS = [
   "billing",
   "invoice",
   "no_reply",
+  "follow-suggestions",
+  "newsletter",
+  "marketing",
+];
+
+const BLOCKED_DOMAINS = [
+  "instagram.com",
+  "mail.instagram.com",
+  "facebook.com",
+  "facebookmail.com",
+  "linkedin.com",
+  "linkedinmail.com",
+  "twitter.com",
+  "x.com",
+  "google.com",
+  "apple.com",
 ];
 
 function isSubscribable(email: string) {
   const clean = email.trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) return false;
+  if (isSystemSender(clean)) return false;
+  if (isBulkMail({ fromEmail: clean, isForm: false })) return false;
 
   const [local, domain] = clean.split("@");
   if (BLOCKED_LOCAL_PARTS.some((part) => local.includes(part))) return false;
+  if (BLOCKED_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`))) {
+    return false;
+  }
   // Our own mailbox / sending domain shouldn't subscribe to itself
   const ownAddresses = [
     process.env.IMAP_USER?.trim().toLowerCase(),

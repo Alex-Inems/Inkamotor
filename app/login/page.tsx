@@ -4,8 +4,10 @@ import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ColorStripe, InkamotoLogo } from "@/components/brand";
 import { CRM_LOGIN_EMAIL } from "@/lib/auth-public";
+import { LanguageSwitcher, useT } from "@/lib/i18n";
 
 function LoginForm() {
+  const t = useT();
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get("next") || "/";
@@ -27,7 +29,7 @@ function LoginForm() {
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) {
-        setError(json.error || "Login failed");
+        setError(json.error || t("pages.login.failed"));
         return;
       }
       router.replace(next.startsWith("/") ? next : "/");
@@ -67,23 +69,23 @@ function LoginForm() {
           <div className="flex flex-col items-center text-center">
             <InkamotoLogo className="h-9 w-auto" />
             <p className="mt-3 font-display text-[0.7rem] tracking-[0.22em] text-mute">
-              CRM
+              {t("brand.crm")}
             </p>
             <h1
               id="login-title"
               className="mt-4 font-display text-3xl tracking-wide text-ink"
             >
-              Welcome back
+              {t("pages.login.welcome")}
             </h1>
             <p className="mt-2 max-w-[18rem] text-sm leading-relaxed text-mute">
-              Sign in to the Inkamoto Tours workspace.
+              {t("pages.login.subtitle")}
             </p>
           </div>
 
           <form className="mt-8 space-y-4" onSubmit={(e) => void onSubmit(e)}>
             <label className="block text-left text-sm">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-                Email
+                {t("common.email")}
               </span>
               <input
                 type="email"
@@ -97,7 +99,7 @@ function LoginForm() {
 
             <label className="block text-left text-sm">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-                Password
+                {t("pages.login.password")}
               </span>
               <div className="relative">
                 <input
@@ -109,15 +111,15 @@ function LoginForm() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  placeholder="Enter password"
+                  placeholder={t("pages.login.passwordPlaceholder")}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 px-3 text-xs font-semibold uppercase tracking-wide text-mute hover:text-sand"
                   onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  aria-label={showPassword ? t("pages.login.hidePassword") : t("pages.login.showPassword")}
                 >
-                  {showPassword ? "Hide" : "Show"}
+                  {showPassword ? t("pages.login.hide") : t("pages.login.show")}
                 </button>
               </div>
             </label>
@@ -136,28 +138,34 @@ function LoginForm() {
               disabled={loading || !password}
               className="mt-1 w-full bg-accent px-4 py-3.5 text-sm font-semibold uppercase tracking-[0.1em] text-white transition-colors hover:bg-accent-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? t("pages.login.signingIn") : t("pages.login.signIn")}
             </button>
           </form>
 
           <p className="mt-6 text-center text-xs text-mute">
-            inkamototours.com · private workspace
+            {t("pages.login.footer")}
           </p>
+          <div className="mt-5 flex justify-center">
+            <LanguageSwitcher />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
+function LoginLoading() {
+  const t = useT();
+  return (
+    <div className="flex min-h-svh items-center justify-center bg-ash text-mute">
+      {t("common.loading")}
+    </div>
+  );
+}
+
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-svh items-center justify-center bg-ash text-mute">
-          Loading…
-        </div>
-      }
-    >
+    <Suspense fallback={<LoginLoading />}>
       <LoginForm />
     </Suspense>
   );

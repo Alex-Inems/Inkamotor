@@ -74,6 +74,8 @@ export default function NewsletterPage() {
   const [subscriberError, setSubscriberError] = useState<string | null>(null);
   const [newSubscriber, setNewSubscriber] = useState({ email: "", name: "" });
   const [addingSubscriber, setAddingSubscriber] = useState(false);
+  const [recipientQuery, setRecipientQuery] = useState("");
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [form, setForm] = useState({
     name: "",
     subject: "",
@@ -97,7 +99,7 @@ export default function NewsletterPage() {
     const res = await fetch("/api/newsletter/subscribers");
     const json = await res.json();
     if (!res.ok) {
-      setSubscriberError((json as ApiError).error || "Could not load subscribers");
+      setSubscriberError((json as ApiError).error || t("pages.newsletter.loadFailed"));
       setSubscribers([]);
       setSubscriberTotal(0);
       return;
@@ -111,12 +113,41 @@ export default function NewsletterPage() {
     setSubscribers(data.subscribers ?? []);
     setSubscriberTotal(data.total ?? 0);
     setAutoSubscribe(Boolean(data.autoSubscribe));
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void loadSubscribers();
     load().finally(() => setLoading(false));
   }, [load, loadSubscribers]);
+
+  useEffect(() => {
+    if (openAdd) void loadSubscribers();
+  }, [openAdd, loadSubscribers]);
+
+  const sendable = useMemo(
+    () => subscribers.filter((s) => !s.blocked),
+    [subscribers],
+  );
+
+  const visibleRecipients = useMemo(() => {
+    const q = recipientQuery.trim().toLowerCase();
+    if (!q) return sendable;
+    return sendable.filter((s) =>
+      `${s.email} ${s.name ?? ""}`.toLowerCase().includes(q),
+    );
+  }, [sendable, recipientQuery]);
+
+  function toggleEmail(email: string) {
+    setSelectedEmails((prev) =>
+      prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email],
+    );
+  }
+
+  function closeComposer() {
+    setOpenAdd(false);
+    setRecipientQuery("");
+    setSelectedEmails([]);
+  }
 
   async function addSubscriber(e: React.FormEvent) {
     e.preventDefault();
@@ -131,10 +162,10 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        pushToast((json as ApiError).error || "Could not add subscriber");
+        pushToast((json as ApiError).error || t("pages.newsletter.addFailed"));
         return;
       }
-      pushToast(`${email} added to the list`);
+      pushToast(t("pages.newsletter.addedToList", { email }));
       setNewSubscriber({ email: "", name: "" });
       await loadSubscribers();
     } finally {
@@ -159,6 +190,10 @@ export default function NewsletterPage() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.subject.trim()) return;
+    if (selectedEmails.length === 0) {
+      pushToast(t("pages.newsletter.needRecipient"));
+      return;
+    }
     setSending(true);
     try {
       const html =
@@ -172,16 +207,17 @@ export default function NewsletterPage() {
           subject: form.subject.trim(),
           previewText: form.preview.trim(),
           htmlContent: html,
+          emails: selectedEmails,
         }),
       });
       const json = await res.json();
       if (!res.ok) {
         setError(json as ApiError);
-        pushToast((json as ApiError).error || "Send failed");
+        pushToast((json as ApiError).error || t("pages.newsletter.sendFailed"));
         return;
       }
-      pushToast("Campaign sent");
-      setOpenAdd(false);
+      pushToast(t("pages.newsletter.campaignSent"));
+      closeComposer();
       setForm({ name: "", subject: "", preview: "", html: "" });
       await load();
     } finally {
@@ -204,7 +240,7 @@ export default function NewsletterPage() {
                 void loadSubscribers();
               }}
             >
-              Refresh
+              {t("pages.newsletter.refresh")}
             </button>
             <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
               {t("pages.newsletter.newCampaign")}
@@ -224,26 +260,26 @@ export default function NewsletterPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Subscribers"
+          label={t("common.subscribers")}
           value={formatNumber(subscriberTotal, false, locale)}
-          hint={autoSubscribe ? "Auto-added from email" : "Manual only"}
+          hint={autoSubscribe ? t("pages.newsletter.autoFromEmail") : t("pages.newsletter.manualOnly")}
         />
-        <KpiCard label="Campaigns" value={formatNumber(campaigns.length, false, locale)} />
-        <KpiCard label="Sent" value={formatNumber(sent.length, false, locale)} />
+        <KpiCard label={t("common.campaigns")} value={formatNumber(campaigns.length, false, locale)} />
+        <KpiCard label={t("pages.newsletter.sent")} value={formatNumber(sent.length, false, locale)} />
         <KpiCard
-          label="Avg open rate"
+          label={t("pages.newsletter.avgOpen")}
           value={formatPercent(avgOpen)}
-          hint="From campaign stats"
+          hint={t("pages.newsletter.fromStats")}
         />
       </div>
 
       <div className="-mx-3 mb-4 mt-6 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:px-0">
         {(
           [
-            { id: "campaigns" as const, label: "Campaigns" },
+            { id: "campaigns" as const, label: t("pages.newsletter.tabCampaigns") },
             {
               id: "subscribers" as const,
-              label: `Subscribers (${subscriberTotal})`,
+              label: t("pages.newsletter.tabSubscribers", { n: subscriberTotal }),
             },
           ] as const
         ).map((item) => (
@@ -264,12 +300,12 @@ export default function NewsletterPage() {
 
       {tab === "subscribers" ? (
         <div className="space-y-4">
-          <Panel title="Add a subscriber">
+          <Panel title={t("pages.newsletter.addSubscriber")}>
             <form className="grid gap-3 sm:grid-cols-[2fr_2fr_auto]" onSubmit={addSubscriber}>
               <input
                 className={inputClass}
                 type="email"
-                placeholder="email@example.com"
+                placeholder={t("pages.newsletter.emailPlaceholder")}
                 value={newSubscriber.email}
                 onChange={(e) =>
                   setNewSubscriber({ ...newSubscriber, email: e.target.value })
@@ -277,7 +313,7 @@ export default function NewsletterPage() {
               />
               <input
                 className={inputClass}
-                placeholder="Name (optional)"
+                placeholder={t("pages.newsletter.nameOptional")}
                 value={newSubscriber.name}
                 onChange={(e) =>
                   setNewSubscriber({ ...newSubscriber, name: e.target.value })
@@ -288,59 +324,60 @@ export default function NewsletterPage() {
                 className={btnPrimary}
                 disabled={addingSubscriber || !newSubscriber.email.trim()}
               >
-                {addingSubscriber ? "Adding…" : "Add"}
+                {addingSubscriber ? t("common.adding") : t("common.add")}
               </button>
             </form>
             <p className="mt-3 text-xs text-mute">
               {autoSubscribe
-                ? "Anyone who emails you, or submits the website form, is added to this list automatically."
-                : "Automatic adding is off — set up the subscriber list to enable it."}
+                ? t("pages.newsletter.autoOn")
+                : t("pages.newsletter.autoOff")}
             </p>
           </Panel>
 
-          <Panel title={`${subscribers.length} subscribers`}>
+          <Panel title={t("pages.newsletter.subscriberCount", { n: subscribers.length })}>
             {subscriberError ? (
               <EmptyHint>{subscriberError}</EmptyHint>
             ) : subscribers.length === 0 ? (
               <EmptyHint>
-                No subscribers yet. They appear here once someone emails you or
-                you add them above.
+                {t("pages.newsletter.noSubscribers")}
               </EmptyHint>
             ) : (
               <div className="table-wrap">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Email</th>
-                      <th>Name</th>
-                      <th>Source</th>
-                      <th>Status</th>
-                      <th>Added</th>
+                      <th>{t("common.email")}</th>
+                      <th>{t("common.name")}</th>
+                      <th>{t("common.source")}</th>
+                      <th>{t("common.status")}</th>
+                      <th>{t("common.added")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {subscribers.map((s) => (
                       <tr key={s.id}>
                         <td className="font-medium">{s.email}</td>
-                        <td className="text-mute">{s.name || "—"}</td>
+                        <td className="text-mute">{s.name || t("common.dash")}</td>
                         <td className="text-mute">
                           {s.source === "inbox"
-                            ? "Emailed us"
+                            ? t("sources.inbox")
                             : s.source === "website_form"
-                              ? "Website form"
+                              ? t("sources.website_form")
                               : s.source === "manual"
-                                ? "Added manually"
-                                : "—"}
+                                ? t("sources.manual")
+                                : t("common.dash")}
                         </td>
                         <td>
                           <StatusBadge tone={s.blocked ? "warning" : "success"}>
-                            {s.blocked ? "Unsubscribed" : "Subscribed"}
+                            {s.blocked
+                              ? t("pages.newsletter.unsubscribed")
+                              : t("pages.newsletter.subscribed")}
                           </StatusBadge>
                         </td>
                         <td className="whitespace-nowrap text-mute">
                           {s.addedAt
                             ? formatDate(s.addedAt.slice(0, 10), locale)
-                            : "—"}
+                            : t("common.dash")}
                         </td>
                       </tr>
                     ))}
@@ -357,31 +394,31 @@ export default function NewsletterPage() {
       <div className="mt-6">
         <input
           className={inputClass}
-          placeholder="Search campaigns…"
+          placeholder={t("pages.newsletter.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
       </div>
 
       <div className="mt-4">
-        <Panel title={`${filtered.length} campaigns`}>
+        <Panel title={t("pages.newsletter.campaignCount", { n: filtered.length })}>
           {loading ? (
-            <EmptyHint>Loading campaigns…</EmptyHint>
+            <EmptyHint>{t("pages.newsletter.loading")}</EmptyHint>
           ) : filtered.length === 0 ? (
             <EmptyHint>
-              No campaigns yet. Create one to email your list.
+              {t("pages.newsletter.noCampaigns")}
             </EmptyHint>
           ) : (
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Campaign</th>
-                    <th>Status</th>
-                    <th>Delivered</th>
-                    <th>Opens</th>
-                    <th>Clicks</th>
-                    <th>Sent</th>
+                    <th>{t("pages.newsletter.campaign")}</th>
+                    <th>{t("common.status")}</th>
+                    <th>{t("common.delivered")}</th>
+                    <th>{t("common.opens")}</th>
+                    <th>{t("common.clicks")}</th>
+                    <th>{t("common.sent")}</th>
                     <th />
                   </tr>
                 </thead>
@@ -393,13 +430,13 @@ export default function NewsletterPage() {
                         <p className="text-xs text-mute">{c.subject}</p>
                       </td>
                       <td>
-                        <StatusBadge tone={tone(c.status)}>{c.status}</StatusBadge>
+                        <StatusBadge tone={tone(c.status)}>{t(`status.${c.status}`)}</StatusBadge>
                       </td>
                       <td>{formatNumber(c.recipients, false, locale)}</td>
                       <td>{formatPercent(openRate(c))}</td>
                       <td>{formatPercent(clickRate(c))}</td>
                       <td className="whitespace-nowrap text-mute">
-                        {c.sentAt ? formatDate(c.sentAt.slice(0, 10), locale) : "—"}
+                        {c.sentAt ? formatDate(c.sentAt.slice(0, 10), locale) : t("common.dash")}
                       </td>
                       <td>
                         <button
@@ -407,7 +444,7 @@ export default function NewsletterPage() {
                           className={btnGhost}
                           onClick={() => setSelected(c)}
                         >
-                          Open
+                          {t("common.open")}
                         </button>
                       </td>
                     </tr>
@@ -421,17 +458,17 @@ export default function NewsletterPage() {
       </>
       ) : null}
 
-      <Modal open={openAdd} title="Send newsletter" onClose={() => setOpenAdd(false)} wide>
+      <Modal open={openAdd} title={t("pages.newsletter.sendTitle")} onClose={closeComposer} wide>
         <form className="grid gap-3" onSubmit={submit}>
-          <Field label="Internal name">
+          <Field label={t("pages.newsletter.internalName")}>
             <input
               className={inputClass}
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="April departures"
+              placeholder={t("pages.newsletter.namePlaceholder")}
             />
           </Field>
-          <Field label="Subject">
+          <Field label={t("common.subject")}>
             <input
               required
               className={inputClass}
@@ -439,33 +476,105 @@ export default function NewsletterPage() {
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
             />
           </Field>
-          <Field label="Preview text">
+          <Field label={t("pages.newsletter.previewText")}>
             <input
               className={inputClass}
               value={form.preview}
               onChange={(e) => setForm({ ...form, preview: e.target.value })}
             />
           </Field>
-          <Field label="HTML body (optional — leave blank for a simple template)">
+          <Field label={t("pages.newsletter.htmlBody")}>
             <textarea
               className={`${inputClass} min-h-32 font-mono text-xs`}
               value={form.html}
               onChange={(e) => setForm({ ...form, html: e.target.value })}
             />
           </Field>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
+                {t("pages.newsletter.recipients")}
+              </p>
+              <p className="text-xs text-mute">
+                {t("pages.newsletter.selectedCount", { n: selectedEmails.length })}
+              </p>
+            </div>
+            <p className="text-xs text-mute">{t("pages.newsletter.pickRecipients")}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => setSelectedEmails(sendable.map((s) => s.email))}
+                disabled={sendable.length === 0}
+              >
+                {t("pages.newsletter.selectAll")}
+              </button>
+              <button
+                type="button"
+                className={btnGhost}
+                onClick={() => setSelectedEmails([])}
+                disabled={selectedEmails.length === 0}
+              >
+                {t("pages.newsletter.selectNone")}
+              </button>
+            </div>
+            <input
+              className={inputClass}
+              placeholder={t("pages.newsletter.searchPeople")}
+              value={recipientQuery}
+              onChange={(e) => setRecipientQuery(e.target.value)}
+            />
+            {sendable.length === 0 ? (
+              <p className="border border-line px-3 py-6 text-center text-sm text-mute">
+                {t("pages.newsletter.noSendable")}
+              </p>
+            ) : (
+              <ul className="max-h-56 overflow-y-auto border border-line">
+                {visibleRecipients.map((s) => {
+                  const checked = selectedEmails.includes(s.email);
+                  return (
+                    <li key={s.id} className="border-b border-line last:border-b-0">
+                      <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-ash/50">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={checked}
+                          onChange={() => toggleEmail(s.email)}
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {s.name || s.email}
+                          </span>
+                          {s.name ? (
+                            <span className="block truncate text-xs text-mute">
+                              {s.email}
+                            </span>
+                          ) : null}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
           <p className="text-xs text-mute">
-            Sends now to your subscriber list.
+            {t("pages.newsletter.sendsNow")}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="submit" className={btnPrimary} disabled={sending}>
-              {sending ? "Sending…" : "Send newsletter"}
+            <button
+              type="submit"
+              className={btnPrimary}
+              disabled={sending || selectedEmails.length === 0}
+            >
+              {sending ? t("common.sending") : t("pages.newsletter.sendNow")}
             </button>
             <button
               type="button"
               className={btnSecondary}
-              onClick={() => setOpenAdd(false)}
+              onClick={closeComposer}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>
@@ -473,22 +582,24 @@ export default function NewsletterPage() {
 
       <Modal
         open={!!selected}
-        title={selected?.name ?? "Campaign"}
+        title={selected?.name ?? t("pages.newsletter.campaign")}
         onClose={() => setSelected(null)}
       >
         {selected ? (
           <div className="space-y-3 text-sm">
             <p>
-              <span className="text-mute">Subject: </span>
+              <span className="text-mute">{t("common.subject")}: </span>
               {selected.subject}
             </p>
             <p>
-              <StatusBadge tone={tone(selected.status)}>{selected.status}</StatusBadge>
+              <StatusBadge tone={tone(selected.status)}>{t(`status.${selected.status}`)}</StatusBadge>
             </p>
             <p>
-              Delivered {formatNumber(selected.recipients, false, locale)} · Opens{" "}
-              {formatPercent(openRate(selected))} · Clicks{" "}
-              {formatPercent(clickRate(selected))}
+              {t("pages.newsletter.statsLine", {
+                delivered: formatNumber(selected.recipients, false, locale),
+                opens: formatPercent(openRate(selected)),
+                clicks: formatPercent(clickRate(selected)),
+              })}
             </p>
             {selected.preview ? (
               <p className="text-mute">{selected.preview}</p>

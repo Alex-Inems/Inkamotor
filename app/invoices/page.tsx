@@ -19,7 +19,6 @@ import {
   type InvoiceStatus,
 } from "@/lib/demo-data";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
-import { invoiceCompany } from "@/lib/invoice-company";
 import { invoiceTone } from "@/lib/status";
 import { useLocale } from "@/lib/i18n";
 
@@ -55,8 +54,8 @@ export default function InvoicesPage() {
     clientAddress: "",
     currency: "EUR" as "EUR" | "USD",
     dueDate: todayIso(),
-    notes: invoiceCompany.paymentNote,
-    lines: [{ ...emptyLine(), description: "Motorcycle tour — 1 rider" }] as LineDraft[],
+    notes: t("invoiceDoc.paymentNote"),
+    lines: [{ ...emptyLine(), description: t("invoiceDoc.defaultLine") }] as LineDraft[],
   });
 
   const filtered = useMemo(() => {
@@ -116,8 +115,8 @@ export default function InvoicesPage() {
       clientAddress: "",
       currency: "EUR",
       dueDate: todayIso(),
-      notes: invoiceCompany.paymentNote,
-      lines: [{ ...emptyLine(), description: "Motorcycle tour — 1 rider" }],
+      notes: t("invoiceDoc.paymentNote"),
+      lines: [{ ...emptyLine(), description: t("invoiceDoc.defaultLine") }],
     });
     setOpenAdd(false);
   }
@@ -136,9 +135,9 @@ export default function InvoicesPage() {
     try {
       const { downloadInvoicePdf } = await import("@/lib/invoice-pdf");
       await downloadInvoicePdf(preview, locale);
-      pushToast(`Downloaded ${preview.number}.pdf`);
+      pushToast(t("pages.invoices.downloaded", { file: `${preview.number}.pdf` }));
     } catch (err) {
-      pushToast(err instanceof Error ? err.message : "PDF download failed");
+      pushToast(err instanceof Error ? err.message : t("pages.invoices.pdfFailed"));
     } finally {
       setDownloading(false);
     }
@@ -166,7 +165,7 @@ export default function InvoicesPage() {
       const json = (await res.json()) as { error?: string; hint?: string };
       if (!res.ok) {
         pushToast(
-          `${t("pages.invoices.emailFailed")}: ${json.error || "unknown error"}`,
+          `${t("pages.invoices.emailFailed")}: ${json.error || t("common.unknownError")}`,
         );
         return;
       }
@@ -179,7 +178,7 @@ export default function InvoicesPage() {
     } catch (err) {
       pushToast(
         `${t("pages.invoices.emailFailed")}: ${
-          err instanceof Error ? err.message : "unknown error"
+          err instanceof Error ? err.message : t("common.unknownError")
         }`,
       );
     } finally {
@@ -201,23 +200,23 @@ export default function InvoicesPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Paid"
+          label={t("pages.invoices.paid")}
           value={formatMoney(paidTotal, "USD", true, locale)}
-          hint={`${paid.length} invoices`}
+          hint={t("pages.invoices.paidHint", { n: paid.length })}
         />
         <KpiCard
-          label="Outstanding"
+          label={t("pages.invoices.outstanding")}
           value={formatMoney(outstandingTotal, "USD", true, locale)}
-          hint={`${outstanding.length} open`}
+          hint={t("pages.invoices.outstandingHint", { n: outstanding.length })}
         />
-        <KpiCard label="Overdue" value={formatNumber(overdue.length, false, locale)} />
-        <KpiCard label="Drafts" value={formatNumber(drafts.length, false, locale)} />
+        <KpiCard label={t("pages.invoices.overdue")} value={formatNumber(overdue.length, false, locale)} />
+        <KpiCard label={t("pages.invoices.drafts")} value={formatNumber(drafts.length, false, locale)} />
       </div>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2">
         <input
           className={inputClass}
-          placeholder="Search invoice # or client…"
+          placeholder={t("pages.invoices.search")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -228,27 +227,27 @@ export default function InvoicesPage() {
         >
           {statuses.map((s) => (
             <option key={s} value={s}>
-              {s === "all" ? "All statuses" : s}
+              {s === "all" ? t("common.allStatuses") : t(`status.${s}`)}
             </option>
           ))}
         </select>
       </div>
 
       <div className="mt-4 space-y-4">
-        <Panel title={`${filtered.length} of ${invoices.length} invoices`}>
+        <Panel title={t("pages.invoices.count", { shown: filtered.length, total: invoices.length })}>
           {filtered.length === 0 ? (
-            <EmptyHint>No invoices match these filters.</EmptyHint>
+            <EmptyHint>{t("pages.invoices.empty")}</EmptyHint>
           ) : (
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Number</th>
-                    <th>Client</th>
-                    <th>Status</th>
-                    <th>Issued</th>
-                    <th>Due</th>
-                    <th>Total</th>
+                    <th>{t("common.number")}</th>
+                    <th>{t("common.client")}</th>
+                    <th>{t("common.status")}</th>
+                    <th>{t("common.issued")}</th>
+                    <th>{t("common.due")}</th>
+                    <th>{t("common.total")}</th>
                     <th />
                   </tr>
                 </thead>
@@ -262,7 +261,7 @@ export default function InvoicesPage() {
                       </td>
                       <td>
                         <StatusBadge tone={invoiceTone(inv.status)}>
-                          {inv.status}
+                          {t(`status.${inv.status}`)}
                         </StatusBadge>
                       </td>
                       <td className="whitespace-nowrap text-mute">
@@ -292,9 +291,9 @@ export default function InvoicesPage() {
         </Panel>
       </div>
 
-      <Modal open={openAdd} title="Generate invoice" onClose={() => setOpenAdd(false)} wide>
+      <Modal open={openAdd} title={t("pages.invoices.generate")} onClose={() => setOpenAdd(false)} wide>
         <form className="grid gap-3 sm:grid-cols-2" onSubmit={submitInvoice}>
-          <Field label="Client">
+          <Field label={t("common.client")}>
             <input
               required
               className={inputClass}
@@ -302,7 +301,7 @@ export default function InvoicesPage() {
               onChange={(e) => setForm({ ...form, client: e.target.value })}
             />
           </Field>
-          <Field label="Billing email">
+          <Field label={t("pages.invoices.billingEmail")}>
             <input
               required
               type="email"
@@ -312,7 +311,7 @@ export default function InvoicesPage() {
             />
           </Field>
           <div className="sm:col-span-2">
-            <Field label="Client address (optional)">
+            <Field label={t("pages.invoices.clientAddress")}>
               <textarea
                 className={`${inputClass} min-h-16`}
                 value={form.clientAddress}
@@ -322,7 +321,7 @@ export default function InvoicesPage() {
               />
             </Field>
           </div>
-          <Field label="Currency">
+          <Field label={t("pages.invoices.currency")}>
             <select
               className={inputClass}
               value={form.currency}
@@ -334,7 +333,7 @@ export default function InvoicesPage() {
               <option value="USD">USD</option>
             </select>
           </Field>
-          <Field label="Due date">
+          <Field label={t("pages.invoices.dueDate")}>
             <input
               required
               type="date"
@@ -346,14 +345,14 @@ export default function InvoicesPage() {
 
           <div className="sm:col-span-2 space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-              Line items
+              {t("pages.invoices.lineItems")}
             </p>
             {form.lines.map((line, index) => (
               <div key={index} className="grid gap-2 sm:grid-cols-[1fr_5rem_7rem_auto]">
                 <input
                   required
                   className={inputClass}
-                  placeholder="Description"
+                  placeholder={t("invoiceDoc.description")}
                   value={line.description}
                   onChange={(e) => {
                     const lines = [...form.lines];
@@ -366,7 +365,7 @@ export default function InvoicesPage() {
                   type="number"
                   min="1"
                   className={inputClass}
-                  placeholder="Qty"
+                  placeholder={t("pages.invoices.qty")}
                   value={line.qty}
                   onChange={(e) => {
                     const lines = [...form.lines];
@@ -380,7 +379,7 @@ export default function InvoicesPage() {
                   min="0"
                   step="0.01"
                   className={inputClass}
-                  placeholder="Price"
+                  placeholder={t("pages.invoices.price")}
                   value={line.unitPrice}
                   onChange={(e) => {
                     const lines = [...form.lines];
@@ -399,7 +398,7 @@ export default function InvoicesPage() {
                     })
                   }
                 >
-                  Remove
+                  {t("common.remove")}
                 </button>
               </div>
             ))}
@@ -408,12 +407,12 @@ export default function InvoicesPage() {
               className={btnSecondary}
               onClick={() => setForm({ ...form, lines: [...form.lines, emptyLine()] })}
             >
-              Add line
+              {t("pages.invoices.addLine")}
             </button>
           </div>
 
           <div className="sm:col-span-2">
-            <Field label="Notes / payment terms">
+            <Field label={t("pages.invoices.notesTerms")}>
               <textarea
                 className={`${inputClass} min-h-20`}
                 value={form.notes}
@@ -422,19 +421,18 @@ export default function InvoicesPage() {
             </Field>
           </div>
           <p className="text-xs text-mute sm:col-span-2">
-            Saved as <strong>draft</strong>. Use Email to client when ready —
-            status becomes sent after the email goes out successfully.
+            {t("pages.invoices.draftHint")}
           </p>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button type="submit" className={btnPrimary}>
-              Generate invoice
+              {t("pages.invoices.generate")}
             </button>
             <button
               type="button"
               className={btnSecondary}
               onClick={() => setOpenAdd(false)}
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </form>
@@ -455,7 +453,7 @@ export default function InvoicesPage() {
                 onClick={() => void downloadPdf()}
               >
                 {downloading
-                  ? "Downloading…"
+                  ? t("common.downloading")
                   : t("pages.invoices.downloadPdf")}
               </button>
               <button type="button" className={btnSecondary} onClick={printPdf}>
@@ -467,7 +465,7 @@ export default function InvoicesPage() {
                 disabled={emailing}
                 onClick={() => void emailInvoice()}
               >
-                {emailing ? "Emailing…" : "Email to client"}
+                {emailing ? t("common.emailing") : t("pages.invoices.emailToClient")}
               </button>
               {preview.status === "draft" ? (
                 <button
@@ -495,7 +493,7 @@ export default function InvoicesPage() {
                     });
                   }}
                 >
-                  Mark paid
+                  {t("pages.invoices.markPaid")}
                 </button>
               ) : null}
               {preview.status !== "void" && preview.status !== "paid" ? (
@@ -507,7 +505,7 @@ export default function InvoicesPage() {
                     setPreview({ ...preview, status: "void" });
                   }}
                 >
-                  Void
+                  {t("pages.invoices.void")}
                 </button>
               ) : null}
               <button
@@ -515,7 +513,7 @@ export default function InvoicesPage() {
                 className={btnSecondary}
                 onClick={() => setPreview(null)}
               >
-                Close
+                {t("common.close")}
               </button>
             </div>
           </div>

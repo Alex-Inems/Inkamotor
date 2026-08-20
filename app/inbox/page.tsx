@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useCrm } from "@/lib/crm-store";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
+import { localeMeta, useLocale } from "@/lib/i18n";
 
 type MailMessage = {
   id: string;
@@ -90,37 +91,42 @@ function displayName(name: string | null, email: string) {
   return local.replace(/[._-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function stamp(iso: string) {
+function stamp(iso: string, locale: string) {
   const then = new Date(iso);
   if (Number.isNaN(then.getTime())) return "";
   const now = new Date();
   if (then.toDateString() === now.toDateString()) {
-    return then.toLocaleTimeString(undefined, {
+    return then.toLocaleTimeString(locale, {
       hour: "2-digit",
       minute: "2-digit",
     });
   }
   const days = (now.getTime() - then.getTime()) / 86_400_000;
-  if (days < 7) return then.toLocaleDateString(undefined, { weekday: "short" });
-  return then.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  if (days < 7) return then.toLocaleDateString(locale, { weekday: "short" });
+  return then.toLocaleDateString(locale, { day: "numeric", month: "short" });
 }
 
-function clockTime(iso: string) {
+function clockTime(iso: string, locale: string) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return "";
-  return at.toLocaleTimeString(undefined, {
+  return at.toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-function dayLabel(iso: string) {
+function dayLabel(
+  iso: string,
+  locale: string,
+  today: string,
+  yesterday: string,
+) {
   const then = new Date(iso);
   const now = new Date();
-  if (then.toDateString() === now.toDateString()) return "Today";
-  const yesterday = new Date(now.getTime() - 86_400_000);
-  if (then.toDateString() === yesterday.toDateString()) return "Yesterday";
-  return then.toLocaleDateString(undefined, {
+  if (then.toDateString() === now.toDateString()) return today;
+  const yest = new Date(now.getTime() - 86_400_000);
+  if (then.toDateString() === yest.toDateString()) return yesterday;
+  return then.toLocaleDateString(locale, {
     day: "numeric",
     month: "long",
     year: then.getFullYear() === now.getFullYear() ? undefined : "numeric",
@@ -129,6 +135,8 @@ function dayLabel(iso: string) {
 
 export default function InboxPage() {
   const { addSale, leads, pushToast, refreshCrm } = useCrm();
+  const { t, locale } = useLocale();
+  const loc = localeMeta[locale].bcp47;
   const [mail, setMail] = useState<MailMessage[]>([]);
   const [replies, setReplies] = useState<MailReply[]>([]);
   const [conn, setConn] = useState<InboxStatus | null>(null);
@@ -190,31 +198,31 @@ export default function InboxPage() {
   }, []);
 
   const loadMail = useCallback(async () => {
-    const res = await fetch("/api/inbox/mail");
+    const res = await fetch(`/api/inbox/mail?locale=${locale}`);
     const json = await res.json();
     if (!res.ok) {
       setMail([]);
       return;
     }
     setMail((json as { messages: MailMessage[] }).messages ?? []);
-  }, []);
+  }, [locale]);
 
   const loadReplies = useCallback(async () => {
-    const res = await fetch("/api/inbox/replies");
+    const res = await fetch(`/api/inbox/replies?locale=${locale}`);
     if (!res.ok) return;
     const json = await res.json();
     setReplies((json as { replies: MailReply[] }).replies ?? []);
-  }, []);
+  }, [locale]);
 
   const sync = useCallback(
     async (opts?: { silent?: boolean }) => {
       const silent = opts?.silent ?? false;
       setSyncing(true);
       try {
-        const res = await fetch("/api/inbox/mail", { method: "POST" });
+        const res = await fetch(`/api/inbox/mail?locale=${locale}`, { method: "POST" });
         const json = await res.json();
         if (!res.ok) {
-          if (!silent) pushToast((json as ApiError).error || "Sync failed");
+          if (!silent) pushToast((json as ApiError).error || t("pages.inbox.syncFailed"));
           return;
         }
         setMail((json as { messages: MailMessage[] }).messages ?? []);
@@ -222,16 +230,17 @@ export default function InboxPage() {
         void loadStatus();
         void refreshCrm();
         if (!silent && ((json as { synced?: number }).synced ?? 0) === 0) {
-          pushToast("No new messages");
+          pushToast(t("pages.inbox.noNew"));
         }
       } finally {
         setSyncing(false);
       }
     },
-    [loadStatus, pushToast, refreshCrm],
+    [loadStatus, pushToast, refreshCrm, t, locale],
   );
 
   useEffect(() => {
+    setLoading(true);
     void loadStatus();
     void loadReplies();
     loadMail().finally(() => setLoading(false));
@@ -269,8 +278,10 @@ export default function InboxPage() {
         replies,
         ownAddresses,
         openedEmails: opened,
+        youPrefix: t("pages.inbox.youPrefix"),
+        emptyPreview: t("pages.inbox.noMessage"),
       }),
-    [mail, replies, ownAddresses, opened],
+    [mail, replies, ownAddresses, opened, t],
   );
 
   useEffect(() => {
@@ -322,14 +333,15 @@ export default function InboxPage() {
         last &&
         prev &&
         last.mine === m.mine &&
-        dayLabel(prev.at) === dayLabel(m.at) &&
+        dayLabel(prev.at, loc, t("common.today"), t("common.yesterday")) ===
+          dayLabel(m.at, loc, t("common.today"), t("common.yesterday")) &&
         new Date(m.at).getTime() - new Date(prev.at).getTime() <
         GROUP_WINDOW_MS;
       if (close) last.items.push(m);
       else out.push({ key: m.key, mine: m.mine, at: m.at, items: [m] });
     }
     return out;
-  }, [active]);
+  }, [active, loc, t]);
 
   const tabCounts = useMemo(() => {
     const inboxRooms = rooms.filter((r) => !r.bulk);
@@ -380,7 +392,7 @@ export default function InboxPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        pushToast((json as ApiError).error || "Could not send");
+        pushToast((json as ApiError).error || t("pages.inbox.sendFailed"));
         return;
       }
       const saved = (json as { reply?: MailReply | null }).reply;
@@ -415,7 +427,7 @@ export default function InboxPage() {
         }`}
       >
         <div className="flex items-center justify-between gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
-          <h1 className="font-display text-lg tracking-wide">Messages</h1>
+          <h1 className="font-display text-lg tracking-wide">{t("pages.inbox.messages")}</h1>
           {unreadTotal > 0 ? (
             <CountBadge count={unreadTotal} />
           ) : null}
@@ -424,7 +436,7 @@ export default function InboxPage() {
         <div className="px-3 pt-2 sm:px-4 sm:pt-3">
           <input
             className="w-full rounded-full border border-line bg-ash px-3.5 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none sm:px-3"
-            placeholder="Search messages"
+            placeholder={t("pages.inbox.search")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -433,17 +445,17 @@ export default function InboxPage() {
         <div className="grid grid-cols-4 border-b border-line">
           {(
             [
-              { id: "inbox" as const, label: "All", count: tabCounts.inbox, alert: tabCounts.inbox > 0 },
-              { id: "unread" as const, label: "Unread", count: tabCounts.unread, alert: tabCounts.unread > 0 },
+              { id: "inbox" as const, label: t("pages.inbox.all"), count: tabCounts.inbox, alert: tabCounts.inbox > 0 },
+              { id: "unread" as const, label: t("pages.inbox.unread"), count: tabCounts.unread, alert: tabCounts.unread > 0 },
               {
                 id: "starred" as const,
-                label: "Starred",
+                label: t("pages.inbox.starred"),
                 count: tabCounts.starred,
                 alert: tabCounts.starredUnread > 0,
               },
               {
                 id: "promos" as const,
-                label: "Promos",
+                label: t("pages.inbox.promos"),
                 count: tabCounts.promos,
                 alert: tabCounts.promosUnread > 0,
               },
@@ -455,9 +467,12 @@ export default function InboxPage() {
               onClick={() => setFilter(tab.id)}
               title={
                 tab.id === "promos"
-                  ? `${tabCounts.promosUnread} unread · ${tabCounts.promosTotal} in Promos`
+                  ? t("pages.inbox.promoTitle", {
+                      unread: tabCounts.promosUnread,
+                      total: tabCounts.promosTotal,
+                    })
                   : tab.id === "unread"
-                    ? `${tab.count} unread chats`
+                    ? t("pages.inbox.unreadChats", { n: tab.count })
                     : undefined
               }
               className={`flex min-w-0 items-center justify-center gap-1 px-1 py-2.5 text-[11px] font-semibold sm:text-xs ${
@@ -476,22 +491,22 @@ export default function InboxPage() {
 
         {conn && !conn.namecheap.ready ? (
           <p className="border-y border-line bg-gold/10 px-4 py-2 text-xs text-gold">
-            Mailbox not connected yet — finish Setup to receive messages.
+            {t("pages.inbox.mailboxMissing")}
           </p>
         ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto border-t border-line">
           {loading ? (
-            <p className="px-4 py-8 text-center text-sm text-mute">Loading…</p>
+            <p className="px-4 py-8 text-center text-sm text-mute">{t("common.loading")}</p>
           ) : visible.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-mute">
               {query
-                ? "Nothing matches that search."
+                ? t("pages.inbox.nothingMatches")
                 : filter === "unread"
-                  ? "Nothing unread."
+                  ? t("pages.inbox.nothingUnread")
                   : filter === "starred"
-                    ? "No starred conversations yet."
-                    : "No messages here."}
+                    ? t("pages.inbox.nothingStarred")
+                    : t("pages.inbox.empty")}
             </p>
           ) : (
             visible.map((room) => (
@@ -502,6 +517,7 @@ export default function InboxPage() {
                 starred={starred.includes(room.email)}
                 onOpen={() => openRoom(room.email)}
                 onStar={() => toggleStar(room.email)}
+                locale={loc}
               />
             ))
           )}
@@ -514,10 +530,10 @@ export default function InboxPage() {
           className="border-t border-line px-3 py-2.5 text-left text-[11px] text-mute transition-colors hover:text-ink disabled:opacity-60 pb-[max(0.65rem,env(safe-area-inset-bottom))] sm:px-4"
         >
           {syncing
-            ? "Checking for new messages…"
+            ? t("pages.inbox.checking")
             : syncedAt
-              ? `Updated ${clockTime(syncedAt)} · check now`
-              : "Check for new messages"}
+              ? t("pages.inbox.updatedCheck", { time: clockTime(syncedAt, loc) })
+              : t("pages.inbox.checkNow")}
         </button>
       </aside>
 
@@ -529,14 +545,14 @@ export default function InboxPage() {
       >
         {!active ? (
           <div className="flex flex-1 items-center justify-center px-6">
-            <p className="text-sm text-mute">Select a conversation.</p>
+            <p className="text-sm text-mute">{t("pages.inbox.selectConversation")}</p>
           </div>
         ) : (
           <>
             <header className="wa-sender-bar flex shrink-0 items-center gap-0 px-1 py-1 sm:gap-1 sm:px-3 sm:py-2">
               <button
                 type="button"
-                aria-label="Back to messages"
+                aria-label={t("pages.inbox.backToMessages")}
                 className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream lg:hidden"
                 onClick={() => closeThread()}
               >
@@ -561,8 +577,8 @@ export default function InboxPage() {
               </button>
               <button
                 type="button"
-                aria-label={starred.includes(active.email) ? "Unstar" : "Star"}
-                title={starred.includes(active.email) ? "Unstar" : "Star"}
+                aria-label={starred.includes(active.email) ? t("pages.inbox.unstar") : t("pages.inbox.star")}
+                title={starred.includes(active.email) ? t("pages.inbox.unstar") : t("pages.inbox.star")}
                 onClick={() => toggleStar(active.email)}
                 className={`flex h-11 w-11 shrink-0 items-center justify-center transition-colors ${
                   starred.includes(active.email)
@@ -574,8 +590,8 @@ export default function InboxPage() {
               </button>
               <button
                 type="button"
-                aria-label="Details"
-                title="Details"
+                aria-label={t("pages.inbox.details")}
+                title={t("pages.inbox.details")}
                 onClick={() => setDetailsOpen((v) => !v)}
                 className={`flex h-11 w-11 shrink-0 items-center justify-center transition-colors ${
                   detailsOpen ? "text-gold" : "text-cream/85 hover:text-cream"
@@ -591,13 +607,31 @@ export default function InboxPage() {
             >
               {groups.map((group, i) => {
                 const prev = groups[i - 1];
-                const newDay = !prev || dayLabel(prev.at) !== dayLabel(group.at);
+                const newDay =
+                  !prev ||
+                  dayLabel(
+                    prev.at,
+                    loc,
+                    t("common.today"),
+                    t("common.yesterday"),
+                  ) !==
+                    dayLabel(
+                      group.at,
+                      loc,
+                      t("common.today"),
+                      t("common.yesterday"),
+                    );
                 return (
                   <div key={group.key}>
                     {newDay ? (
                       <div className="flex justify-center py-4">
                         <span className="bg-panel px-3 py-1 text-[11px] font-semibold tracking-wide text-mute">
-                          {dayLabel(group.at)}
+                          {dayLabel(
+                            group.at,
+                            loc,
+                            t("common.today"),
+                            t("common.yesterday"),
+                          )}
                         </span>
                       </div>
                     ) : null}
@@ -606,6 +640,7 @@ export default function InboxPage() {
                       contactName={activeName}
                       contactEmail={active.email}
                       showOriginal={showOriginal}
+                      locale={loc}
                     />
                   </div>
                 );
@@ -630,25 +665,25 @@ export default function InboxPage() {
                         void send();
                       }
                     }}
-                    placeholder={`Message ${activeName}`}
+                    placeholder={t("pages.inbox.messagePlaceholder", { name: activeName })}
                     className="max-h-32 min-h-11 flex-1 resize-none rounded-[22px] border border-line bg-ash px-3.5 py-2.5 text-sm leading-snug outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none"
                   />
                   <button
                     type="button"
                     onClick={() => void send()}
                     disabled={sending || !draft.trim()}
-                    aria-label="Send"
+                    aria-label={t("pages.inbox.send")}
                     className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chat-out text-chat-out-text transition-colors hover:bg-accent-deep disabled:opacity-40 sm:w-auto sm:rounded-none sm:bg-accent sm:px-4 sm:text-sm sm:font-semibold sm:text-cream"
                   >
                     <span className="sm:hidden">
                       {sending ? "…" : <SendIcon />}
                     </span>
-                    <span className="hidden sm:inline">{sending ? "…" : "Send"}</span>
+                    <span className="hidden sm:inline">{sending ? "…" : t("pages.inbox.send")}</span>
                   </button>
                 </div>
               ) : (
                 <p className="px-1 pb-1 text-xs text-gold">
-                  Sending isn’t set up yet — finish Setup to reply from here.
+                  {t("pages.inbox.sendingMissing")}
                 </p>
               )}
             </footer>
@@ -662,21 +697,21 @@ export default function InboxPage() {
           <div className="wa-sender-bar flex shrink-0 items-center gap-1 px-1 py-1 lg:hidden">
             <button
               type="button"
-              aria-label="Back to chat"
+              aria-label={t("pages.inbox.backToChat")}
               onClick={() => setDetailsOpen(false)}
               className="flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream"
             >
               <BackIcon />
             </button>
             <p className="min-w-0 flex-1 truncate px-2 text-[15px] font-semibold text-cream">
-              Details
+              {t("pages.inbox.details")}
             </p>
           </div>
           <div className="hidden items-center justify-between gap-2 border-b border-line px-4 py-2.5 lg:flex">
-            <p className="text-sm font-semibold">Details</p>
+            <p className="text-sm font-semibold">{t("pages.inbox.details")}</p>
             <button
               type="button"
-              aria-label="Close details"
+              aria-label={t("pages.inbox.closeDetails")}
               onClick={() => setDetailsOpen(false)}
               className="px-2 py-1 text-mute hover:text-ink"
             >
@@ -707,12 +742,12 @@ export default function InboxPage() {
                   </div>
                 ))}
               <div className="flex gap-2">
-                <dt className="w-20 shrink-0 text-mute">Messages</dt>
+                <dt className="w-20 shrink-0 text-mute">{t("pages.inbox.messages")}</dt>
                 <dd>{active.messages.length}</dd>
               </div>
               <div className="flex gap-2">
-                <dt className="w-20 shrink-0 text-mute">Last</dt>
-                <dd>{stamp(active.lastAt)}</dd>
+                <dt className="w-20 shrink-0 text-mute">{t("common.last")}</dt>
+                <dd>{stamp(active.lastAt, loc)}</dd>
               </div>
             </dl>
 
@@ -721,50 +756,46 @@ export default function InboxPage() {
               onClick={() => setShowOriginal((v) => !v)}
               className="w-full border border-line px-3 py-2 text-xs font-semibold text-mute transition-colors hover:bg-ash hover:text-ink"
             >
-              {showOriginal ? "Show tidied messages" : "Show original emails"}
+              {showOriginal ? t("pages.inbox.showTidied") : t("pages.inbox.showOriginal")}
             </button>
 
             <div className="space-y-2 border-t border-line pt-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
-                Lead
+                {t("pages.inbox.lead")}
               </p>
               {active.bulk ? (
                 <p className="text-xs text-mute">
-                  Promos stay out of Leads.
+                  {t("pages.inbox.promosOut")}
                 </p>
               ) : (
                 <>
                   <p className="text-sm text-ink">
                     {activeLead
-                      ? {
-                          new: "Need reply",
-                          contacted: "Talking",
-                          qualified: "Ready to book",
-                          won: "Booked",
-                          lost: "Not booked",
-                        }[activeLead.status]
-                      : "Saved from Inbox on the next sync"}
+                      ? t(`stages.${activeLead.status}`)
+                      : t("pages.inbox.savedNextSync")}
                   </p>
                   <Link
                     href="/leads"
                     className="block w-full border border-line px-3 py-2 text-center text-xs font-semibold text-ink transition-colors hover:bg-ash"
                   >
-                    Open in Leads
+                    {t("pages.inbox.openInLeads")}
                   </Link>
                 </>
               )}
               <DetailAction
-                label="Create sale"
+                label={t("pages.inbox.createSale")}
                 onClick={() =>
                   void addSale({
                     customer: activeName,
                     email: active.email,
-                    product: active.lastSubject || "Tour enquiry",
+                    product: active.lastSubject || t("pages.inbox.tourEnquiry"),
                     amount: 0,
                     source: "website",
                     inquiryId: null,
                     leadId: activeLead?.id ?? null,
-                    notes: `Started from inbox: ${active.lastSubject}`,
+                    notes: t("pages.inbox.startedFrom", {
+                      subject: active.lastSubject,
+                    }),
                   })
                 }
               />
@@ -782,13 +813,16 @@ function RoomRow({
   starred,
   onOpen,
   onStar,
+  locale,
 }: {
   room: Room;
   active: boolean;
   starred: boolean;
   onOpen: () => void;
   onStar: () => void;
+  locale: string;
 }) {
+  const { t } = useLocale();
   const unread = room.unread > 0;
   return (
     <div
@@ -816,7 +850,7 @@ function RoomRow({
             <span
               className={`shrink-0 text-[11px] ${unread ? "font-semibold text-gold" : "text-mute"}`}
             >
-              {stamp(room.lastAt)}
+              {stamp(room.lastAt, locale)}
             </span>
           </span>
           <span className="mt-0.5 flex items-center gap-2">
@@ -833,7 +867,11 @@ function RoomRow({
       </button>
       <button
         type="button"
-        aria-label={starred ? "Unstar conversation" : "Star conversation"}
+        aria-label={
+          starred
+            ? t("pages.inbox.unstarConversation")
+            : t("pages.inbox.starConversation")
+        }
         onClick={onStar}
         className={`shrink-0 p-2 transition-colors ${
           starred
@@ -871,11 +909,13 @@ function MessageGroup({
   contactName,
   contactEmail,
   showOriginal,
+  locale,
 }: {
   group: Group;
   contactName: string;
   contactEmail: string;
   showOriginal: boolean;
+  locale: string;
 }) {
   const last = group.items[group.items.length - 1];
 
@@ -901,6 +941,7 @@ function MessageGroup({
             senderName={!group.mine && i === 0 ? contactName : null}
             tail={m.key === last?.key}
             showOriginal={showOriginal}
+            locale={locale}
           />
         ))}
       </div>
@@ -914,13 +955,16 @@ function MessageBody({
   senderName,
   tail,
   showOriginal,
+  locale,
 }: {
   message: Message;
   mine: boolean;
   senderName: string | null;
   tail: boolean;
   showOriginal: boolean;
+  locale: string;
 }) {
+  const { t } = useLocale();
   const [showQuoted, setShowQuoted] = useState(false);
   const { clean } = message;
   const bubble = `wa-bubble ${mine ? "wa-bubble-out" : "wa-bubble-in"}${
@@ -929,7 +973,7 @@ function MessageBody({
 
   const stampEl = (
     <span className="wa-time">
-      {clockTime(message.at)}
+      {clockTime(message.at, locale)}
       {mine ? <CheckIcon /> : null}
     </span>
   );
@@ -968,7 +1012,7 @@ function MessageBody({
       {clean.text ? (
         <p className="whitespace-pre-wrap wrap-break-word">{clean.text}</p>
       ) : clean.fields.length === 0 ? (
-        <p className="opacity-80">{message.raw?.trim() || "Empty message"}</p>
+        <p className="opacity-80">{message.raw?.trim() || t("pages.inbox.emptyMessage")}</p>
       ) : null}
 
       {clean.quoted ? (
@@ -980,7 +1024,7 @@ function MessageBody({
               mine ? "text-chat-out-text/70" : "text-mute"
             }`}
           >
-            {showQuoted ? "Hide earlier messages" : "Show earlier messages"}
+            {showQuoted ? t("pages.inbox.hideQuoted") : t("pages.inbox.showQuoted")}
           </button>
           {showQuoted ? (
             <pre

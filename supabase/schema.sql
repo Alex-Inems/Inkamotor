@@ -161,3 +161,13 @@ alter table follow_ups enable row level security;
 alter table sales enable row level security;
 alter table invoices enable row level security;
 alter table newsletter_campaigns enable row level security;
+
+create table if not exists mail_translations (
+  locale text not null,
+  source_hash text not null,
+  translated text not null,
+  created_at timestamptz not null default now(),
+  primary key (locale, source_hash)
+);
+
+alter table mail_translations enable row level security;

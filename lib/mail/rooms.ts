@@ -77,9 +77,13 @@ export function groupMailRooms(input: {
   replies: ReplyItem[];
   ownAddresses: (string | null | undefined)[];
   openedEmails?: string[];
+  youPrefix?: string;
+  emptyPreview?: string;
 }): MailRoom[] {
   const { mail, replies, ownAddresses } = input;
   const opened = input.openedEmails ?? [];
+  const youPrefix = input.youPrefix ?? "You: ";
+  const emptyPreview = input.emptyPreview ?? "(no message)";
   const byEmail = new Map<string, MailRoom>();
 
   const ensure = (email: string, name: string | null) => {
@@ -207,7 +211,7 @@ export function groupMailRooms(input: {
     const last = room.messages[room.messages.length - 1];
     room.lastAt = last?.at ?? "";
     room.lastText = last
-      ? `${last.mine ? "You: " : ""}${previewOf(last.clean, "(no message)")}`
+      ? `${last.mine ? youPrefix : ""}${previewOf(last.clean, emptyPreview)}`
       : "";
     const lastIn = [...room.messages].reverse().find((m) => !m.mine);
     room.lastSubject = lastIn?.subject ?? last?.subject ?? "";

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { btnSecondary } from "@/components/modal";
 import { EmptyHint, PageHeader, Panel, StatusBadge } from "@/components/ui";
+import { useT } from "@/lib/i18n";
 
 type IntegrationStatus = {
   ready: boolean;
@@ -17,51 +18,41 @@ type SetupResponse = {
 
 const GUIDES: Record<
   string,
-  { title: string; where: string; keys: string[]; after?: string }
+  { titleKey: string; whereKey: string; keys: string[]; afterKey?: string }
 > = {
   auth: {
-    title: "CRM login",
-    where: "Hardcoded in lib/auth-credentials.ts",
+    titleKey: "pages.setup.authTitle",
+    whereKey: "pages.setup.authWhere",
     keys: ["contact@inkamototours.com", "InkamotoCRM2026!"],
-    after: "Optional env overrides: CRM_ACCESS_EMAIL / CRM_ACCESS_PASSWORD.",
+    afterKey: "pages.setup.authAfter",
   },
   supabase: {
-    title: "Supabase (required)",
-    where: "supabase.com → New project → Settings → API",
+    titleKey: "pages.setup.supabaseTitle",
+    whereKey: "pages.setup.supabaseWhere",
     keys: ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
-    after: "Paste supabase/schema.sql in SQL Editor → Run once.",
+    afterKey: "pages.setup.supabaseAfter",
   },
-  // Google / Meta guides commented out — no env required for now.
-  // googleSearchConsole: {
-  //   title: "Google Search Console (paused)",
-  //   where: "console.cloud.google.com → Search Console API → OAuth + refresh token",
-  //   keys: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN", "GSC_SITE_URL"],
-  // },
-  // metaAds: {
-  //   title: "Meta Ads (paused)",
-  //   where: "Meta Business Manager → ad account",
-  //   keys: ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID"],
-  // },
   brevo: {
-    title: "Email sending (replies + newsletter)",
-    where: "brevo.com → Settings → SMTP & API → API keys · verify sender",
+    titleKey: "pages.setup.brevoTitle",
+    whereKey: "pages.setup.brevoWhere",
     keys: [
       "BREVO_API_KEY",
       "BREVO_SENDER_EMAIL",
       "BREVO_SENDER_NAME",
       "BREVO_LIST_ID",
     ],
-    after: "Powers outbound replies, invoice email, and newsletters.",
+    afterKey: "pages.setup.brevoAfter",
   },
   imap: {
-    title: "Incoming mailbox (inbox)",
-    where: "Private Email → mail.privateemail.com · SSL 993",
+    titleKey: "pages.setup.imapTitle",
+    whereKey: "pages.setup.imapWhere",
     keys: ["IMAP_HOST", "IMAP_PORT", "IMAP_USER", "IMAP_PASSWORD"],
-    after: "Mailbox for contact@inkamototours.com — fills the Inbox tab.",
+    afterKey: "pages.setup.imapAfter",
   },
 };
 
 export default function SetupPage() {
+  const t = useT();
   const [data, setData] = useState<SetupResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,13 +61,13 @@ export default function SetupPage() {
     const res = await fetch("/api/setup");
     const json = await res.json();
     if (!res.ok) {
-      setError((json as { error?: string }).error || "Could not load setup");
+      setError((json as { error?: string }).error || t("pages.setup.loadFailed"));
       setData(null);
       return;
     }
     setError(null);
     setData(json as SetupResponse);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     load().finally(() => setLoading(false));
@@ -90,8 +81,8 @@ export default function SetupPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Live setup"
-        description="Fill .env.local (see .env.example). Restart npm run dev after saving. Same keys on Vercel."
+        title={t("pages.setup.title")}
+        description={t("pages.setup.description")}
         action={
           <button
             type="button"
@@ -101,19 +92,23 @@ export default function SetupPage() {
               load().finally(() => setLoading(false));
             }}
           >
-            Recheck
+            {t("pages.setup.recheck")}
           </button>
         }
       />
 
       {loading && !data ? (
-        <EmptyHint>Checking env…</EmptyHint>
+        <EmptyHint>{t("pages.setup.checking")}</EmptyHint>
       ) : error ? (
         <EmptyHint>{error}</EmptyHint>
       ) : data ? (
         <>
           <p className="text-sm text-mute">
-            {readyCount}/{total} integrations ready · {data.hint}
+            {t("pages.setup.readyCount", {
+              ready: readyCount,
+              total,
+              hint: data.hint,
+            })}
           </p>
           <div className="grid gap-4 lg:grid-cols-2">
             {Object.entries(GUIDES).map(([key, guide]) => {
@@ -123,14 +118,16 @@ export default function SetupPage() {
               return (
                 <Panel key={key}>
                   <div className="flex items-start justify-between gap-3">
-                    <h2 className="font-display text-lg text-ink">{guide.title}</h2>
+                    <h2 className="font-display text-lg text-ink">
+                      {t(guide.titleKey)}
+                    </h2>
                     <StatusBadge
                       tone={ready ? "success" : paused ? "warning" : "warning"}
                     >
-                      {ready ? "Ready" : "Paused"}
+                      {ready ? t("common.ready") : t("common.paused")}
                     </StatusBadge>
                   </div>
-                  <p className="mt-2 text-sm text-mute">{guide.where}</p>
+                  <p className="mt-2 text-sm text-mute">{t(guide.whereKey)}</p>
                   <ul className="mt-3 space-y-1 font-mono text-xs text-ink">
                     {guide.keys.map((k) => {
                       const miss = st?.missing?.includes(k);
@@ -145,8 +142,8 @@ export default function SetupPage() {
                       );
                     })}
                   </ul>
-                  {guide.after ? (
-                    <p className="mt-3 text-xs text-mute">{guide.after}</p>
+                  {guide.afterKey ? (
+                    <p className="mt-3 text-xs text-mute">{t(guide.afterKey)}</p>
                   ) : null}
                 </Panel>
               );

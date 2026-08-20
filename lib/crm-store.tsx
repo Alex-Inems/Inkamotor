@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import type { CrmMutation, CrmSnapshot } from "@/lib/crm/types";
+import { useLocale } from "@/lib/i18n";
 import {
   type AdCampaign,
   type AdStatus,
@@ -122,6 +123,7 @@ const empty: CrmSnapshot = {
 const CrmContext = createContext<CrmStore | null>(null);
 
 export function CrmProvider({ children }: { children: ReactNode }) {
+  const { t, locale } = useLocale();
   const [data, setData] = useState<CrmSnapshot>(empty);
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -142,16 +144,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshCrm = useCallback(async () => {
-    const res = await fetch("/api/crm");
+    const res = await fetch(`/api/crm?locale=${locale}`);
     const json = await res.json();
     if (!res.ok) {
-      setLoadError((json as { error?: string }).error || "Could not load CRM");
+      setLoadError((json as { error?: string }).error || t("toast.loadFailed"));
       setData(empty);
       return;
     }
     setLoadError(null);
     setData(json as CrmSnapshot);
-  }, []);
+  }, [t, locale]);
 
   useEffect(() => {
     refreshCrm().finally(() => setReady(true));
@@ -159,22 +161,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const mutate = useCallback(
     async (mutation: CrmMutation, okMessage: string) => {
-      const res = await fetch("/api/crm", {
+      const res = await fetch(`/api/crm?locale=${locale}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(mutation),
       });
       const json = await res.json();
       if (!res.ok) {
-        pushToast((json as { error?: string }).error || "Save failed");
-        throw new Error((json as { error?: string }).error || "Save failed");
+        pushToast((json as { error?: string }).error || t("toast.saveFailed"));
+        throw new Error((json as { error?: string }).error || t("toast.saveFailed"));
       }
       setData(json as CrmSnapshot);
       setLoadError(null);
       pushToast(okMessage);
       return json as CrmSnapshot;
     },
-    [pushToast],
+    [pushToast, t, locale],
   );
 
   const addLead = useCallback(
@@ -194,116 +196,122 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             notes: input.notes,
           },
         },
-        `Lead added: ${input.name}`,
+        t("toast.leadAdded", { name: input.name }),
       );
       return snap.leads.find((l) => l.email.toLowerCase() === input.email.trim().toLowerCase())
         ?.id ?? snap.leads[0]?.id ?? "";
     },
-    [mutate],
+    [mutate, t],
   );
 
   const updateLeadStatus = useCallback(
     async (id: string, status: LeadStatus) => {
-      await mutate({ op: "updateLeadStatus", id, status }, `Lead marked ${status}`);
+      await mutate(
+        { op: "updateLeadStatus", id, status },
+        t("toast.leadMarked", { status: t(`status.${status}`) }),
+      );
     },
-    [mutate],
+    [mutate, t],
   );
 
   const setCampaignStatus = useCallback(
     (_platform: "google" | "meta", _id: string, status: AdStatus) => {
-      pushToast(`Meta Ads is demo-only until API keys are added (${status})`);
+      pushToast(t("toast.metaDemo", { status: t(`status.${status}`) }));
     },
-    [pushToast],
+    [pushToast, t],
   );
 
   const addInvoice = useCallback(
     async (input: NewInvoiceInput) => {
       await mutate(
         { op: "addInvoice", input },
-        input.sendNow ? "Invoice saved as sent" : "Draft invoice created",
+        input.sendNow ? t("toast.invoiceSent") : t("toast.invoiceDraft"),
       );
     },
-    [mutate],
+    [mutate, t],
   );
 
   const updateInvoiceStatus = useCallback(
     async (id: string, status: InvoiceStatus) => {
       await mutate(
         { op: "updateInvoiceStatus", id, status },
-        `Invoice ${status}`,
+        t("toast.invoiceStatus", { status: t(`status.${status}`) }),
       );
     },
-    [mutate],
+    [mutate, t],
   );
 
   const addNewsletter = useCallback(
     (_input: NewNewsletterInput) => {
-      pushToast("Use the Newsletter page to send campaigns");
+      pushToast(t("toast.useNewsletter"));
     },
-    [pushToast],
+    [pushToast, t],
   );
 
   const updateNewsletterStatus = useCallback(
     (_id: string, _status: NewsletterStatus) => {
-      pushToast("Newsletter status updates from your email account");
+      pushToast(t("toast.newsletterFromAccount"));
     },
-    [pushToast],
+    [pushToast, t],
   );
 
   const updateInquiryStatus = useCallback(
     async (id: string, status: InquiryStatus) => {
       await mutate(
         { op: "updateInquiryStatus", id, status },
-        `Inquiry ${status}`,
+        t("toast.inquiryStatus", { status: t(`status.${status}`) }),
       );
     },
-    [mutate],
+    [mutate, t],
   );
 
   const convertInquiryToLead = useCallback(
     async (id: string) => {
       await mutate(
         { op: "convertInquiryToLead", id },
-        "Inquiry converted to lead + follow-up",
+        t("toast.inquiryConverted"),
       );
     },
-    [mutate],
+    [mutate, t],
   );
 
   const addFollowUp = useCallback(
     async (input: NewFollowUpInput) => {
-      await mutate({ op: "addFollowUp", input }, "Follow-up created");
+      await mutate({ op: "addFollowUp", input }, t("toast.followUpCreated"));
     },
-    [mutate],
+    [mutate, t],
   );
 
   const updateFollowUpStatus = useCallback(
     async (id: string, status: FollowUpStatus) => {
       await mutate(
         { op: "updateFollowUpStatus", id, status },
-        `Follow-up ${status}`,
+        t("toast.followUpStatus", { status: t(`status.${status}`) }),
       );
     },
-    [mutate],
+    [mutate, t],
   );
 
   const addSale = useCallback(
     async (input: NewSaleInput) => {
-      await mutate({ op: "addSale", input }, "Sale created");
+      await mutate({ op: "addSale", input }, t("toast.saleCreated"));
     },
-    [mutate],
+    [mutate, t],
   );
 
   const updateSaleStatus = useCallback(
     async (id: string, status: SaleStatus) => {
-      await mutate({ op: "updateSaleStatus", id, status }, `Sale ${status}`);
+      await mutate(
+        { op: "updateSaleStatus", id, status },
+        t("toast.saleStatus", { status: t(`status.${status}`) }),
+      );
     },
-    [mutate],
+    [mutate, t],
   );
 
   const resetDemo = useCallback(() => {
-    pushToast("Demo reset is disabled in production");
-  }, [pushToast]);
+    pushToast(t("toast.demoResetOff"));
+  }, [pushToast, t]);
 
   const value = useMemo(
     () => ({

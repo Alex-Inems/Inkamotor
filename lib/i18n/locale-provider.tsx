@@ -68,10 +68,12 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     document.documentElement.lang = localeMeta[locale].bcp47;
+    document.cookie = `${localeStorageKey}=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
   }, [locale]);
 
   const setLocale = useCallback((next: Locale) => {
     window.localStorage.setItem(localeStorageKey, next);
+    document.cookie = `${localeStorageKey}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
     emitLocaleChange();
   }, []);
 

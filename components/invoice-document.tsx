@@ -4,58 +4,7 @@ import { ColorStripe, InkamotoLogo } from "@/components/brand";
 import { invoiceCompany } from "@/lib/invoice-company";
 import { invoiceTotal, type Invoice } from "@/lib/demo-data";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { Locale } from "@/lib/i18n";
-
-const labels = {
-  en: {
-    invoice: "Invoice",
-    billTo: "Bill to",
-    from: "From",
-    number: "Number",
-    issued: "Issued",
-    due: "Due",
-    paid: "Paid",
-    description: "Description",
-    qty: "Qty",
-    unit: "Unit price",
-    amount: "Amount",
-    total: "Total due",
-    notes: "Notes",
-    thanks: "Thank you for riding with Inkamoto.",
-  },
-  fr: {
-    invoice: "Facture",
-    billTo: "Facturer à",
-    from: "De",
-    number: "Numéro",
-    issued: "Émise",
-    due: "Échéance",
-    paid: "Payée",
-    description: "Désignation",
-    qty: "Qté",
-    unit: "Prix unit.",
-    amount: "Montant",
-    total: "Total dû",
-    notes: "Notes",
-    thanks: "Merci de voyager avec Inkamoto.",
-  },
-  es: {
-    invoice: "Factura",
-    billTo: "Facturar a",
-    from: "De",
-    number: "Número",
-    issued: "Emitida",
-    due: "Vence",
-    paid: "Pagada",
-    description: "Descripción",
-    qty: "Cant.",
-    unit: "Precio",
-    amount: "Importe",
-    total: "Total a pagar",
-    notes: "Notas",
-    thanks: "Gracias por viajar con Inkamoto.",
-  },
-} as const;
+import { messagesFor, type Locale } from "@/lib/i18n";
 
 export function InvoiceDocument({
   invoice,
@@ -64,17 +13,17 @@ export function InvoiceDocument({
   invoice: Invoice;
   locale?: Locale;
 }) {
-  const copy = labels[locale] ?? labels.en;
+  const copy = messagesFor(locale).invoiceDoc;
   const total = invoiceTotal(invoice);
   const stamp =
     invoice.status === "paid"
-      ? copy.paid
+      ? copy.stampPaid
       : invoice.status === "void"
-        ? "VOID"
+        ? copy.stampVoid
         : invoice.status === "overdue"
-          ? "OVERDUE"
+          ? copy.stampOverdue
           : invoice.status === "draft"
-            ? "DRAFT"
+            ? copy.stampDraft
             : null;
 
   return (
@@ -101,7 +50,7 @@ export function InvoiceDocument({
           <div>
             <InkamotoLogo className="h-8 w-auto" />
             <p className="mt-3 text-xs leading-relaxed text-white/80">
-              {invoiceCompany.tagline}
+              {copy.tagline}
               <br />
               {invoiceCompany.address}
             </p>
@@ -228,7 +177,7 @@ export function InvoiceDocument({
             {invoice.notes}
           </p>
         ) : (
-          <p>{invoiceCompany.paymentNote}</p>
+          <p>{copy.paymentNote}</p>
         )}
         <p className="mt-3 font-medium text-[#31595d]">{copy.thanks}</p>
       </footer>

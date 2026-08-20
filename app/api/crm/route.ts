@@ -1,10 +1,13 @@
 import { jsonError } from "@/lib/api";
-import { missingSupabaseEnv } from "@/lib/supabase/server";
+import { localizeCrmSnapshot } from "@/lib/crm/localize";
 import { applyCrmMutation, loadCrmSnapshot, type CrmMutation } from "@/lib/crm/repository";
+import { localeFromRequest } from "@/lib/i18n/request-locale";
+import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-export async function GET() {
+export async function GET(req: Request) {
   const missing = missingSupabaseEnv();
   if (missing.length) {
     return jsonError(503, {
@@ -15,7 +18,8 @@ export async function GET() {
   }
   try {
     const data = await loadCrmSnapshot();
-    return Response.json(data);
+    const localized = await localizeCrmSnapshot(data, localeFromRequest(req));
+    return Response.json(localized);
   } catch (err) {
     return jsonError(502, {
       error: err instanceof Error ? err.message : "Could not load CRM data",
@@ -47,7 +51,8 @@ export async function POST(request: Request) {
 
   try {
     const data = await applyCrmMutation(body);
-    return Response.json(data);
+    const localized = await localizeCrmSnapshot(data, localeFromRequest(request));
+    return Response.json(localized);
   } catch (err) {
     return jsonError(502, {
       error: err instanceof Error ? err.message : "Mutation failed",

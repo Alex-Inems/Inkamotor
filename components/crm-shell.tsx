@@ -16,6 +16,7 @@ const pageKeys: Record<string, string> = {
   // "/analytics": "nav.analytics", // Google paused
   "/leads": "pages.leads.title",
   "/sales": "nav.sales",
+  "/bookings": "nav.sales",
   // "/search-console": "nav.searchConsole", // Google paused
   // "/ads/meta": "nav.metaAds", // Meta paused
   "/invoices": "nav.invoices",
@@ -30,11 +31,11 @@ export function CrmShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <CrmProvider>
-      <LocaleProvider>
+    <LocaleProvider>
+      <CrmProvider>
         <CrmShellInner>{children}</CrmShellInner>
-      </LocaleProvider>
-    </CrmProvider>
+      </CrmProvider>
+    </LocaleProvider>
   );
 }
 

@@ -15,6 +15,7 @@ import {
 } from "@/lib/demo-data";
 import { formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import { adTone } from "@/lib/status";
+import { useT } from "@/lib/i18n";
 
 export function PlatformAnalytics({
   title,
@@ -27,8 +28,10 @@ export function PlatformAnalytics({
   campaigns: AdCampaign[];
   accent?: "accent" | "pink";
 }) {
+  const t = useT();
   const s = summarizeCampaigns(campaigns);
   const level = conversionLevel(s.cvr);
+  const levelLabel = t(`ads.${level.key}`);
   const sorted = [...campaigns].sort((a, b) => b.conversions - a.conversions);
 
   return (
@@ -39,53 +42,65 @@ export function PlatformAnalytics({
             {title}
           </h2>
           <p className="mt-1 text-sm text-mute">
-            {s.campaigns} campaigns · {s.active} active ·{" "}
-            <StatusBadge tone={level.tone}>{level.label} conversion</StatusBadge>
+            {t("ads.campaignsActive", {
+              campaigns: s.campaigns,
+              active: s.active,
+            })}{" "}
+            <StatusBadge tone={level.tone}>
+              {levelLabel}
+              {t("ads.conversionSuffix")}
+            </StatusBadge>
           </p>
         </div>
         <Link
           href={href}
           className="text-xs font-semibold text-sand hover:text-gold"
         >
-          Manage campaigns
+          {t("ads.manage")}
         </Link>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="Impressions"
+          label={t("ads.impressions")}
           value={formatNumber(s.impressions, true)}
-          hint={`${formatNumber(s.campaigns)} campaigns`}
+          hint={t("ads.campaignsHint", { n: s.campaigns })}
         />
         <KpiCard
-          label="Clicks"
+          label={t("ads.clicks")}
           value={formatNumber(s.clicks, true)}
-          hint={`CTR ${formatPercent(s.ctr, 2)}`}
+          hint={t("ads.ctrHint", { ctr: formatPercent(s.ctr, 2) })}
         />
         <KpiCard
-          label="Conversions"
+          label={t("ads.conversions")}
           value={formatNumber(s.conversions)}
-          hint={`CVR ${formatPercent(s.cvr, 2)} · ${level.label}`}
+          hint={t("ads.cvrHint", {
+            cvr: formatPercent(s.cvr, 2),
+            level: levelLabel,
+          })}
         />
         <KpiCard
-          label="Spend"
+          label={t("ads.spend")}
           value={formatMoney(s.spend, "USD", true)}
-          hint={`CPC ${formatMoney(s.cpc, "USD")} · CPA ${formatMoney(s.cpa, "USD")}`}
+          hint={t("ads.spendHint", {
+            cpc: formatMoney(s.cpc, "USD"),
+            cpa: formatMoney(s.cpa, "USD"),
+          })}
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <ConversionFunnel
-          title={`${title} conversion funnel`}
+          title={t("ads.funnel", { title })}
           impressions={s.impressions}
           clicks={s.clicks}
           conversions={s.conversions}
         />
         <GroupedBarChart
-          title="Per campaign — impressions, clicks, conversions"
-          aLabel="Impr. ÷50"
-          bLabel="Clicks"
-          cLabel="Conv. ×15"
+          title={t("ads.perCampaign")}
+          aLabel={t("ads.imprDiv")}
+          bLabel={t("ads.clicks")}
+          cLabel={t("ads.convTimes")}
           points={sorted.map((c) => ({
             label: c.name
               .replace(
@@ -100,21 +115,21 @@ export function PlatformAnalytics({
         />
       </div>
 
-      <Panel title="Campaign performance">
+      <Panel title={t("ads.performance")}>
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Campaign</th>
-                <th>Status</th>
-                <th>Impr.</th>
-                <th>Clicks</th>
-                <th>CTR</th>
-                <th>Conv.</th>
-                <th>CVR</th>
-                <th>Level</th>
-                <th>Spend</th>
-                <th>ROAS</th>
+                <th>{t("common.campaign")}</th>
+                <th>{t("common.status")}</th>
+                <th>{t("ads.impr")}</th>
+                <th>{t("ads.clicks")}</th>
+                <th>{t("pages.searchConsole.ctr")}</th>
+                <th>{t("ads.conv")}</th>
+                <th>{t("ads.cvr")}</th>
+                <th>{t("ads.level")}</th>
+                <th>{t("ads.spendCol")}</th>
+                <th>{t("ads.roas")}</th>
               </tr>
             </thead>
             <tbody>
@@ -128,7 +143,9 @@ export function PlatformAnalytics({
                       <p className="text-xs text-mute">{c.objective}</p>
                     </td>
                     <td>
-                      <StatusBadge tone={adTone(c.status)}>{c.status}</StatusBadge>
+                      <StatusBadge tone={adTone(c.status)}>
+                        {t(`status.${c.status}`)}
+                      </StatusBadge>
                     </td>
                     <td>{formatNumber(c.impressions, true)}</td>
                     <td>{formatNumber(c.clicks)}</td>
@@ -136,7 +153,7 @@ export function PlatformAnalytics({
                     <td className="font-medium">{c.conversions}</td>
                     <td>{formatPercent(cvr, 2)}</td>
                     <td>
-                      <StatusBadge tone={lvl.tone}>{lvl.label}</StatusBadge>
+                      <StatusBadge tone={lvl.tone}>{t(`ads.${lvl.key}`)}</StatusBadge>
                     </td>
                     <td className="whitespace-nowrap">
                       {formatMoney(c.spend, "USD", true)}
@@ -160,14 +177,15 @@ export function AnalyticsOverviewCharts({
 }: {
   meta: AdCampaign[];
 }) {
+  const t = useT();
   const sorted = [...meta].sort((a, b) => b.clicks - a.clicks);
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <LineChart
-        title="Meta Ads — clicks & conversions"
-        aLabel="Clicks"
-        bLabel="Conversions"
+        title={t("ads.metaClicks")}
+        aLabel={t("ads.clicks")}
+        bLabel={t("ads.conversions")}
         formatA={(n) => formatNumber(n, true)}
         formatB={(n) => formatNumber(n)}
         points={sorted.slice(0, 6).map((c) => ({
@@ -179,10 +197,10 @@ export function AnalyticsOverviewCharts({
         }))}
       />
       <GroupedBarChart
-        title="Meta campaign mix"
-        aLabel="Clicks"
-        bLabel="Conversions ×15"
-        cLabel="Spend ÷2"
+        title={t("ads.metaMix")}
+        aLabel={t("ads.clicks")}
+        bLabel={t("ads.convTimes15")}
+        cLabel={t("ads.spendDiv")}
         points={sorted.slice(0, 6).map((c) => ({
           label: c.name
             .replace(/^(Prospecting|Retarget|Awareness|Leads) — /i, "")

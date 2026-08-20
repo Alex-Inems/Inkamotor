@@ -1,7 +1,7 @@
+import https from "node:https";
 import { missingEnv } from "@/lib/api";
 
 const BREVO_KEYS = ["BREVO_API_KEY", "BREVO_SENDER_EMAIL"] as const;
-const BASE = "https://api.brevo.com/v3";
 
 export type BrevoCampaign = {
   id: number;
@@ -27,25 +27,67 @@ export function missingBrevoEnv(): string[] {
   return missingEnv(BREVO_KEYS);
 }
 
-function headers() {
-  return {
+function brevo<T>(
+  path: string,
+  init?: { method?: string; body?: string },
+): Promise<T> {
+  const method = init?.method ?? "GET";
+  const body = init?.body;
+  const headers: Record<string, string> = {
     accept: "application/json",
-    "content-type": "application/json",
     "api-key": process.env.BREVO_API_KEY!.trim(),
   };
-}
+  if (body) headers["content-type"] = "application/json";
 
-async function brevo<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { ...headers(), ...(init?.headers ?? {}) },
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: "api.brevo.com",
+        path: `/v3${path}`,
+        method,
+        headers,
+        family: 4,
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+        res.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          const status = res.statusCode ?? 0;
+          if (status >= 400) {
+            reject(new Error(`Brevo ${status}: ${text.slice(0, 400)}`));
+            return;
+          }
+          if (status === 204 || !text.trim()) {
+            resolve(undefined as T);
+            return;
+          }
+          try {
+            resolve(JSON.parse(text) as T);
+          } catch {
+            reject(new Error(`Brevo: invalid JSON (${text.slice(0, 120)})`));
+          }
+        });
+      },
+    );
+    req.on("error", (err) => {
+      const cause =
+        err instanceof Error && "cause" in err
+          ? String((err as Error & { cause?: unknown }).cause ?? "")
+          : "";
+      reject(
+        new Error(
+          cause
+            ? `${err.message} (${cause})`
+            : err instanceof Error
+              ? err.message
+              : "Brevo request failed",
+        ),
+      );
+    });
+    if (body) req.write(body);
+    req.end();
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Brevo ${res.status}: ${text.slice(0, 400)}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
 }
 
 export function sender() {
@@ -113,8 +155,8 @@ export async function listBrevoContacts(limit = 200) {
     `/contacts/lists/${listId}/contacts?limit=${limit}&offset=0&sort=desc`,
   );
   return {
-    contacts: data.contacts ?? [],
-    total: data.count ?? (data.contacts?.length ?? 0),
+    contacts: data?.contacts ?? [],
+    total: data?.count ?? (data?.contacts?.length ?? 0),
   };
 }
 
@@ -160,9 +202,43 @@ export async function addContactToList(input: {
 
 export async function listBrevoCampaigns(limit = 50) {
   const data = await brevo<{ campaigns?: BrevoCampaign[] }>(
-    `/emailCampaigns?limit=${limit}&sort=desc`,
+    `/emailCampaigns?limit=${limit}&sort=desc&excludeHtmlContent=true`,
   );
-  return data.campaigns ?? [];
+  return data?.campaigns ?? [];
+}
+
+async function subscriberFolderId() {
+  const id = subscriberListId();
+  if (id == null) return 1;
+  try {
+    const list = await brevo<{ folderId?: number }>(`/contacts/lists/${id}`);
+    return list?.folderId || 1;
+  } catch {
+    return 1;
+  }
+}
+
+export async function createBrevoList(name: string) {
+  const created = await brevo<{ id: number }>("/contacts/lists", {
+    method: "POST",
+    body: JSON.stringify({
+      name: name.slice(0, 50),
+      folderId: await subscriberFolderId(),
+    }),
+  });
+  if (!created?.id) throw new Error("Could not create a recipient list.");
+  return created.id;
+}
+
+export async function addEmailsToList(listId: number, emails: string[]) {
+  const unique = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
+  for (let i = 0; i < unique.length; i += 150) {
+    const slice = unique.slice(i, i + 150);
+    await brevo(`/contacts/lists/${listId}/contacts/add`, {
+      method: "POST",
+      body: JSON.stringify({ emails: slice }),
+    });
+  }
 }
 
 export async function createAndSendCampaign(input: {
@@ -171,12 +247,25 @@ export async function createAndSendCampaign(input: {
   htmlContent: string;
   previewText?: string;
   listId?: number;
+  emails?: string[];
 }) {
-  const listId =
-    input.listId ??
-    (process.env.BREVO_LIST_ID?.trim()
-      ? Number(process.env.BREVO_LIST_ID.trim())
-      : NaN);
+  let listId = input.listId;
+  const emails = (input.emails ?? [])
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (emails.length > 0) {
+    listId = await createBrevoList(
+      `${input.name} · ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+    );
+    await addEmailsToList(listId, emails);
+  } else {
+    listId =
+      listId ??
+      (process.env.BREVO_LIST_ID?.trim()
+        ? Number(process.env.BREVO_LIST_ID.trim())
+        : NaN);
+  }
 
   if (!Number.isFinite(listId)) {
     throw new Error(

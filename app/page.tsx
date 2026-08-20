@@ -14,7 +14,7 @@ import {
 import { formatDate, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import { currentUser } from "@/lib/session";
 import { invoiceTone, leadTone } from "@/lib/status";
-import { useLocale } from "@/lib/i18n";
+import { localeMeta, useLocale } from "@/lib/i18n";
 
 type OverviewMail = {
   id: string;
@@ -28,13 +28,13 @@ function monthKey(iso: string) {
   return iso.slice(0, 7);
 }
 
-function monthLabel(key: string) {
+function monthLabel(key: string, locale: string) {
   const [y, m] = key.split("-");
   const d = new Date(Date.UTC(Number(y), Number(m) - 1, 1));
-  return d.toLocaleString("en", { month: "short" });
+  return d.toLocaleString(locale, { month: "short" });
 }
 
-function buildSeries(leads: Lead[], sales: Sale[]) {
+function buildSeries(leads: Lead[], sales: Sale[], locale: string) {
   const map = new Map<
     string,
     { revenue: number; leads: number; adSpend: number; subscribers: number }
@@ -65,12 +65,15 @@ function buildSeries(leads: Lead[], sales: Sale[]) {
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-6)
     .map(([key, row]) => ({
-      label: monthLabel(key),
+      label: monthLabel(key, locale),
       ...row,
     }));
 }
 
-function buildChannelMix(leads: Lead[]) {
+function buildChannelMix(
+  leads: Lead[],
+  sourceLabel: (source: string) => string,
+) {
   const colors: Record<string, string> = {
     google: "#31595d",
     meta: "#e1736c",
@@ -85,7 +88,7 @@ function buildChannelMix(leads: Lead[]) {
   }
   const total = [...counts.values()].reduce((a, b) => a + b, 0) || 1;
   return [...counts.entries()].map(([source, n]) => ({
-    label: source,
+    label: sourceLabel(source),
     value: Math.round((n / total) * 100),
     color: colors[source] ?? "#b8b3a8",
   }));
@@ -109,7 +112,7 @@ export default function OverviewPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/inbox/mail")
+    fetch(`/api/inbox/mail?locale=${locale}`)
       .then((r) => (r.ok ? r.json() : { messages: [] }))
       .then((json: { messages?: OverviewMail[] }) => {
         if (!cancelled) setMail(json.messages ?? []);
@@ -120,7 +123,7 @@ export default function OverviewPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale]);
 
   const stats = getDashboardStats({
     leads,
@@ -134,10 +137,18 @@ export default function OverviewPage() {
   });
 
   const analyticsSeries = useMemo(
-    () => buildSeries(leads, sales),
-    [leads, sales],
+    () => buildSeries(leads, sales, localeMeta[locale].bcp47),
+    [leads, sales, locale],
   );
-  const channelMix = useMemo(() => buildChannelMix(leads), [leads]);
+  const channelMix = useMemo(
+    () =>
+      buildChannelMix(leads, (source) => {
+        const key = `sources.${source}`;
+        const label = t(key);
+        return label === key ? source : label;
+      }),
+    [leads, t],
+  );
 
   const money = (n: number, compact = true) =>
     formatMoney(n, "USD", compact, locale);
@@ -149,7 +160,7 @@ export default function OverviewPage() {
   const recentInvoices = [...invoices].slice(0, 4);
 
   if (!ready) {
-    return <EmptyHint>Loading workspace…</EmptyHint>;
+    return <EmptyHint>{t("common.loadingWorkspace")}</EmptyHint>;
   }
 
   if (loadError) {
@@ -157,11 +168,12 @@ export default function OverviewPage() {
       <div className="border border-wine/40 bg-wine/10 px-4 py-3 text-sm">
         <p className="font-semibold text-pink">{loadError}</p>
         <p className="mt-2 text-mute">
-          Configure Supabase in{" "}
+          {t("overview.setupBefore")}{" "}
           <Link href="/setup" className="text-sand hover:text-gold">
-            Setup
+            {t("overview.setupLink")}
           </Link>{" "}
-          and run <code className="text-sand">supabase/schema.sql</code>.
+          {t("overview.setupAfter")}{" "}
+          <code className="text-sand">supabase/schema.sql</code>.
         </p>
       </div>
     );
@@ -201,8 +213,11 @@ export default function OverviewPage() {
                 {money(stats.trailingProfit)}
               </p>
               <p className="mt-1 text-xs text-mute">
-                {money(stats.periodRevenue)} sales · {money(stats.periodAdSpend)}{" "}
-                ads · {money(stats.trailingPaidCollections)} collected
+                {t("overview.trailingHint", {
+                  sales: money(stats.periodRevenue),
+                  ads: money(stats.periodAdSpend),
+                  collected: money(stats.trailingPaidCollections),
+                })}
               </p>
             </div>
           </div>
@@ -259,16 +274,16 @@ export default function OverviewPage() {
         />
         <Link href="/inbox" className="block">
           <KpiCard
-            label="Inbox"
+            label={t("nav.inbox")}
             value={num(mail.filter((m) => !m.isRead).length)}
-            hint="Unread messages"
+            hint={t("overview.inboxHint")}
           />
         </Link>
         <Link href="/newsletter" className="block">
           <KpiCard
-            label="Newsletters"
+            label={t("overview.newsletters")}
             value={num(newsletters.length)}
-            hint="Newsletters"
+            hint={t("overview.newsletters")}
           />
         </Link>
         <KpiCard
@@ -295,14 +310,14 @@ export default function OverviewPage() {
               }))}
             />
           ) : (
-            <EmptyHint>No sales or leads yet — create them in the CRM.</EmptyHint>
+            <EmptyHint>{t("overview.noSalesLeads")}</EmptyHint>
           )}
         </div>
         <div className="lg:col-span-2">
           {channelMix.length > 0 ? (
             <DonutChart title={t("overview.leadSourceMix")} segments={channelMix} />
           ) : (
-            <EmptyHint>Lead sources will appear here.</EmptyHint>
+            <EmptyHint>{t("overview.leadSourcesSoon")}</EmptyHint>
           )}
         </div>
       </div>
@@ -317,21 +332,21 @@ export default function OverviewPage() {
             }))}
           />
         ) : (
-          <EmptyHint>Monthly revenue builds from closed sales.</EmptyHint>
+          <EmptyHint>{t("overview.monthlyFromSales")}</EmptyHint>
         )}
-        <Panel title="Quick links">
+        <Panel title={t("overview.quickLinks")}>
           <div className="flex flex-col gap-2 text-sm">
             <Link href="/inbox" className="text-sand hover:text-gold">
-              Inbox & replies
+              {t("overview.inboxReplies")}
             </Link>
             <Link href="/newsletter" className="text-sand hover:text-gold">
-              Newsletter
+              {t("nav.newsletter")}
             </Link>
             <Link href="/invoices" className="text-sand hover:text-gold">
-              Invoices
+              {t("nav.invoices")}
             </Link>
             <Link href="/setup" className="text-sand hover:text-gold">
-              Setup
+              {t("nav.setup")}
             </Link>
           </div>
         </Panel>
@@ -347,12 +362,12 @@ export default function OverviewPage() {
               href="/inbox"
               className="text-xs font-semibold text-sand hover:text-gold"
             >
-              Inbox
+              {t("nav.inbox")}
             </Link>
           }
         >
           {recentMail.length === 0 ? (
-            <EmptyHint>No messages yet.</EmptyHint>
+            <EmptyHint>{t("overview.noMessages")}</EmptyHint>
           ) : (
             <ul className="divide-y divide-line">
               {recentMail.map((m) => (
@@ -367,7 +382,7 @@ export default function OverviewPage() {
                     <p className="truncate text-xs text-mute">{m.subject}</p>
                   </div>
                   <StatusBadge tone={m.isRead ? "neutral" : "info"}>
-                    {m.isRead ? "Read" : "New"}
+                    {m.isRead ? t("common.read") : t("status.new")}
                   </StatusBadge>
                 </li>
               ))}
@@ -381,12 +396,12 @@ export default function OverviewPage() {
               href="/leads"
               className="text-xs font-semibold text-sand hover:text-gold"
             >
-              Leads
+              {t("nav.leads")}
             </Link>
           }
         >
           {recentLeads.length === 0 ? (
-            <EmptyHint>No leads yet.</EmptyHint>
+            <EmptyHint>{t("overview.noLeads")}</EmptyHint>
           ) : (
             <ul className="divide-y divide-line">
               {recentLeads.map((lead) => (
@@ -401,15 +416,7 @@ export default function OverviewPage() {
                     </p>
                   </div>
                   <StatusBadge tone={leadTone(lead.status)}>
-                    {lead.status === "new"
-                      ? "Need reply"
-                      : lead.status === "contacted"
-                        ? "Talking"
-                        : lead.status === "qualified"
-                          ? "Ready"
-                          : lead.status === "won"
-                            ? "Booked"
-                            : "Not booked"}
+                    {t(`stages.${lead.status}`)}
                   </StatusBadge>
                 </li>
               ))}
@@ -419,18 +426,18 @@ export default function OverviewPage() {
       </div>
 
       <div className="mt-4">
-        <Panel title="Recent invoices">
+        <Panel title={t("overview.recentInvoices")}>
           {recentInvoices.length === 0 ? (
-            <EmptyHint>No invoices yet.</EmptyHint>
+            <EmptyHint>{t("overview.noInvoices")}</EmptyHint>
           ) : (
             <div className="table-wrap">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Number</th>
-                    <th>Client</th>
-                    <th>Status</th>
-                    <th>Total</th>
+                    <th>{t("overview.number")}</th>
+                    <th>{t("overview.client")}</th>
+                    <th>{t("common.status")}</th>
+                    <th>{t("overview.total")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -440,7 +447,7 @@ export default function OverviewPage() {
                       <td>{inv.client}</td>
                       <td>
                         <StatusBadge tone={invoiceTone(inv.status)}>
-                          {inv.status}
+                          {t(`status.${inv.status}`)}
                         </StatusBadge>
                       </td>
                       <td>

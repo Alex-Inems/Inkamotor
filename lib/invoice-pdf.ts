@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import { invoiceCompany } from "@/lib/invoice-company";
 import { invoiceTotal, type Invoice } from "@/lib/demo-data";
 import { formatDate, formatMoney } from "@/lib/format";
-import type { Locale } from "@/lib/i18n";
+import { messagesFor, type Locale } from "@/lib/i18n";
 
 /** Brand tokens matching invoice preview / inkamototours.com */
 const brand = {
@@ -73,6 +73,7 @@ export async function downloadInvoicePdf(
   const margin = 14;
   const contentW = pageW - margin * 2;
 
+  const copy = messagesFor(locale).invoiceDoc;
   const money = (n: number) =>
     formatMoney(n, invoice.currency, false, locale);
   const total = invoiceTotal(invoice);
@@ -117,14 +118,14 @@ export async function downloadInvoicePdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   const tagline = doc.splitTextToSize(
-    `${invoiceCompany.tagline}\n${invoiceCompany.address}`,
+    `${copy.tagline}\n${invoiceCompany.address}`,
     95,
   );
   doc.text(tagline, margin, y + 12);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(26);
-  doc.text("INVOICE", pageW - margin, y + 2, { align: "right" });
+  doc.text(copy.invoice.toUpperCase(), pageW - margin, y + 2, { align: "right" });
   rgb(doc, brand.gold, "text");
   doc.setFontSize(12);
   doc.text(invoice.number, pageW - margin, y + 11, { align: "right" });
@@ -135,10 +136,10 @@ export async function downloadInvoicePdf(
   rgb(doc, brand.mute, "text");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.text("NUMBER", margin, y);
-  doc.text("ISSUED", margin + 48, y);
-  doc.text("DUE", margin + 96, y);
-  if (invoice.paidDate) doc.text("PAID", margin + 144, y);
+  doc.text(copy.number.toUpperCase(), margin, y);
+  doc.text(copy.issued.toUpperCase(), margin + 48, y);
+  doc.text(copy.due.toUpperCase(), margin + 96, y);
+  if (invoice.paidDate) doc.text(copy.paid.toUpperCase(), margin + 144, y);
 
   y += 5;
   rgb(doc, brand.ink, "text");
@@ -160,8 +161,8 @@ export async function downloadInvoicePdf(
   rgb(doc, brand.mute, "text");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.text("FROM", margin, y);
-  doc.text("BILL TO", col2, y);
+  doc.text(copy.from.toUpperCase(), margin, y);
+  doc.text(copy.billTo.toUpperCase(), col2, y);
 
   y += 5;
   rgb(doc, brand.ink, "text");
@@ -194,10 +195,10 @@ export async function downloadInvoicePdf(
   rgb(doc, brand.white, "text");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
-  doc.text("DESCRIPTION", tableX + 3, y);
-  doc.text("QTY", tableX + contentW * 0.58, y, { align: "right" });
-  doc.text("UNIT", tableX + contentW * 0.76, y, { align: "right" });
-  doc.text("AMOUNT", tableX + contentW - 3, y, { align: "right" });
+  doc.text(copy.description.toUpperCase(), tableX + 3, y);
+  doc.text(copy.qty.toUpperCase(), tableX + contentW * 0.58, y, { align: "right" });
+  doc.text(copy.unit.toUpperCase(), tableX + contentW * 0.76, y, { align: "right" });
+  doc.text(copy.amount.toUpperCase(), tableX + contentW - 3, y, { align: "right" });
   y += 8;
 
   doc.setFont("helvetica", "normal");
@@ -247,7 +248,7 @@ export async function downloadInvoicePdf(
   rgb(doc, brand.teal, "text");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
-  doc.text("TOTAL DUE", boxX + 5, y + 3);
+  doc.text(copy.total.toUpperCase(), boxX + 5, y + 3);
   doc.setFontSize(16);
   doc.text(money(total), boxX + boxW - 4, y + 11, { align: "right" });
 
@@ -255,7 +256,7 @@ export async function downloadInvoicePdf(
   rgb(doc, brand.body, "text");
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  const notes = invoice.notes || invoiceCompany.paymentNote;
+  const notes = invoice.notes || copy.paymentNote;
   const noteLines = doc.splitTextToSize(notes, contentW);
   doc.text(noteLines, margin, y);
   y += noteLines.length * 3.8 + 6;
@@ -263,7 +264,7 @@ export async function downloadInvoicePdf(
   rgb(doc, brand.teal, "text");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.text("Thank you for riding with Inkamoto.", margin, y);
+  doc.text(copy.thanks, margin, y);
 
   // Footer stripe
   brand.stripe.forEach((c, i) => {
@@ -286,11 +287,19 @@ export async function downloadInvoicePdf(
           : invoice.status === "overdue"
             ? brand.pink
             : brand.mute;
+    const stampText =
+      invoice.status === "paid"
+        ? copy.stampPaid
+        : invoice.status === "void"
+          ? copy.stampVoid
+          : invoice.status === "overdue"
+            ? copy.stampOverdue
+            : copy.stampDraft;
     rgb(doc, stampColor, "text");
     rgb(doc, stampColor, "draw");
     doc.setFontSize(28);
     doc.setFont("helvetica", "bold");
-    doc.text(invoice.status.toUpperCase(), pageW / 2, 130, {
+    doc.text(stampText, pageW / 2, 130, {
       align: "center",
       angle: 18,
     });

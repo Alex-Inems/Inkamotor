@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { InkamotoLogo } from "@/components/brand";
-import { LanguageSwitcher, useT } from "@/lib/i18n";
+import { LanguageSwitcher, useLocale } from "@/lib/i18n";
 import { useCrm } from "@/lib/crm-store";
 import {
   currentUser,
@@ -21,7 +21,7 @@ export function Topbar({
   onMenu: () => void;
 }) {
   const { pushToast } = useCrm();
-  const t = useT();
+  const { t, locale } = useLocale();
   const [userOpen, setUserOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(seedNotifications);
@@ -70,7 +70,7 @@ export function Topbar({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="hidden sm:block">
+          <div>
             <LanguageSwitcher />
           </div>
           <div className="relative hidden md:block">
@@ -166,7 +166,7 @@ export function Topbar({
                   {currentUser.name}
                 </span>
                 <span className="block text-[11px] leading-tight text-mute">
-                  {currentUser.role}
+                  {t("common.admin")}
                 </span>
               </span>
               <ChevronIcon />
@@ -197,16 +197,16 @@ export function Topbar({
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                     <div className="bg-ash px-2.5 py-2">
                       <p className="text-mute">{t("topbar.role")}</p>
-                      <p className="font-semibold text-ink">{currentUser.role}</p>
+                      <p className="font-semibold text-ink">{t("common.admin")}</p>
                     </div>
                     <div className="bg-ash px-2.5 py-2">
                       <p className="text-mute">{t("topbar.title")}</p>
-                      <p className="font-semibold text-ink">{currentUser.title}</p>
+                      <p className="font-semibold text-ink">{t("session.titleOps")}</p>
                     </div>
                   </div>
                   <p className="mt-2 text-[11px] text-mute">
                     {t("topbar.lastLogin", {
-                      time: formatLastLogin(currentUser.lastLoginAt),
+                      time: formatLastLogin(currentUser.lastLoginAt, locale),
                     })}
                   </p>
                 </div>

@@ -1,10 +1,13 @@
 import { jsonError } from "@/lib/api";
+import { localeFromRequest } from "@/lib/i18n/request-locale";
 import { listMailReplies } from "@/lib/mail/replies";
+import { translateReplyList } from "@/lib/mail/translate-mailbox";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-export async function GET() {
+export async function GET(req: Request) {
   const missing = missingSupabaseEnv();
   if (missing.length > 0) {
     return jsonError(503, {
@@ -15,8 +18,14 @@ export async function GET() {
   }
 
   try {
+    const locale = localeFromRequest(req);
     const replies = await listMailReplies();
-    return Response.json({ replies });
+    const localized = await translateReplyList(replies, locale);
+    return Response.json({
+      replies: localized.replies,
+      locale,
+      translation: localized.stats,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not load sent replies";
     return jsonError(500, {

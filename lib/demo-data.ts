@@ -1313,10 +1313,10 @@ export function summarizeCampaigns(list: AdCampaign[]): CampaignSummary {
 }
 
 export function conversionLevel(cvr: number) {
-  if (cvr >= 5) return { label: "Excellent", tone: "success" as const };
-  if (cvr >= 3) return { label: "Strong", tone: "info" as const };
-  if (cvr >= 1.5) return { label: "Average", tone: "warning" as const };
-  return { label: "Low", tone: "danger" as const };
+  if (cvr >= 5) return { key: "excellent" as const, tone: "success" as const };
+  if (cvr >= 3) return { key: "strong" as const, tone: "info" as const };
+  if (cvr >= 1.5) return { key: "average" as const, tone: "warning" as const };
+  return { key: "low" as const, tone: "danger" as const };
 }
 
 export function campaignConvRate(c: AdCampaign) {

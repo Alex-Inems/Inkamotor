@@ -1,3 +1,5 @@
+import { localeMeta, type Locale } from "@/lib/i18n/config";
+
 export type SessionUser = {
   id: string;
   name: string;
@@ -49,8 +51,8 @@ export const notifications: {
   unread: boolean;
 }[] = [];
 
-export function formatLastLogin(iso: string) {
-  return new Intl.DateTimeFormat("en-GB", {
+export function formatLastLogin(iso: string, locale: Locale = "en") {
+  return new Intl.DateTimeFormat(localeMeta[locale].bcp47, {
     month: "short",
     day: "numeric",
     hour: "numeric",

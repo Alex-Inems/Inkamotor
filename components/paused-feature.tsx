@@ -1,6 +1,7 @@
 "use client";
 
 import { EmptyHint, PageHeader, StatusBadge } from "@/components/ui";
+import { useT } from "@/lib/i18n";
 import Link from "next/link";
 
 export function PausedFeature({
@@ -10,17 +11,17 @@ export function PausedFeature({
   title: string;
   description: string;
 }) {
+  const t = useT();
   return (
     <div>
       <PageHeader title={title} description={description} />
       <div className="mb-4 inline-flex">
-        <StatusBadge tone="warning">Paused</StatusBadge>
+        <StatusBadge tone="warning">{t("common.paused")}</StatusBadge>
       </div>
       <EmptyHint>
-        This area is paused until its environment variables are configured.
-        Focus on Inbox, Invoices, and Newsletter for now.{" "}
+        {t("pages.paused.body")}{" "}
         <Link href="/setup" className="text-sand hover:text-gold">
-          Open Setup
+          {t("pages.paused.openSetup")}
         </Link>
       </EmptyHint>
     </div>
