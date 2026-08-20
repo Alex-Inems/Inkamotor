@@ -214,7 +214,7 @@ button {
   padding-right: max(0.15rem, env(safe-area-inset-right));
 }
 
-@media (max-width: 767px) {
+@media (max-width: 1023px) {
   body[data-inbox-pane="thread"] .crm-topbar,
   body[data-inbox-pane="details"] .crm-topbar {
     display: none;

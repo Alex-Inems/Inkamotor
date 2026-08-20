@@ -437,9 +437,10 @@ export default function InboxPage() {
 
   const active = rooms.find((r) => r.email === activeEmail) ?? null;
 
-  // Land in a conversation instead of an empty pane
+  // Desktop: land in a conversation. Mobile: keep the list until they tap one.
   useEffect(() => {
     if (activeEmail || visible.length === 0) return;
+    if (window.matchMedia("(max-width: 1023px)").matches) return;
     const first = visible[0].email;
     setActiveEmail(first);
     setOpened((prev) => (prev.includes(first) ? prev : [...prev, first]));
@@ -469,16 +470,36 @@ export default function InboxPage() {
     return out;
   }, [active]);
 
-  const unreadTotal = rooms.reduce(
-    (n, r) => n + (r.bulk ? 0 : r.unread),
-    0,
-  );
+  const tabCounts = useMemo(() => {
+    const inboxRooms = rooms.filter((r) => !r.bulk);
+    const promoRooms = rooms.filter((r) => r.bulk);
+    const starredRooms = rooms.filter((r) => starred.includes(r.email));
+    const unreadRooms = inboxRooms.filter((r) => r.unread > 0);
+    const sumUnread = (list: Room[]) => list.reduce((n, r) => n + r.unread, 0);
+    return {
+      inbox: sumUnread(inboxRooms),
+      unread: unreadRooms.length,
+      starred: sumUnread(starredRooms) || starredRooms.length,
+      starredUnread: sumUnread(starredRooms),
+      promos: sumUnread(promoRooms) || promoRooms.length,
+      promosUnread: sumUnread(promoRooms),
+      promosTotal: promoRooms.length,
+    };
+  }, [rooms, starred]);
+
+  const unreadTotal = tabCounts.inbox;
 
   function openRoom(email: string) {
     setActiveEmail(email);
+    setDetailsOpen(false);
     setDraft("");
     setShowOriginal(false);
     setOpened((prev) => (prev.includes(email) ? prev : [...prev, email]));
+  }
+
+  function closeThread() {
+    setDetailsOpen(false);
+    setActiveEmail(null);
   }
 
   async function send() {
@@ -518,54 +539,73 @@ export default function InboxPage() {
   const activeName = active ? displayName(active.name, active.email) : "";
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
       {/* Rooms */}
       <aside
-        className={`min-w-0 flex-col border-r border-line bg-panel ${!active
+        className={`min-h-0 min-w-0 flex-col border-r border-line bg-panel ${
+          !active
             ? "flex w-full"
             : detailsOpen
-              ? // Details takes this slot until there's room for all three panes
-              "hidden xl:flex xl:w-80"
-              : "hidden md:flex md:w-72 lg:w-80"
-          }`}
+              ? "hidden xl:flex xl:w-80"
+              : "hidden lg:flex lg:w-72 xl:w-80"
+        }`}
       >
-        <div className="flex items-center justify-between gap-2 px-4 pt-4">
+        <div className="flex items-center justify-between gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
           <h1 className="font-display text-lg tracking-wide">Messages</h1>
           {unreadTotal > 0 ? (
-            <span className="bg-accent px-2 py-0.5 text-xs font-bold text-white">
-              {unreadTotal}
-            </span>
+            <CountBadge count={unreadTotal} />
           ) : null}
         </div>
 
-        <div className="px-4 pt-3">
+        <div className="px-3 pt-2 sm:px-4 sm:pt-3">
           <input
-            className="w-full border border-line bg-ash px-3 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold"
+            className="w-full rounded-full border border-line bg-ash px-3.5 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none sm:px-3"
             placeholder="Search messages"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
 
-        <div className="flex gap-1 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="grid grid-cols-4 border-b border-line">
           {(
             [
-              { id: "inbox" as const, label: "All" },
-              { id: "unread" as const, label: "Unread" },
-              { id: "starred" as const, label: "Starred" },
-              { id: "promos" as const, label: "Promos" },
+              { id: "inbox" as const, label: "All", count: tabCounts.inbox, alert: tabCounts.inbox > 0 },
+              { id: "unread" as const, label: "Unread", count: tabCounts.unread, alert: tabCounts.unread > 0 },
+              {
+                id: "starred" as const,
+                label: "Starred",
+                count: tabCounts.starred,
+                alert: tabCounts.starredUnread > 0,
+              },
+              {
+                id: "promos" as const,
+                label: "Promos",
+                count: tabCounts.promos,
+                alert: tabCounts.promosUnread > 0,
+              },
             ] as const
           ).map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setFilter(tab.id)}
-              className={`shrink-0 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${filter === tab.id
-                  ? "bg-accent text-white"
-                  : "text-mute hover:bg-ash hover:text-ink"
-                }`}
+              title={
+                tab.id === "promos"
+                  ? `${tabCounts.promosUnread} unread · ${tabCounts.promosTotal} in Promos`
+                  : tab.id === "unread"
+                    ? `${tab.count} unread chats`
+                    : undefined
+              }
+              className={`flex min-w-0 items-center justify-center gap-1 px-1 py-2.5 text-[11px] font-semibold sm:text-xs ${
+                filter === tab.id
+                  ? "border-b-2 border-gold text-ink"
+                  : "border-b-2 border-transparent text-mute hover:text-ink"
+              }`}
             >
-              {tab.label}
+              <span className="truncate">{tab.label}</span>
+              {tab.count > 0 ? (
+                <CountBadge count={tab.count} tone={tab.alert ? "gold" : "mute"} />
+              ) : null}
             </button>
           ))}
         </div>
@@ -607,7 +647,7 @@ export default function InboxPage() {
           type="button"
           onClick={() => void sync({ silent: false })}
           disabled={syncing || !conn?.namecheap.ready}
-          className="border-t border-line px-4 py-2.5 text-left text-[11px] text-mute transition-colors hover:text-ink disabled:opacity-60"
+          className="border-t border-line px-3 py-2.5 text-left text-[11px] text-mute transition-colors hover:text-ink disabled:opacity-60 pb-[max(0.65rem,env(safe-area-inset-bottom))] sm:px-4"
         >
           {syncing
             ? "Checking for new messages…"
@@ -619,8 +659,9 @@ export default function InboxPage() {
 
       {/* Thread */}
       <section
-        className={`min-w-0 flex-1 flex-col bg-canvas ${!active || detailsOpen ? "hidden md:flex" : "flex"
-          }`}
+        className={`min-h-0 min-w-0 flex-1 flex-col bg-canvas ${
+          !active || detailsOpen ? "hidden lg:flex" : "flex"
+        }`}
       >
         {!active ? (
           <div className="flex flex-1 items-center justify-center px-6">
@@ -631,9 +672,9 @@ export default function InboxPage() {
             <header className="wa-sender-bar flex shrink-0 items-center gap-0 px-1 py-1 sm:gap-1 sm:px-3 sm:py-2">
               <button
                 type="button"
-                aria-label="Back"
-                className="flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream md:hidden"
-                onClick={() => setActiveEmail(null)}
+                aria-label="Back to messages"
+                className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream lg:hidden"
+                onClick={() => closeThread()}
               >
                 <BackIcon />
               </button>
@@ -753,8 +794,8 @@ export default function InboxPage() {
 
       {/* Details */}
       {active && detailsOpen ? (
-        <aside className="flex w-full min-w-0 flex-col bg-panel md:w-72 md:border-l md:border-line lg:w-80">
-          <div className="wa-sender-bar flex shrink-0 items-center gap-1 px-1 py-1 md:hidden">
+        <aside className="flex w-full min-w-0 flex-col bg-panel lg:w-72 lg:border-l lg:border-line xl:w-80">
+          <div className="wa-sender-bar flex shrink-0 items-center gap-1 px-1 py-1 lg:hidden">
             <button
               type="button"
               aria-label="Back to chat"
@@ -767,7 +808,7 @@ export default function InboxPage() {
               Details
             </p>
           </div>
-          <div className="hidden items-center justify-between gap-2 border-b border-line px-4 py-2.5 md:flex">
+          <div className="hidden items-center justify-between gap-2 border-b border-line px-4 py-2.5 lg:flex">
             <p className="text-sm font-semibold">Details</p>
             <button
               type="button"
@@ -893,9 +934,10 @@ function RoomRow({
   onOpen: () => void;
   onStar: () => void;
 }) {
+  const unread = room.unread > 0;
   return (
     <div
-      className={`group flex items-center gap-3 px-3 py-2.5 transition-colors ${
+      className={`group flex items-center gap-2.5 px-3 py-3 transition-colors sm:gap-3 sm:py-2.5 ${
         active ? "bg-accent-soft" : "hover:bg-ash/50"
       }`}
     >
@@ -906,24 +948,31 @@ function RoomRow({
       >
         <span className="relative shrink-0">
           <Avatar name={room.name} email={room.email} />
-          {room.unread > 0 ? (
-            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 bg-gold" />
-          ) : null}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
             <span
-              className={`truncate text-sm ${room.unread > 0 ? "font-bold text-ink" : "font-medium text-ink"
-                }`}
+              className={`min-w-0 truncate text-[15px] sm:text-sm ${
+                unread ? "font-bold text-ink" : "font-medium text-ink"
+              }`}
             >
               {displayName(room.name, room.email)}
             </span>
-            <span className="shrink-0 text-[11px] text-mute">
+            <span
+              className={`shrink-0 text-[11px] ${unread ? "font-semibold text-gold" : "text-mute"}`}
+            >
               {stamp(room.lastAt)}
             </span>
           </span>
-          <span className="mt-0.5 block truncate text-xs text-mute">
-            {room.lastText}
+          <span className="mt-0.5 flex items-center gap-2">
+            <span
+              className={`min-w-0 flex-1 truncate text-[13px] sm:text-xs ${
+                unread ? "text-ink/80" : "text-mute"
+              }`}
+            >
+              {room.lastText}
+            </span>
+            {unread ? <CountBadge count={room.unread} /> : null}
           </span>
         </span>
       </button>
@@ -931,14 +980,34 @@ function RoomRow({
         type="button"
         aria-label={starred ? "Unstar conversation" : "Star conversation"}
         onClick={onStar}
-        className={`shrink-0 p-2.5 transition-colors ${starred
+        className={`shrink-0 p-2 transition-colors ${
+          starred
             ? "text-gold"
             : "text-mute hover:text-ink sm:text-transparent sm:group-hover:text-mute"
-          }`}
+        }`}
       >
         <StarIcon filled={starred} />
       </button>
     </div>
+  );
+}
+
+function CountBadge({
+  count,
+  tone = "gold",
+}: {
+  count: number;
+  tone?: "gold" | "mute";
+}) {
+  if (count <= 0) return null;
+  return (
+    <span
+      className={`inline-flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold leading-none ${
+        tone === "gold" ? "bg-gold text-ash" : "bg-line text-mute"
+      }`}
+    >
+      {count > 99 ? "99+" : count}
+    </span>
   );
 }
 

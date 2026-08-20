@@ -70,7 +70,9 @@ export function Topbar({
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <LanguageSwitcher />
+          <div className="hidden sm:block">
+            <LanguageSwitcher />
+          </div>
           <div className="relative hidden md:block">
             <input
               type="search"
