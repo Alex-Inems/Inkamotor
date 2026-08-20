@@ -65,39 +65,41 @@ export async function POST(request: Request) {
       htmlContent: html,
       textContent: message,
     });
-
-    let reply = null;
-    if (missingSupabaseEnv().length === 0) {
-      try {
-        reply = await saveMailReply({
-          toEmail: to,
-          toName: body.toName,
-          subject,
-          bodyText: message,
-          relatedMailId: body.relatedMailId,
-          relatedInquiryId: body.relatedInquiryId,
-        });
-      } catch (storeErr) {
-        // Still report send success; storage may need mail_replies migration
-        return Response.json({
-          ok: true,
-          subject,
-          reply: null,
-          storeWarning:
-            storeErr instanceof Error
-              ? storeErr.message
-              : "Reply sent but not saved — run supabase/mail_replies.sql",
-        });
-      }
-    }
-
-    return Response.json({ ok: true, subject, reply });
   } catch (err) {
     return jsonError(502, {
       error: err instanceof Error ? err.message : "Could not send reply",
       code: "send_failed",
     });
   }
+
+  let reply = null;
+  if (missingSupabaseEnv().length === 0) {
+    try {
+      reply = await saveMailReply({
+        toEmail: to,
+        toName: body.toName,
+        subject,
+        bodyText: message,
+        relatedMailId: body.relatedMailId,
+        relatedInquiryId: body.relatedInquiryId,
+      });
+    } catch {
+      // Email already went out — still return a history row so the thread
+      // shows the send even if one of the tables isn't migrated yet.
+      reply = {
+        id: crypto.randomUUID(),
+        toName: body.toName ?? null,
+        toEmail: to,
+        subject,
+        bodyText: message,
+        relatedMailId: body.relatedMailId ?? null,
+        relatedInquiryId: body.relatedInquiryId ?? null,
+        sentAt: new Date().toISOString(),
+      };
+    }
+  }
+
+  return Response.json({ ok: true, subject, reply });
 }
 
 function escapeHtml(s: string) {

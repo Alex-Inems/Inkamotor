@@ -30,6 +30,15 @@ export function isSystemSender(email: string | null | undefined): boolean {
   return SYSTEM_DOMAINS.includes(domain);
 }
 
+export function isOwnAddress(
+  email: string | null | undefined,
+  own: (string | null | undefined)[] = [],
+): boolean {
+  const clean = email?.trim().toLowerCase();
+  if (!clean) return false;
+  return own.some((a) => a?.trim().toLowerCase() === clean);
+}
+
 /** First email in the body that isn't a system or own address. */
 export function extractEmailFromBody(
   body: string | null | undefined,

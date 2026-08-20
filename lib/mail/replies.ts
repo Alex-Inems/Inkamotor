@@ -11,6 +11,14 @@ export type MailReply = {
   sentAt: string;
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function asUuid(value?: string | null): string | null {
+  const v = value?.trim();
+  return v && UUID_RE.test(v) ? v : null;
+}
+
 function mapRow(row: Record<string, unknown>): MailReply {
   return {
     id: String(row.id),
@@ -37,33 +45,105 @@ export async function listMailReplies(limit = 100): Promise<MailReply[]> {
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
 }
 
-export async function saveMailReply(input: {
+type SaveInput = {
   toEmail: string;
   toName?: string | null;
   subject: string;
   bodyText: string;
   relatedMailId?: string | null;
   relatedInquiryId?: string | null;
-}): Promise<MailReply> {
+};
+
+/**
+ * Persist an outbound reply so it always shows in conversation history.
+ * Writes mail_replies (sent log) and a SENT row in mail_messages (the table
+ * the inbox already reads). Either table is enough for the UI.
+ */
+export async function saveMailReply(input: SaveInput): Promise<MailReply> {
   if (missingSupabaseEnv().length > 0) {
     throw new Error("Supabase is not configured — cannot store sent reply.");
   }
+
+  const sentAt = new Date().toISOString();
+  const relatedMailId = asUuid(input.relatedMailId);
+  const fromEmail =
+    process.env.BREVO_SENDER_EMAIL?.trim() ||
+    process.env.IMAP_USER?.trim() ||
+    "contact@inkamototours.com";
+  const fromName = process.env.BREVO_SENDER_NAME?.trim() || "Inkamoto Tours";
+  const preview = input.bodyText.replace(/\s+/g, " ").trim().slice(0, 240);
+
   const supabase = getSupabase();
-  const { data, error } = await supabase
+  const payload = {
+    to_email: input.toEmail,
+    to_name: input.toName ?? null,
+    subject: input.subject,
+    body_text: input.bodyText,
+    related_mail_id: relatedMailId,
+    related_inquiry_id: input.relatedInquiryId ?? null,
+    sent_at: sentAt,
+  };
+
+  let reply: MailReply | null = null;
+  const inserted = await supabase
     .from("mail_replies")
-    .insert({
-      to_email: input.toEmail,
-      to_name: input.toName ?? null,
-      subject: input.subject,
-      body_text: input.bodyText,
-      related_mail_id: input.relatedMailId ?? null,
-      related_inquiry_id: input.relatedInquiryId ?? null,
-      sent_at: new Date().toISOString(),
-    })
+    .insert(payload)
     .select(
       "id, to_name, to_email, subject, body_text, related_mail_id, related_inquiry_id, sent_at",
     )
     .single();
-  if (error) throw new Error(error.message);
-  return mapRow(data as Record<string, unknown>);
+
+  if (inserted.error && relatedMailId) {
+    const retry = await supabase
+      .from("mail_replies")
+      .insert({ ...payload, related_mail_id: null })
+      .select(
+        "id, to_name, to_email, subject, body_text, related_mail_id, related_inquiry_id, sent_at",
+      )
+      .single();
+    if (!retry.error && retry.data) {
+      reply = mapRow(retry.data as Record<string, unknown>);
+    }
+  } else if (!inserted.error && inserted.data) {
+    reply = mapRow(inserted.data as Record<string, unknown>);
+  }
+
+  const copyId = reply?.id ?? crypto.randomUUID();
+  const { error: copyError } = await supabase.from("mail_messages").upsert(
+    {
+      message_id: `crm-sent-${copyId}`,
+      folder: "SENT",
+      from_name: fromName,
+      from_email: fromEmail,
+      to_email: input.toEmail,
+      subject: input.subject,
+      preview,
+      body_text: input.bodyText.slice(0, 20000),
+      received_at: sentAt,
+      is_read: true,
+      synced_at: sentAt,
+    },
+    { onConflict: "message_id" },
+  );
+
+  if (!reply && copyError) {
+    throw new Error(
+      inserted.error?.message ||
+        copyError.message ||
+        "Could not save reply to history",
+    );
+  }
+
+  return (
+    reply ?? {
+      id: copyId,
+      toName: input.toName ?? null,
+      toEmail: input.toEmail,
+      subject: input.subject,
+      bodyText: input.bodyText,
+      relatedMailId,
+      relatedInquiryId: input.relatedInquiryId ?? null,
+      sentAt,
+    }
+  );
 }

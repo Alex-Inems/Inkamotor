@@ -131,9 +131,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const pushToast = useCallback((message: string) => {
     // Ref counter avoids duplicate keys from Strict Mode double-invoking setState updaters.
     const id = ++toastSeq.current;
-    setToasts((prev) => [...prev, { id, message }]);
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts((prev) => [...prev, { id, message }]);
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3200);
   }, []);
 

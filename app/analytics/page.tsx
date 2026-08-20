@@ -6,7 +6,7 @@ import { PausedFeature } from "@/components/paused-feature";
 export default function AnalyticsPage() {
   return (
     <PausedFeature
-      title="Analytics"
+        title="Analytics"
       description="Google and Meta analytics are commented out for now — no Google or Meta env required."
     />
   );

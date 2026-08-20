@@ -207,7 +207,13 @@ function parseFields(input: string): FormField[] {
 
 function looksLikeForm(raw: string, subject?: string) {
   if (FORM_PREAMBLE.test(raw)) return true;
-  if (subject && /new form submission|nouvelle soumission/i.test(subject)) {
+  // Replies keep the form subject ("Re: New form submission…") — that is not
+  // a form body. Only the original notification is.
+  if (
+    subject &&
+    !/^re\s*:/i.test(subject.trim()) &&
+    /new form submission|nouvelle soumission/i.test(subject)
+  ) {
     return true;
   }
   return false;
@@ -225,7 +231,7 @@ export function cleanBody(
   const decoded = decode(original);
   const { body: unquoted, quoted } = splitQuoted(decoded);
   const { body: noFooter, cut } = cutFooter(unquoted);
-  const isForm = looksLikeForm(decoded, subject);
+  const isForm = looksLikeForm(unquoted, subject);
 
   let working = tidy(stripLinks(noFooter));
   let fields: FormField[] = [];
@@ -234,7 +240,6 @@ export function cleanBody(
     working = working.replace(FORM_PREAMBLE, "").trim();
     fields = parseFields(working);
 
-    // The message is the longest field that isn't just contact details
     const messageField =
       fields
         .filter(
@@ -247,12 +252,20 @@ export function cleanBody(
     if (messageField) {
       fields = fields.filter((f) => f !== messageField);
       working = messageField.value;
+    } else if (fields.length === 0) {
+      // Subject looked like a form, but the body is a normal message.
     } else {
+      // Contact fields only — no separate message.
       working = "";
     }
   }
 
-  const text = working.trim();
+  let text = working.trim();
+  if (!text && !fields.length) {
+    const fallback = tidy(stripLinks(unquoted)).trim();
+    if (fallback) text = fallback;
+  }
+
   const trimmed =
     cut ||
     !!quoted ||

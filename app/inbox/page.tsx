@@ -16,13 +16,18 @@ import {
   type CleanBody,
   type FormField,
 } from "@/lib/mail/clean";
-import { messageContact } from "@/lib/mail/extract";
-import { currentUser } from "@/lib/session";
+import {
+  extractEmailFromBody,
+  isOwnAddress,
+  isSystemSender,
+  messageContact,
+} from "@/lib/mail/extract";
 
 type MailMessage = {
   id: string;
   fromName: string | null;
   fromEmail: string;
+  toEmail: string | null;
   subject: string;
   preview: string;
   bodyText: string | null;
@@ -183,6 +188,14 @@ export default function InboxPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const pane = !activeEmail ? "list" : detailsOpen ? "details" : "thread";
+    document.body.dataset.inboxPane = pane;
+    return () => {
+      delete document.body.dataset.inboxPane;
+    };
+  }, [activeEmail, detailsOpen]);
+
   const toggleStar = useCallback((email: string) => {
     setStarred((prev) => {
       const next = prev.includes(email)
@@ -214,10 +227,7 @@ export default function InboxPage() {
 
   const loadReplies = useCallback(async () => {
     const res = await fetch("/api/inbox/replies");
-    if (!res.ok) {
-      setReplies([]);
-      return;
-    }
+    if (!res.ok) return;
     const json = await res.json();
     setReplies((json as { replies: MailReply[] }).replies ?? []);
   }, []);
@@ -303,9 +313,47 @@ export default function InboxPage() {
       return fresh;
     };
 
+    const hasNearDuplicate = (
+      room: Room,
+      mine: boolean,
+      raw: string,
+      at: string,
+    ) => {
+      const preview = previewOf(cleanBody(raw));
+      const ts = new Date(at).getTime();
+      return room.messages.some((msg) => {
+        if (msg.mine !== mine) return false;
+        if (previewOf(msg.clean) !== preview) return false;
+        return Math.abs(new Date(msg.at).getTime() - ts) < 5 * 60_000;
+      });
+    };
+
     for (const m of mail) {
       const raw = m.bodyText || m.preview || "";
       const clean = cleanBody(raw, m.subject);
+      const ownOutbound = isOwnAddress(m.fromEmail, ownAddresses);
+
+      if (ownOutbound) {
+        const recipient =
+          m.toEmail &&
+          !isOwnAddress(m.toEmail, ownAddresses) &&
+          !isSystemSender(m.toEmail)
+            ? m.toEmail
+            : extractEmailFromBody(raw, [m.fromEmail, m.toEmail, ...ownAddresses]);
+        if (!recipient || isOwnAddress(recipient, ownAddresses)) continue;
+        const room = ensure(recipient, null);
+        if (hasNearDuplicate(room, true, raw, m.receivedAt)) continue;
+        room.messages.push({
+          key: `out-mail-${m.id}`,
+          mine: true,
+          at: m.receivedAt,
+          subject: m.subject,
+          clean: cleanBody(raw),
+          raw,
+        });
+        continue;
+      }
+
       const contact = messageContact({
         fromEmail: m.fromEmail,
         fromName: m.fromName,
@@ -338,13 +386,23 @@ export default function InboxPage() {
     }
 
     for (const r of replies) {
-      const room = ensure(r.toEmail, r.toName);
+      const related = [...byEmail.values()].find((room) =>
+        room.messages.some((msg) => msg.mailId === r.relatedMailId),
+      );
+      const target =
+        related?.email ??
+        (isSystemSender(r.toEmail) || isOwnAddress(r.toEmail, ownAddresses)
+          ? null
+          : r.toEmail);
+      if (!target) continue;
+      const room = ensure(target, r.toName ?? related?.name ?? null);
+      if (hasNearDuplicate(room, true, r.bodyText, r.sentAt)) continue;
       room.messages.push({
         key: `out-${r.id}`,
         mine: true,
         at: r.sentAt,
         subject: r.subject,
-        clean: cleanBody(r.bodyText, r.subject),
+        clean: cleanBody(r.bodyText),
         raw: r.bodyText,
       });
     }
@@ -404,7 +462,7 @@ export default function InboxPage() {
         last.mine === m.mine &&
         dayLabel(prev.at) === dayLabel(m.at) &&
         new Date(m.at).getTime() - new Date(prev.at).getTime() <
-          GROUP_WINDOW_MS;
+        GROUP_WINDOW_MS;
       if (close) last.items.push(m);
       else out.push({ key: m.key, mine: m.mine, at: m.at, items: [m] });
     }
@@ -443,11 +501,15 @@ export default function InboxPage() {
         pushToast((json as ApiError).error || "Could not send");
         return;
       }
-      setDraft("");
-      if ((json as { storeWarning?: string }).storeWarning) {
-        pushToast("Sent, but not saved to history yet");
+      const saved = (json as { reply?: MailReply | null }).reply;
+      if (saved) {
+        setReplies((prev) =>
+          prev.some((r) => r.id === saved.id) ? prev : [saved, ...prev],
+        );
       }
+      setDraft("");
       await loadReplies();
+      void loadMail();
     } finally {
       setSending(false);
     }
@@ -459,14 +521,13 @@ export default function InboxPage() {
     <div className="flex h-full min-h-0">
       {/* Rooms */}
       <aside
-        className={`min-w-0 flex-col border-r border-line bg-panel ${
-          !active
+        className={`min-w-0 flex-col border-r border-line bg-panel ${!active
             ? "flex w-full"
             : detailsOpen
               ? // Details takes this slot until there's room for all three panes
-                "hidden xl:flex xl:w-80"
+              "hidden xl:flex xl:w-80"
               : "hidden md:flex md:w-72 lg:w-80"
-        }`}
+          }`}
       >
         <div className="flex items-center justify-between gap-2 px-4 pt-4">
           <h1 className="font-display text-lg tracking-wide">Messages</h1>
@@ -486,7 +547,7 @@ export default function InboxPage() {
           />
         </div>
 
-        <div className="flex gap-1 px-4 py-3">
+        <div className="flex gap-1 overflow-x-auto px-4 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(
             [
               { id: "inbox" as const, label: "All" },
@@ -499,11 +560,10 @@ export default function InboxPage() {
               key={tab.id}
               type="button"
               onClick={() => setFilter(tab.id)}
-              className={`px-2.5 py-1.5 text-xs font-semibold transition-colors ${
-                filter === tab.id
+              className={`shrink-0 px-2.5 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${filter === tab.id
                   ? "bg-accent text-white"
                   : "text-mute hover:bg-ash hover:text-ink"
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -559,9 +619,8 @@ export default function InboxPage() {
 
       {/* Thread */}
       <section
-        className={`min-w-0 flex-1 flex-col bg-canvas ${
-          !active || detailsOpen ? "hidden md:flex" : "flex"
-        }`}
+        className={`min-w-0 flex-1 flex-col bg-canvas ${!active || detailsOpen ? "hidden md:flex" : "flex"
+          }`}
       >
         {!active ? (
           <div className="flex flex-1 items-center justify-center px-6">
@@ -569,33 +628,41 @@ export default function InboxPage() {
           </div>
         ) : (
           <>
-            <header className="flex items-center gap-3 border-b border-line bg-panel px-3 py-2.5 sm:px-4">
+            <header className="wa-sender-bar flex shrink-0 items-center gap-0 px-1 py-1 sm:gap-1 sm:px-3 sm:py-2">
               <button
                 type="button"
                 aria-label="Back"
-                className="-ml-1 shrink-0 px-2 py-2 text-mute hover:text-ink md:hidden"
+                className="flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream md:hidden"
                 onClick={() => setActiveEmail(null)}
               >
                 <BackIcon />
               </button>
-              <Avatar name={active.name} email={active.email} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink">
-                  {activeName}
-                </p>
-                <p className="truncate text-xs text-mute">
-                  {active.lastSubject || active.email}
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setDetailsOpen(true)}
+                className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pr-1 text-left sm:gap-3 sm:px-1.5 hover:bg-white/10"
+              >
+                <span className="inline-flex shrink-0 overflow-hidden rounded-full ring-2 ring-white/25">
+                  <Avatar name={active.name} email={active.email} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[15px] font-semibold leading-tight text-cream sm:text-[16px]">
+                    {activeName}
+                  </p>
+                  <p className="truncate text-[11px] leading-snug text-cream/70 sm:text-[12px]">
+                    {active.email}
+                  </p>
+                </div>
+              </button>
               <button
                 type="button"
                 aria-label={starred.includes(active.email) ? "Unstar" : "Star"}
                 title={starred.includes(active.email) ? "Unstar" : "Star"}
                 onClick={() => toggleStar(active.email)}
-                className={`shrink-0 px-2 py-2 transition-colors ${
+                className={`flex h-11 w-11 shrink-0 items-center justify-center transition-colors ${
                   starred.includes(active.email)
                     ? "text-gold"
-                    : "text-mute hover:text-ink"
+                    : "text-cream/85 hover:text-cream"
                 }`}
               >
                 <StarIcon filled={starred.includes(active.email)} />
@@ -605,8 +672,8 @@ export default function InboxPage() {
                 aria-label="Details"
                 title="Details"
                 onClick={() => setDetailsOpen((v) => !v)}
-                className={`shrink-0 px-2 py-2 transition-colors ${
-                  detailsOpen ? "text-gold" : "text-mute hover:text-ink"
+                className={`flex h-11 w-11 shrink-0 items-center justify-center transition-colors ${
+                  detailsOpen ? "text-gold" : "text-cream/85 hover:text-cream"
                 }`}
               >
                 <InfoIcon />
@@ -615,7 +682,7 @@ export default function InboxPage() {
 
             <div
               ref={threadRef}
-              className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5"
+              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-6 sm:py-5"
             >
               {groups.map((group, i) => {
                 const prev = groups[i - 1];
@@ -623,12 +690,10 @@ export default function InboxPage() {
                 return (
                   <div key={group.key}>
                     {newDay ? (
-                      <div className="flex items-center gap-3 py-4">
-                        <span className="h-px flex-1 bg-line" />
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
+                      <div className="flex justify-center py-4">
+                        <span className="bg-panel px-3 py-1 text-[11px] font-semibold tracking-wide text-mute">
                           {dayLabel(group.at)}
                         </span>
-                        <span className="h-px flex-1 bg-line" />
                       </div>
                     ) : null}
                     <MessageGroup
@@ -642,13 +707,18 @@ export default function InboxPage() {
               })}
             </div>
 
-            <footer className="px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-5">
+            <footer className="shrink-0 bg-panel/90 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:border-t sm:border-line sm:bg-panel sm:px-5 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {conn?.brevo.ready ? (
-                <div className="border border-line bg-panel focus-within:border-gold">
+                <div className="flex items-end gap-2">
                   <textarea
-                    rows={2}
+                    rows={1}
                     value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
+                    onChange={(e) => {
+                      setDraft(e.target.value);
+                      const el = e.target;
+                      el.style.height = "auto";
+                      el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -656,24 +726,23 @@ export default function InboxPage() {
                       }
                     }}
                     placeholder={`Message ${activeName}`}
-                    className="max-h-40 w-full resize-none bg-transparent px-3 py-2.5 text-sm outline-none placeholder:text-mute/70"
+                    className="max-h-32 min-h-11 flex-1 resize-none rounded-[22px] border border-line bg-ash px-3.5 py-2.5 text-sm leading-snug outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none"
                   />
-                  <div className="flex items-center justify-between gap-3 border-t border-line px-3 py-2">
-                    <span className="truncate text-[11px] text-mute">
-                      Enter to send · Shift+Enter for a new line
+                  <button
+                    type="button"
+                    onClick={() => void send()}
+                    disabled={sending || !draft.trim()}
+                    aria-label="Send"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chat-out text-chat-out-text transition-colors hover:bg-accent-deep disabled:opacity-40 sm:w-auto sm:rounded-none sm:bg-accent sm:px-4 sm:text-sm sm:font-semibold sm:text-cream"
+                  >
+                    <span className="sm:hidden">
+                      {sending ? "…" : <SendIcon />}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void send()}
-                      disabled={sending || !draft.trim()}
-                      className="shrink-0 bg-accent px-4 py-1.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-                    >
-                      {sending ? "Sending…" : "Send"}
-                    </button>
-                  </div>
+                    <span className="hidden sm:inline">{sending ? "…" : "Send"}</span>
+                  </button>
                 </div>
               ) : (
-                <p className="border border-line bg-panel px-3 py-3 text-xs text-gold">
+                <p className="px-1 pb-1 text-xs text-gold">
                   Sending isn’t set up yet — finish Setup to reply from here.
                 </p>
               )}
@@ -684,8 +753,21 @@ export default function InboxPage() {
 
       {/* Details */}
       {active && detailsOpen ? (
-        <aside className="flex w-full min-w-0 flex-col border-l border-line bg-panel md:w-72 lg:w-80">
-          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+        <aside className="flex w-full min-w-0 flex-col bg-panel md:w-72 md:border-l md:border-line lg:w-80">
+          <div className="wa-sender-bar flex shrink-0 items-center gap-1 px-1 py-1 md:hidden">
+            <button
+              type="button"
+              aria-label="Back to chat"
+              onClick={() => setDetailsOpen(false)}
+              className="flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream"
+            >
+              <BackIcon />
+            </button>
+            <p className="min-w-0 flex-1 truncate px-2 text-[15px] font-semibold text-cream">
+              Details
+            </p>
+          </div>
+          <div className="hidden items-center justify-between gap-2 border-b border-line px-4 py-2.5 md:flex">
             <p className="text-sm font-semibold">Details</p>
             <button
               type="button"
@@ -813,8 +895,8 @@ function RoomRow({
 }) {
   return (
     <div
-      className={`group flex items-center gap-3 border-b border-line px-4 py-3 transition-colors ${
-        active ? "bg-accent-soft" : "hover:bg-ash/60"
+      className={`group flex items-center gap-3 px-3 py-2.5 transition-colors ${
+        active ? "bg-accent-soft" : "hover:bg-ash/50"
       }`}
     >
       <button
@@ -822,13 +904,17 @@ function RoomRow({
         onClick={onOpen}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        <Avatar name={room.name} email={room.email} />
+        <span className="relative shrink-0">
+          <Avatar name={room.name} email={room.email} />
+          {room.unread > 0 ? (
+            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 bg-gold" />
+          ) : null}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
             <span
-              className={`truncate text-sm ${
-                room.unread > 0 ? "font-bold text-ink" : "font-medium text-ink"
-              }`}
+              className={`truncate text-sm ${room.unread > 0 ? "font-bold text-ink" : "font-medium text-ink"
+                }`}
             >
               {displayName(room.name, room.email)}
             </span>
@@ -836,19 +922,8 @@ function RoomRow({
               {stamp(room.lastAt)}
             </span>
           </span>
-          <span className="mt-0.5 flex items-center justify-between gap-2">
-            <span
-              className={`truncate text-xs ${
-                room.unread > 0 ? "text-ink" : "text-mute"
-              }`}
-            >
-              {room.lastText}
-            </span>
-            {room.unread > 0 ? (
-              <span className="shrink-0 bg-accent px-1.5 text-[11px] font-bold text-white">
-                {room.unread}
-              </span>
-            ) : null}
+          <span className="mt-0.5 block truncate text-xs text-mute">
+            {room.lastText}
           </span>
         </span>
       </button>
@@ -856,11 +931,10 @@ function RoomRow({
         type="button"
         aria-label={starred ? "Unstar conversation" : "Star conversation"}
         onClick={onStar}
-        className={`shrink-0 p-1 transition-colors ${
-          starred
+        className={`shrink-0 p-2.5 transition-colors ${starred
             ? "text-gold"
-            : "text-transparent hover:text-ink group-hover:text-mute"
-        }`}
+            : "text-mute hover:text-ink sm:text-transparent sm:group-hover:text-mute"
+          }`}
       >
         <StarIcon filled={starred} />
       </button>
@@ -879,35 +953,32 @@ function MessageGroup({
   contactEmail: string;
   showOriginal: boolean;
 }) {
-  const author = group.mine ? currentUser.name : contactName;
+  const last = group.items[group.items.length - 1];
 
   return (
-    <div className="flex gap-3 py-2">
-      {group.mine ? (
-        <span
-          aria-hidden
-          className="flex h-9 w-9 shrink-0 items-center justify-center text-xs font-bold text-white"
-          style={{ background: currentUser.avatarHue }}
-        >
-          {currentUser.initials}
-        </span>
-      ) : (
-        <Avatar name={contactName} email={contactEmail} />
+    <div
+      className={`mb-1.5 flex items-end gap-2 ${
+        group.mine ? "justify-end" : "justify-start"
+      }`}
+    >
+      {group.mine ? null : (
+        <Avatar name={contactName} email={contactEmail} small />
       )}
-      <div className="min-w-0 flex-1">
-        <p className="flex items-baseline gap-2">
-          <span className="truncate text-sm font-semibold text-ink">
-            {author}
-          </span>
-          <span className="shrink-0 text-[11px] text-mute">
-            {clockTime(group.at)}
-          </span>
-        </p>
-        <div className="mt-1 space-y-2">
-          {group.items.map((m) => (
-            <MessageBody key={m.key} message={m} showOriginal={showOriginal} />
-          ))}
-        </div>
+      <div
+        className={`flex min-w-0 max-w-[88%] flex-col gap-0.5 sm:max-w-[65%] ${
+          group.mine ? "items-end" : "items-start"
+        }`}
+      >
+        {group.items.map((m, i) => (
+          <MessageBody
+            key={m.key}
+            message={m}
+            mine={group.mine}
+            senderName={!group.mine && i === 0 ? contactName : null}
+            tail={m.key === last?.key}
+            showOriginal={showOriginal}
+          />
+        ))}
       </div>
     </div>
   );
@@ -915,58 +986,117 @@ function MessageGroup({
 
 function MessageBody({
   message,
+  mine,
+  senderName,
+  tail,
   showOriginal,
 }: {
   message: Message;
+  mine: boolean;
+  senderName: string | null;
+  tail: boolean;
   showOriginal: boolean;
 }) {
   const [showQuoted, setShowQuoted] = useState(false);
   const { clean } = message;
+  const bubble = `wa-bubble ${mine ? "wa-bubble-out" : "wa-bubble-in"}${
+    tail ? " wa-tail" : ""
+  }`;
+
+  const stampEl = (
+    <span className="wa-time">
+      {clockTime(message.at)}
+      {mine ? <CheckIcon /> : null}
+    </span>
+  );
 
   if (showOriginal) {
     return (
-      <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap wrap-break-word border border-line bg-ash/40 p-2 text-xs text-mute">
+      <pre className={`${bubble} text-xs whitespace-pre-wrap wrap-break-word`}>
         {message.raw}
+        {stampEl}
       </pre>
     );
   }
 
   return (
-    <div className="text-sm leading-relaxed text-ink">
+    <div className={`${bubble} text-[14px] leading-[1.4]`}>
+      {senderName ? (
+        <p className="mb-0.5 hidden text-[12.5px] font-semibold text-[#86c5c9] sm:block">
+          {senderName}
+        </p>
+      ) : null}
       {clean.fields.length > 0 ? (
-        <dl className="mb-2 space-y-0.5 border-l-2 border-line pl-3 text-xs text-mute">
+        <dl
+          className={`mb-1.5 space-y-0.5 border-l pl-2 text-xs ${
+            mine ? "border-chat-out-text/30 text-chat-out-text/75" : "border-white/15 text-mute"
+          }`}
+        >
           {clean.fields.map((f) => (
             <div key={`${f.label}-${f.value}`} className="flex gap-2">
               <dt>{f.label}</dt>
-              <dd className="min-w-0 wrap-break-word text-ink">{f.value}</dd>
+              <dd className="min-w-0 wrap-break-word text-inherit">{f.value}</dd>
             </div>
           ))}
         </dl>
       ) : null}
 
-      <p className="whitespace-pre-wrap wrap-break-word">
-        {clean.text || (
-          <span className="text-mute">(no message text)</span>
-        )}
-      </p>
+      {clean.text ? (
+        <p className="whitespace-pre-wrap wrap-break-word">{clean.text}</p>
+      ) : clean.fields.length === 0 ? (
+        <p className="opacity-80">{message.raw?.trim() || "Empty message"}</p>
+      ) : null}
 
       {clean.quoted ? (
         <>
           <button
             type="button"
             onClick={() => setShowQuoted((v) => !v)}
-            className="mt-1 text-[11px] font-semibold text-mute underline-offset-2 hover:text-ink hover:underline"
+            className={`mt-1 text-[11px] font-semibold underline-offset-2 hover:underline ${
+              mine ? "text-chat-out-text/70" : "text-mute"
+            }`}
           >
             {showQuoted ? "Hide earlier messages" : "Show earlier messages"}
           </button>
           {showQuoted ? (
-            <pre className="mt-1.5 max-h-52 overflow-y-auto whitespace-pre-wrap wrap-break-word border-l-2 border-line pl-3 text-xs text-mute">
+            <pre
+              className={`mt-1 max-h-52 overflow-y-auto whitespace-pre-wrap wrap-break-word border-l pl-2 text-xs opacity-80 ${
+                mine ? "border-chat-out-text/30" : "border-white/15"
+              }`}
+            >
               {clean.quoted}
             </pre>
           ) : null}
         </>
       ) : null}
+      {stampEl}
     </div>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      viewBox="0 0 16 11"
+      className="h-[11px] w-[16px]"
+      fill="none"
+      aria-hidden
+    >
+      <path
+        d="M1.5 6.2 3.8 8.5 8.6 1.8"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.2 6.2 8.5 8.5 13.8 1.5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -974,17 +1104,22 @@ function Avatar({
   name,
   email,
   large,
+  small,
 }: {
   name: string | null;
   email: string;
   large?: boolean;
+  small?: boolean;
 }) {
+  const size = large
+    ? "h-12 w-12 text-sm"
+    : small
+      ? "h-7 w-7 text-[10px]"
+      : "h-9 w-9 text-xs";
   return (
     <span
       aria-hidden
-      className={`flex shrink-0 items-center justify-center font-bold text-white ${
-        large ? "h-12 w-12 text-sm" : "h-9 w-9 text-xs"
-      } ${toneFor(email)}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold text-white ${size} ${toneFor(email)}`}
     >
       {initialsOf(name, email)}
     </span>
@@ -1006,6 +1141,14 @@ function DetailAction({
     >
       {label}
     </button>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M3.4 20.6 21 12 3.4 3.4l-.4 7.1 12.2 1.5L3 13.5z" />
+    </svg>
   );
 }
 

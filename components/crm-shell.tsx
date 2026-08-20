@@ -50,6 +50,25 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    if (!fullBleed) return;
+    const vv = window.visualViewport;
+    const set = () => {
+      const h = vv?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty("--crm-vvh", `${Math.round(h)}px`);
+    };
+    set();
+    vv?.addEventListener("resize", set);
+    vv?.addEventListener("scroll", set);
+    window.addEventListener("resize", set);
+    return () => {
+      vv?.removeEventListener("resize", set);
+      vv?.removeEventListener("scroll", set);
+      window.removeEventListener("resize", set);
+      document.documentElement.style.removeProperty("--crm-vvh");
+    };
+  }, [fullBleed]);
+
+  useEffect(() => {
     if (!navOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -65,9 +84,11 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`bg-canvas pt-[6px] text-ink ${
-        fullBleed ? "h-svh overflow-hidden" : "min-h-svh"
-      }`}
+        className={`bg-canvas pt-[6px] text-ink ${
+          fullBleed
+            ? "h-[var(--crm-vvh,100dvh)] overflow-hidden"
+            : "min-h-svh"
+        }`}
     >
       <ColorStripe className="fixed inset-x-0 top-0 z-50" />
       {navOpen ? (
@@ -87,7 +108,9 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
         className={`min-w-0 lg:pl-60 ${
           // The inbox is an app pane, not a document: fill the viewport and
           // let its own panes scroll.
-          fullBleed ? "flex h-[calc(100svh-6px)] flex-col" : ""
+          fullBleed
+            ? "flex h-[calc(var(--crm-vvh,100dvh)-6px)] flex-col"
+            : ""
         }`}
       >
         <Topbar

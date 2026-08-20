@@ -45,7 +45,7 @@ export function Topbar({
   }, []);
 
   return (
-    <header className="sticky top-[6px] z-30 border-b border-line bg-panel/95 backdrop-blur-sm">
+    <header className="crm-topbar sticky top-[6px] z-30 border-b border-line bg-panel/95 backdrop-blur-sm">
       <div className="flex min-h-14 items-center justify-between gap-2 px-3 py-2 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] sm:gap-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <button
