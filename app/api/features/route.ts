@@ -11,6 +11,6 @@ export async function GET() {
     features: byId,
     /** Always hide Google / Meta routes — no env required for those. */
     hiddenNav: ["/search-console", "/analytics", "/ads/meta"],
-    hint: "Google + Meta are paused. Only Supabase / Brevo / IMAP / webhook are checked.",
+    hint: "Google + Meta are paused. Only Supabase, email sending, and the mailbox are checked.",
   });
 }

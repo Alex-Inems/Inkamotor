@@ -59,12 +59,6 @@ const GUIDES: Record<
     keys: ["IMAP_HOST", "IMAP_PORT", "IMAP_USER", "IMAP_PASSWORD"],
     after: "Mailbox for contact@inkamototours.com — fills the Inbox tab.",
   },
-  webhook: {
-    title: "Site form webhook (optional)",
-    where: "Webflow → form webhook or Make/Zapier → POST /api/webhooks/contact",
-    keys: ["WEBHOOK_SECRET"],
-    after: "Send header x-webhook-secret with the same value.",
-  },
 };
 
 export default function SetupPage() {

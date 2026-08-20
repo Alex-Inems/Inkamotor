@@ -2,13 +2,9 @@
 
 import { missingEnv } from "@/lib/api";
 
-export type FeatureId =
-  | "supabase"
-  | "brevo"
-  | "imap"
-  // | "googleSearchConsole" // paused — not required
-  // | "metaAds" // paused — not required
-  | "webhook";
+// Website forms arrive as email in the mailbox, so no webhook feature is needed.
+// Google / Meta are paused: "googleSearchConsole" and "metaAds" stay out for now.
+export type FeatureId = "supabase" | "brevo" | "imap";
 
 export type FeatureState = {
   id: FeatureId;
@@ -49,8 +45,6 @@ export function getFeatureStates(): FeatureState[] {
     "IMAP_USER",
     "IMAP_PASSWORD",
   ]);
-  const webhookMissing = missingEnv(["WEBHOOK_SECRET"]);
-
   return [
     {
       id: "supabase",
@@ -87,13 +81,6 @@ export function getFeatureStates(): FeatureState[] {
     //   missing: [],
     //   label: "Meta Ads",
     // },
-    {
-      id: "webhook",
-      ready: webhookMissing.length === 0,
-      paused: webhookMissing.length > 0,
-      missing: webhookMissing,
-      label: "Webflow webhook",
-    },
   ];
 }
 

@@ -42,6 +42,7 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const t = useT();
   const title = t(pageKeys[pathname] ?? "brand.crm");
+  const fullBleed = pathname === "/inbox";
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -63,7 +64,11 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
   }, [navOpen]);
 
   return (
-    <div className="min-h-svh bg-canvas pt-[6px] text-ink">
+    <div
+      className={`bg-canvas pt-[6px] text-ink ${
+        fullBleed ? "h-svh overflow-hidden" : "min-h-svh"
+      }`}
+    >
       <ColorStripe className="fixed inset-x-0 top-0 z-50" />
       {navOpen ? (
         <button
@@ -78,13 +83,25 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
         open={navOpen}
         onClose={() => setNavOpen(false)}
       />
-      <div className="min-w-0 lg:pl-60">
+      <div
+        className={`min-w-0 lg:pl-60 ${
+          // The inbox is an app pane, not a document: fill the viewport and
+          // let its own panes scroll.
+          fullBleed ? "flex h-[calc(100svh-6px)] flex-col" : ""
+        }`}
+      >
         <Topbar
           title={title}
           menuOpen={navOpen}
           onMenu={() => setNavOpen((v) => !v)}
         />
-        <main className="mx-auto w-full max-w-7xl px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8">
+        <main
+          className={
+            fullBleed
+              ? "min-h-0 flex-1 overflow-hidden"
+              : "mx-auto w-full max-w-7xl px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8"
+          }
+        >
           {children}
         </main>
       </div>

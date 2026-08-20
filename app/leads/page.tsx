@@ -913,20 +913,23 @@ export default function LeadsPage() {
 
       <div className="-mx-3 mb-4 overflow-x-auto px-3 sm:mx-0 sm:overflow-visible sm:px-0">
         <div className="flex w-max min-w-full gap-1 border border-line bg-panel p-1 sm:w-fit sm:flex-wrap">
-        {(
-          [
-            { id: "leads" as const, label: `Leads (${leads.length})` },
-            {
-              id: "questions" as const,
-              label: `Questions (${siteInquiries.length})`,
-            },
-            {
-              id: "followups" as const,
-              label: `Follow-ups (${followUps.length})`,
-            },
-            { id: "insights" as const, label: "Insights" },
-          ] as const
-        ).map((item) => (
+        {[
+          { id: "leads" as const, label: `Leads (${leads.length})` },
+          // Questions came from the old form webhook — hidden once empty
+          ...(siteInquiries.length > 0
+            ? [
+                {
+                  id: "questions" as const,
+                  label: `Questions (${siteInquiries.length})`,
+                },
+              ]
+            : []),
+          {
+            id: "followups" as const,
+            label: `Follow-ups (${followUps.length})`,
+          },
+          { id: "insights" as const, label: "Insights" },
+        ].map((item) => (
           <button
             key={item.id}
             type="button"

@@ -1,6 +1,8 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { missingEnv } from "@/lib/api";
+import { autoSubscribe } from "@/lib/mail/auto-subscribe";
+import { messageContact } from "@/lib/mail/extract";
 import { getSupabase } from "@/lib/supabase/server";
 
 const IMAP_KEYS = ["IMAP_HOST", "IMAP_USER", "IMAP_PASSWORD"] as const;
@@ -50,7 +52,9 @@ export async function listMailMessages(limit = 50): Promise<MailMessage[]> {
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
 }
 
-export async function syncImapInbox(limit = 40): Promise<{ synced: number }> {
+export async function syncImapInbox(
+  limit = 40,
+): Promise<{ synced: number; subscribed: number }> {
   const host = process.env.IMAP_HOST!.trim();
   const port = Number(process.env.IMAP_PORT?.trim() || "993");
   const user = process.env.IMAP_USER!.trim();
@@ -65,6 +69,7 @@ export async function syncImapInbox(limit = 40): Promise<{ synced: number }> {
   });
 
   const startedAt = new Date().toISOString();
+  const senders: { email: string; name?: string | null }[] = [];
   let synced = 0;
 
   try {
@@ -76,7 +81,7 @@ export async function syncImapInbox(limit = 40): Promise<{ synced: number }> {
         : 0;
       if (total === 0) {
         await logSync("ok", 0, null, startedAt);
-        return { synced: 0 };
+        return { synced: 0, subscribed: 0 };
       }
 
       const start = Math.max(1, total - limit + 1);
@@ -130,28 +135,23 @@ export async function syncImapInbox(limit = 40): Promise<{ synced: number }> {
           },
           { onConflict: "message_id" },
         );
-        if (!error) {
-          synced += 1;
-          // Anyone who emails the inbox is added to the newsletter list
-          void import("@/lib/brevo")
-            .then(({ upsertSubscriber }) =>
-              upsertSubscriber({
-                email: fromEmail,
-                name: from?.name || parsed?.from?.value?.[0]?.name || null,
-                source: "inbox",
-              }),
-            )
-            .catch(() => {
-              /* don't fail IMAP sync if list update fails */
-            });
-        }
+        if (!error) synced += 1;
+        // Form notifications come from a robot — subscribe the visitor instead
+        const contact = messageContact({
+          fromEmail,
+          fromName: from?.name || parsed?.from?.value?.[0]?.name || null,
+          bodyText: text,
+          ownAddresses: [user],
+        });
+        senders.push({ email: contact.email, name: contact.name });
       }
     } finally {
       lock.release();
     }
     await client.logout();
     await logSync("ok", synced, null, startedAt);
-    return { synced };
+    const { added } = await autoSubscribe(senders, "inbox");
+    return { synced, subscribed: added };
   } catch (err) {
     const message = err instanceof Error ? err.message : "IMAP sync failed";
     try {

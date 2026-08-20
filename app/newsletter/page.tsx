@@ -33,9 +33,9 @@ type Subscriber = {
   id: string;
   email: string;
   name: string | null;
-  blacklisted: boolean;
-  createdAt: string | null;
-  modifiedAt: string | null;
+  source: string | null;
+  blocked: boolean;
+  addedAt: string | null;
 };
 
 type ApiError = { error: string; missing?: string[] };
@@ -60,27 +60,26 @@ function tone(status: string) {
 export default function NewsletterPage() {
   const { pushToast } = useCrm();
   const { t, locale } = useLocale();
-  const [tab, setTab] = useState<"campaigns" | "subscribers">("campaigns");
   const [campaigns, setCampaigns] = useState<LiveCampaign[]>([]);
-  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
-  const [subTotal, setSubTotal] = useState(0);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
-  const [subsLoading, setSubsLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
-  const [subQuery, setSubQuery] = useState("");
   const [openAdd, setOpenAdd] = useState(false);
-  const [openAddSub, setOpenAddSub] = useState(false);
   const [selected, setSelected] = useState<LiveCampaign | null>(null);
+  const [tab, setTab] = useState<"campaigns" | "subscribers">("campaigns");
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+  const [subscriberTotal, setSubscriberTotal] = useState(0);
+  const [autoSubscribe, setAutoSubscribe] = useState(false);
+  const [subscriberError, setSubscriberError] = useState<string | null>(null);
+  const [newSubscriber, setNewSubscriber] = useState({ email: "", name: "" });
+  const [addingSubscriber, setAddingSubscriber] = useState(false);
   const [form, setForm] = useState({
     name: "",
     subject: "",
     preview: "",
     html: "",
   });
-  const [subForm, setSubForm] = useState({ email: "", name: "" });
 
   const load = useCallback(async () => {
     const res = await fetch("/api/newsletter");
@@ -98,18 +97,50 @@ export default function NewsletterPage() {
     const res = await fetch("/api/newsletter/subscribers");
     const json = await res.json();
     if (!res.ok) {
+      setSubscriberError((json as ApiError).error || "Could not load subscribers");
       setSubscribers([]);
-      setSubTotal(0);
+      setSubscriberTotal(0);
       return;
     }
-    setSubscribers((json as { subscribers: Subscriber[] }).subscribers ?? []);
-    setSubTotal((json as { total?: number }).total ?? 0);
+    const data = json as {
+      subscribers: Subscriber[];
+      total: number;
+      autoSubscribe: boolean;
+    };
+    setSubscriberError(null);
+    setSubscribers(data.subscribers ?? []);
+    setSubscriberTotal(data.total ?? 0);
+    setAutoSubscribe(Boolean(data.autoSubscribe));
   }, []);
 
   useEffect(() => {
+    void loadSubscribers();
     load().finally(() => setLoading(false));
-    loadSubscribers().finally(() => setSubsLoading(false));
   }, [load, loadSubscribers]);
+
+  async function addSubscriber(e: React.FormEvent) {
+    e.preventDefault();
+    const email = newSubscriber.email.trim();
+    if (!email) return;
+    setAddingSubscriber(true);
+    try {
+      const res = await fetch("/api/newsletter/subscribers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, name: newSubscriber.name.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        pushToast((json as ApiError).error || "Could not add subscriber");
+        return;
+      }
+      pushToast(`${email} added to the list`);
+      setNewSubscriber({ email: "", name: "" });
+      await loadSubscribers();
+    } finally {
+      setAddingSubscriber(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -118,14 +149,6 @@ export default function NewsletterPage() {
       `${c.name} ${c.subject} ${c.audience}`.toLowerCase().includes(q),
     );
   }, [campaigns, query]);
-
-  const filteredSubs = useMemo(() => {
-    const q = subQuery.trim().toLowerCase();
-    if (!q) return subscribers;
-    return subscribers.filter((s) =>
-      `${s.email} ${s.name ?? ""}`.toLowerCase().includes(q),
-    );
-  }, [subscribers, subQuery]);
 
   const sent = campaigns.filter((c) => c.status === "sent");
   const avgOpen =
@@ -166,70 +189,26 @@ export default function NewsletterPage() {
     }
   }
 
-  async function addSubscriber(e: React.FormEvent) {
-    e.preventDefault();
-    if (!subForm.email.trim()) return;
-    setAdding(true);
-    try {
-      const res = await fetch("/api/newsletter/subscribers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: subForm.email.trim(),
-          name: subForm.name.trim() || undefined,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        pushToast((json as ApiError).error || "Could not add subscriber");
-        return;
-      }
-      pushToast(`Added ${subForm.email.trim()} to the list`);
-      setOpenAddSub(false);
-      setSubForm({ email: "", name: "" });
-      await loadSubscribers();
-    } finally {
-      setAdding(false);
-    }
-  }
-
-  function refreshAll() {
-    if (tab === "subscribers") {
-      setSubsLoading(true);
-      void loadSubscribers().finally(() => setSubsLoading(false));
-    } else {
-      setLoading(true);
-      void load().finally(() => setLoading(false));
-    }
-  }
-
   return (
     <div>
       <PageHeader
         title={t("pages.newsletter.title")}
-        description="Campaigns go to your subscriber list. Anyone who emails the inbox is added automatically."
+        description={t("pages.newsletter.description")}
         action={
           <div className="flex flex-wrap gap-2">
-            <button type="button" className={btnSecondary} onClick={refreshAll}>
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={() => {
+                void load();
+                void loadSubscribers();
+              }}
+            >
               Refresh
             </button>
-            {tab === "subscribers" ? (
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() => setOpenAddSub(true)}
-              >
-                Add subscriber
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() => setOpenAdd(true)}
-              >
-                {t("pages.newsletter.newCampaign")}
-              </button>
-            )}
+            <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
+              {t("pages.newsletter.newCampaign")}
+            </button>
           </div>
         }
       />
@@ -237,23 +216,20 @@ export default function NewsletterPage() {
       {error ? (
         <div className="mb-4 border border-wine/40 bg-wine/10 px-4 py-3 text-sm">
           <p className="font-semibold text-pink">{error.error}</p>
+          {error.missing?.length ? (
+            <p className="mt-1 text-mute">{error.missing.join(", ")}</p>
+          ) : null}
         </div>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Subscribers"
-          value={formatNumber(subTotal || subscribers.length, false, locale)}
-          hint="On your list"
+          value={formatNumber(subscriberTotal, false, locale)}
+          hint={autoSubscribe ? "Auto-added from email" : "Manual only"}
         />
-        <KpiCard
-          label="Campaigns"
-          value={formatNumber(campaigns.length, false, locale)}
-        />
-        <KpiCard
-          label="Sent"
-          value={formatNumber(sent.length, false, locale)}
-        />
+        <KpiCard label="Campaigns" value={formatNumber(campaigns.length, false, locale)} />
+        <KpiCard label="Sent" value={formatNumber(sent.length, false, locale)} />
         <KpiCard
           label="Avg open rate"
           value={formatPercent(avgOpen)}
@@ -267,7 +243,7 @@ export default function NewsletterPage() {
             { id: "campaigns" as const, label: "Campaigns" },
             {
               id: "subscribers" as const,
-              label: `Subscribers (${subTotal || subscribers.length})`,
+              label: `Subscribers (${subscriberTotal})`,
             },
           ] as const
         ).map((item) => (
@@ -286,123 +262,85 @@ export default function NewsletterPage() {
         ))}
       </div>
 
-      {tab === "campaigns" ? (
-        <>
-          <div className="mb-4">
-            <input
-              className={inputClass}
-              placeholder="Search campaigns…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <Panel title={`${filtered.length} campaigns`}>
-            {loading ? (
-              <EmptyHint>Loading campaigns…</EmptyHint>
-            ) : filtered.length === 0 ? (
-              <EmptyHint>
-                No campaigns yet. Create one to email your subscriber list.
-              </EmptyHint>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Campaign</th>
-                      <th>Status</th>
-                      <th>Delivered</th>
-                      <th>Opens</th>
-                      <th>Clicks</th>
-                      <th>Sent</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((c) => (
-                      <tr key={c.id}>
-                        <td>
-                          <p className="font-medium">{c.name}</p>
-                          <p className="text-xs text-mute">{c.subject}</p>
-                        </td>
-                        <td>
-                          <StatusBadge tone={tone(c.status)}>
-                            {c.status}
-                          </StatusBadge>
-                        </td>
-                        <td>{formatNumber(c.recipients, false, locale)}</td>
-                        <td>{formatPercent(openRate(c))}</td>
-                        <td>{formatPercent(clickRate(c))}</td>
-                        <td className="whitespace-nowrap text-mute">
-                          {c.sentAt
-                            ? formatDate(c.sentAt.slice(0, 10), locale)
-                            : "—"}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className={btnGhost}
-                            onClick={() => setSelected(c)}
-                          >
-                            Open
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
-        </>
-      ) : (
-        <>
-          <div className="mb-4">
-            <input
-              className={inputClass}
-              placeholder="Search subscribers…"
-              value={subQuery}
-              onChange={(e) => setSubQuery(e.target.value)}
-            />
-          </div>
-          <Panel title={`${filteredSubs.length} subscribers`}>
-            <p className="mb-3 text-sm text-mute">
-              New inbox emails and website form contacts are added to this list
-              automatically.
+      {tab === "subscribers" ? (
+        <div className="space-y-4">
+          <Panel title="Add a subscriber">
+            <form className="grid gap-3 sm:grid-cols-[2fr_2fr_auto]" onSubmit={addSubscriber}>
+              <input
+                className={inputClass}
+                type="email"
+                placeholder="email@example.com"
+                value={newSubscriber.email}
+                onChange={(e) =>
+                  setNewSubscriber({ ...newSubscriber, email: e.target.value })
+                }
+              />
+              <input
+                className={inputClass}
+                placeholder="Name (optional)"
+                value={newSubscriber.name}
+                onChange={(e) =>
+                  setNewSubscriber({ ...newSubscriber, name: e.target.value })
+                }
+              />
+              <button
+                type="submit"
+                className={btnPrimary}
+                disabled={addingSubscriber || !newSubscriber.email.trim()}
+              >
+                {addingSubscriber ? "Adding…" : "Add"}
+              </button>
+            </form>
+            <p className="mt-3 text-xs text-mute">
+              {autoSubscribe
+                ? "Anyone who emails you, or submits the website form, is added to this list automatically."
+                : "Automatic adding is off — set up the subscriber list to enable it."}
             </p>
-            {subsLoading ? (
-              <EmptyHint>Loading subscribers…</EmptyHint>
-            ) : filteredSubs.length === 0 ? (
+          </Panel>
+
+          <Panel title={`${subscribers.length} subscribers`}>
+            {subscriberError ? (
+              <EmptyHint>{subscriberError}</EmptyHint>
+            ) : subscribers.length === 0 ? (
               <EmptyHint>
-                No subscribers yet. They appear when someone emails the inbox,
-                submits a website form, or you add them here.
+                No subscribers yet. They appear here once someone emails you or
+                you add them above.
               </EmptyHint>
             ) : (
               <div className="table-wrap">
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Name</th>
                       <th>Email</th>
-                      <th>Added</th>
+                      <th>Name</th>
+                      <th>Source</th>
                       <th>Status</th>
+                      <th>Added</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredSubs.map((s) => (
-                      <tr key={s.id || s.email}>
-                        <td className="font-medium">{s.name || "—"}</td>
-                        <td>{s.email}</td>
-                        <td className="whitespace-nowrap text-mute">
-                          {s.createdAt
-                            ? formatDate(s.createdAt.slice(0, 10), locale)
-                            : "—"}
+                    {subscribers.map((s) => (
+                      <tr key={s.id}>
+                        <td className="font-medium">{s.email}</td>
+                        <td className="text-mute">{s.name || "—"}</td>
+                        <td className="text-mute">
+                          {s.source === "inbox"
+                            ? "Emailed us"
+                            : s.source === "website_form"
+                              ? "Website form"
+                              : s.source === "manual"
+                                ? "Added manually"
+                                : "—"}
                         </td>
                         <td>
-                          <StatusBadge
-                            tone={s.blacklisted ? "warning" : "success"}
-                          >
-                            {s.blacklisted ? "Unsubscribed" : "Subscribed"}
+                          <StatusBadge tone={s.blocked ? "warning" : "success"}>
+                            {s.blocked ? "Unsubscribed" : "Subscribed"}
                           </StatusBadge>
+                        </td>
+                        <td className="whitespace-nowrap text-mute">
+                          {s.addedAt
+                            ? formatDate(s.addedAt.slice(0, 10), locale)
+                            : "—"}
                         </td>
                       </tr>
                     ))}
@@ -411,15 +349,79 @@ export default function NewsletterPage() {
               </div>
             )}
           </Panel>
-        </>
-      )}
+        </div>
+      ) : null}
 
-      <Modal
-        open={openAdd}
-        title="Send newsletter"
-        onClose={() => setOpenAdd(false)}
-        wide
-      >
+      {tab === "campaigns" ? (
+      <>
+      <div className="mt-6">
+        <input
+          className={inputClass}
+          placeholder="Search campaigns…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+
+      <div className="mt-4">
+        <Panel title={`${filtered.length} campaigns`}>
+          {loading ? (
+            <EmptyHint>Loading campaigns…</EmptyHint>
+          ) : filtered.length === 0 ? (
+            <EmptyHint>
+              No campaigns yet. Create one to email your list.
+            </EmptyHint>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Campaign</th>
+                    <th>Status</th>
+                    <th>Delivered</th>
+                    <th>Opens</th>
+                    <th>Clicks</th>
+                    <th>Sent</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((c) => (
+                    <tr key={c.id}>
+                      <td>
+                        <p className="font-medium">{c.name}</p>
+                        <p className="text-xs text-mute">{c.subject}</p>
+                      </td>
+                      <td>
+                        <StatusBadge tone={tone(c.status)}>{c.status}</StatusBadge>
+                      </td>
+                      <td>{formatNumber(c.recipients, false, locale)}</td>
+                      <td>{formatPercent(openRate(c))}</td>
+                      <td>{formatPercent(clickRate(c))}</td>
+                      <td className="whitespace-nowrap text-mute">
+                        {c.sentAt ? formatDate(c.sentAt.slice(0, 10), locale) : "—"}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          className={btnGhost}
+                          onClick={() => setSelected(c)}
+                        >
+                          Open
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      </div>
+      </>
+      ) : null}
+
+      <Modal open={openAdd} title="Send newsletter" onClose={() => setOpenAdd(false)} wide>
         <form className="grid gap-3" onSubmit={submit}>
           <Field label="Internal name">
             <input
@@ -470,45 +472,6 @@ export default function NewsletterPage() {
       </Modal>
 
       <Modal
-        open={openAddSub}
-        title="Add subscriber"
-        onClose={() => setOpenAddSub(false)}
-      >
-        <form className="grid gap-3" onSubmit={addSubscriber}>
-          <Field label="Email">
-            <input
-              required
-              type="email"
-              className={inputClass}
-              value={subForm.email}
-              onChange={(e) =>
-                setSubForm({ ...subForm, email: e.target.value })
-              }
-            />
-          </Field>
-          <Field label="Name (optional)">
-            <input
-              className={inputClass}
-              value={subForm.name}
-              onChange={(e) => setSubForm({ ...subForm, name: e.target.value })}
-            />
-          </Field>
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className={btnPrimary} disabled={adding}>
-              {adding ? "Adding…" : "Add to list"}
-            </button>
-            <button
-              type="button"
-              className={btnSecondary}
-              onClick={() => setOpenAddSub(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      <Modal
         open={!!selected}
         title={selected?.name ?? "Campaign"}
         onClose={() => setSelected(null)}
@@ -520,13 +483,11 @@ export default function NewsletterPage() {
               {selected.subject}
             </p>
             <p>
-              <StatusBadge tone={tone(selected.status)}>
-                {selected.status}
-              </StatusBadge>
+              <StatusBadge tone={tone(selected.status)}>{selected.status}</StatusBadge>
             </p>
             <p>
-              Delivered {formatNumber(selected.recipients, false, locale)} ·
-              Opens {formatPercent(openRate(selected))} · Clicks{" "}
+              Delivered {formatNumber(selected.recipients, false, locale)} · Opens{" "}
+              {formatPercent(openRate(selected))} · Clicks{" "}
               {formatPercent(clickRate(selected))}
             </p>
             {selected.preview ? (

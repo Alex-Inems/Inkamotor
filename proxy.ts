@@ -16,10 +16,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/api/webhooks/")) {
-    return NextResponse.next();
-  }
-
   const isLoginPage = pathname === "/login";
   const isLoginApi = pathname === "/api/auth/login";
   const isLogoutApi = pathname === "/api/auth/logout";

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BarChart, DonutChart, LineChart } from "@/components/charts";
 import { EmptyHint, KpiCard, PageHeader, Panel, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
@@ -13,8 +13,16 @@ import {
 } from "@/lib/demo-data";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 import { currentUser } from "@/lib/session";
-import { inquiryTone, invoiceTone, leadTone } from "@/lib/status";
+import { invoiceTone, leadTone } from "@/lib/status";
 import { useLocale } from "@/lib/i18n";
+
+type OverviewMail = {
+  id: string;
+  fromName: string | null;
+  fromEmail: string;
+  subject: string;
+  isRead: boolean;
+};
 
 function monthKey(iso: string) {
   return iso.slice(0, 7);
@@ -96,7 +104,24 @@ export default function OverviewPage() {
     loadError,
   } = useCrm();
   const { t, locale } = useLocale();
+  const [mail, setMail] = useState<OverviewMail[]>([]);
   const hello = `${t("greet.hello")}, ${currentUser.firstName}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/inbox/mail")
+      .then((r) => (r.ok ? r.json() : { messages: [] }))
+      .then((json: { messages?: OverviewMail[] }) => {
+        if (!cancelled) setMail(json.messages ?? []);
+      })
+      .catch(() => {
+        /* inbox may not be configured yet */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stats = getDashboardStats({
     leads,
     googleCampaigns: [],
@@ -120,9 +145,7 @@ export default function OverviewPage() {
   const recentLeads = [...leads]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 5);
-  const recentInquiries = [...siteInquiries]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, 4);
+  const recentMail = mail.slice(0, 4);
   const recentInvoices = [...invoices].slice(0, 4);
 
   if (!ready) {
@@ -149,7 +172,7 @@ export default function OverviewPage() {
       <PageHeader
         title={hello}
         description={t("overview.description", {
-          inquiries: stats.openInquiries,
+          inquiries: mail.filter((m) => !m.isRead).length,
           followUps: stats.openFollowUps,
           leads: stats.websiteLeads,
         })}
@@ -248,8 +271,8 @@ export default function OverviewPage() {
         />
         <Link href="/inbox" className="block">
           <KpiCard
-            label={t("overview.siteInbox")}
-            value={num(stats.openInquiries)}
+            label="Inbox"
+            value={num(mail.filter((m) => !m.isRead).length)}
             hint={t("overview.openFollowUpsHint", { n: stats.openFollowUps })}
           />
         </Link>
@@ -340,21 +363,23 @@ export default function OverviewPage() {
             </Link>
           }
         >
-          {recentInquiries.length === 0 ? (
-            <EmptyHint>No site inquiries yet.</EmptyHint>
+          {recentMail.length === 0 ? (
+            <EmptyHint>No messages yet.</EmptyHint>
           ) : (
             <ul className="divide-y divide-line">
-              {recentInquiries.map((inq) => (
+              {recentMail.map((m) => (
                 <li
-                  key={inq.id}
+                  key={m.id}
                   className="flex items-start justify-between gap-3 py-3"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{inq.name}</p>
-                    <p className="truncate text-xs text-mute">{inq.subject}</p>
+                    <p className="truncate font-medium">
+                      {m.fromName || m.fromEmail}
+                    </p>
+                    <p className="truncate text-xs text-mute">{m.subject}</p>
                   </div>
-                  <StatusBadge tone={inquiryTone(inq.status)}>
-                    {inq.status}
+                  <StatusBadge tone={m.isRead ? "neutral" : "info"}>
+                    {m.isRead ? "Read" : "New"}
                   </StatusBadge>
                 </li>
               ))}

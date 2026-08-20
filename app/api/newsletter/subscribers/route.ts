@@ -1,31 +1,39 @@
 import { jsonError } from "@/lib/api";
 import {
-  listBrevoSubscribers,
+  addContactToList,
+  listBrevoContacts,
+  mapBrevoContact,
   missingBrevoEnv,
-  upsertSubscriber,
+  subscriberListId,
 } from "@/lib/brevo";
+import { autoSubscribeEnabled } from "@/lib/mail/auto-subscribe";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const missing = [
-    ...missingBrevoEnv(),
-    ...(process.env.BREVO_LIST_ID?.trim() ? [] : ["BREVO_LIST_ID"]),
-  ];
+  const missing = missingBrevoEnv();
   if (missing.length > 0) {
     return jsonError(503, {
-      error: "Email list isn’t connected yet. Ask your admin to finish setup.",
+      error: "Email sending isn’t configured yet.",
       code: "missing_credentials",
       missing,
     });
   }
 
+  if (subscriberListId() === null) {
+    return jsonError(503, {
+      error: "Set BREVO_LIST_ID to load the subscriber list.",
+      code: "missing_credentials",
+      missing: ["BREVO_LIST_ID"],
+    });
+  }
+
   try {
-    const data = await listBrevoSubscribers(100, 0);
+    const { contacts, total } = await listBrevoContacts();
     return Response.json({
-      subscribers: data.contacts,
-      total: data.total,
-      listId: data.listId,
+      subscribers: contacts.map(mapBrevoContact),
+      total,
+      autoSubscribe: autoSubscribeEnabled(),
     });
   } catch (err) {
     const message =
@@ -34,15 +42,11 @@ export async function GET() {
   }
 }
 
-/** Manually add a subscriber to the list. */
 export async function POST(request: Request) {
-  const missing = [
-    ...missingBrevoEnv(),
-    ...(process.env.BREVO_LIST_ID?.trim() ? [] : ["BREVO_LIST_ID"]),
-  ];
+  const missing = missingBrevoEnv();
   if (missing.length > 0) {
     return jsonError(503, {
-      error: "Email list isn’t connected yet.",
+      error: "Email sending isn’t configured yet.",
       code: "missing_credentials",
       missing,
     });
@@ -61,22 +65,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await upsertSubscriber({
-      email,
-      name: body.name,
-      source: "manual",
-    });
-    if (result.skipped) {
-      return jsonError(400, {
-        error: "That address can’t be added to the list",
-        code: "send_failed",
-      });
-    }
-    return Response.json({ ok: true, email: result.email });
+    await addContactToList({ email, name: body.name, source: "manual" });
+    return Response.json({ ok: true });
   } catch (err) {
-    return jsonError(502, {
-      error: err instanceof Error ? err.message : "Could not add subscriber",
-      code: "send_failed",
-    });
+    const message =
+      err instanceof Error ? err.message : "Could not add subscriber";
+    return jsonError(502, { error: message, code: "send_failed" });
   }
 }

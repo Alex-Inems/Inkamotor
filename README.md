@@ -8,7 +8,7 @@ Deploy on a subdomain (e.g. `crm.inkamototours.com`). Staff log in and work from
 
 | Area | What it does |
 |------|----------------|
-| **Inbox** | Incoming mail (auto-refresh every 60s), your **Replies**, website form messages |
+| **Inbox** | Incoming mail (auto-refresh every 60s) and your **Replies** — includes website form emails |
 | **Leads / Sales / Follow-ups** | Pipeline and tasks stored in Supabase |
 | **Invoices** | Create PDF invoices and email them to clients |
 | **Newsletter** | Send campaigns to your subscriber list |
@@ -69,7 +69,7 @@ Copy from `.env.example`. Never commit `.env.local`.
 
 | Key | Purpose |
 |-----|---------|
-| `WEBHOOK_SECRET` | Webflow / site form → `POST /api/webhooks/contact` |
+| `NEWSLETTER_AUTO_SUBSCRIBE` | Set `false` to stop auto-adding senders to the list |
 | `CRM_DEFAULT_OWNER` | Default owner label |
 | `NEXT_PUBLIC_CRM_COGS_RATE` | Optional COGS fraction for P&L (0–1) |
 
@@ -96,17 +96,25 @@ Check status in the app at **/setup** (after login).
 4. **Invoices** → Email to client (your own address).
 5. **Newsletter** → Send a campaign (add yourself to the Brevo list first).
 
-## Webflow form → CRM
+## Website forms
 
-`POST /api/webhooks/contact` with header:
+No webhook or extra setup. Point the Webflow form notification at
+`contact@inkamototours.com` — the Inbox sync pulls it in like any other email.
 
-`x-webhook-secret: <WEBHOOK_SECRET>`
+If the notification arrives from a no-reply address, the CRM reads the
+visitor's email out of the message body so replies and subscriptions go to the
+real person.
 
-JSON fields: `name` (or `firstName` / `lastName`), `email`, `subject`, `message`, `page`.
+## Subscribers
+
+Everyone who emails you is added to the newsletter list automatically
+(**Newsletter → Subscribers**). Automated senders (no-reply, mailer-daemon,
+postmaster, bounce, support, billing, invoice) are skipped, as is your own
+mailbox. Set `NEWSLETTER_AUTO_SUBSCRIBE="false"` to turn this off.
 
 ## Security
 
-- CRM pages and APIs (except login + webhook) require a signed session cookie.
+- CRM pages and APIs (except login) require a signed session cookie.
 - Supabase is used only with the service role on the server.
 - Do not commit secrets or expose `SUPABASE_SERVICE_ROLE_KEY` / API keys to the client.
 

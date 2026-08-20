@@ -22,6 +22,6 @@ export async function GET() {
       auth: { ready: true, paused: false, missing: [] as string[] },
       ...status,
     },
-    hint: "Paused = missing env (hidden from nav). Fill Brevo + IMAP + Supabase to test subdomain mail.",
+    hint: "Fill Supabase, email sending, and the mailbox. Website forms arrive as email — no webhook needed.",
   });
 }

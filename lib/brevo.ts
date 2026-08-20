@@ -55,100 +55,107 @@ export function sender() {
   };
 }
 
-export function listIdFromEnv(): number | null {
+export function subscriberListId(): number | null {
   const raw = process.env.BREVO_LIST_ID?.trim();
   if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
 }
 
-export async function listBrevoSubscribers(limit = 100, offset = 0) {
-  const listId = listIdFromEnv();
-  if (listId == null) {
+export type BrevoContact = {
+  id: number;
+  email: string;
+  emailBlacklisted?: boolean;
+  createdAt?: string;
+  modifiedAt?: string;
+  attributes?: Record<string, unknown>;
+};
+
+export type Subscriber = {
+  id: string;
+  email: string;
+  name: string | null;
+  source: string | null;
+  blocked: boolean;
+  addedAt: string | null;
+};
+
+function attrString(
+  attributes: Record<string, unknown> | undefined,
+  key: string,
+): string | null {
+  const value = attributes?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+export function mapBrevoContact(c: BrevoContact): Subscriber {
+  const first = attrString(c.attributes, "FIRSTNAME");
+  const last = attrString(c.attributes, "LASTNAME");
+  const name = [first, last].filter(Boolean).join(" ").trim();
+  return {
+    id: String(c.id),
+    email: c.email,
+    name: name || null,
+    source: attrString(c.attributes, "SOURCE"),
+    blocked: Boolean(c.emailBlacklisted),
+    addedAt: c.createdAt ?? null,
+  };
+}
+
+export async function listBrevoContacts(limit = 200) {
+  const listId = subscriberListId();
+  if (listId === null) {
     throw new Error(
-      "Set BREVO_LIST_ID to load subscribers (Contacts → Lists → list id).",
+      "Set BREVO_LIST_ID to see subscribers (Brevo → Contacts → Lists → list id).",
     );
   }
-
-  const data = await brevo<{
-    contacts?: Array<{
-      id?: number;
-      email?: string;
-      emailBlacklisted?: boolean;
-      createdAt?: string;
-      modifiedAt?: string;
-      attributes?: Record<string, unknown>;
-    }>;
-    count?: number;
-  }>(
-    `/contacts/lists/${listId}/contacts?limit=${limit}&offset=${offset}&sort=desc`,
+  const data = await brevo<{ contacts?: BrevoContact[]; count?: number }>(
+    `/contacts/lists/${listId}/contacts?limit=${limit}&offset=0&sort=desc`,
   );
-
-  const contacts = (data.contacts ?? []).map((c) => {
-    const attrs = c.attributes ?? {};
-    const first = String(attrs.FIRSTNAME ?? attrs.PRENOM ?? "").trim();
-    const last = String(attrs.LASTNAME ?? attrs.NOM ?? "").trim();
-    const name =
-      [first, last].filter(Boolean).join(" ") ||
-      String(attrs.NAME ?? "").trim() ||
-      null;
-    return {
-      id: String(c.id ?? c.email ?? ""),
-      email: (c.email || "").toLowerCase(),
-      name,
-      blacklisted: Boolean(c.emailBlacklisted),
-      createdAt: c.createdAt ?? null,
-      modifiedAt: c.modifiedAt ?? null,
-    };
-  });
-
-  return { contacts, total: data.count ?? contacts.length, listId };
+  return {
+    contacts: data.contacts ?? [],
+    total: data.count ?? (data.contacts?.length ?? 0),
+  };
 }
 
-/** Create or update a contact and add them to BREVO_LIST_ID. */
-export async function upsertSubscriber(input: {
+/**
+ * Add (or update) a contact on the subscriber list.
+ * Existing contacts are kept — `updateEnabled` only tops up list membership.
+ */
+export async function addContactToList(input: {
   email: string;
   name?: string | null;
   source?: string;
 }) {
-  const email = input.email.trim().toLowerCase();
-  if (!email || !email.includes("@") || email.endsWith("@unknown")) {
-    return { ok: false as const, skipped: true as const };
+  const listId = subscriberListId();
+  if (listId === null) {
+    throw new Error("Set BREVO_LIST_ID before adding subscribers.");
   }
 
-  const ours = new Set(
-    [
-      process.env.IMAP_USER?.trim().toLowerCase(),
-      process.env.BREVO_SENDER_EMAIL?.trim().toLowerCase(),
-      "contact@inkamototours.com",
-    ].filter(Boolean) as string[],
-  );
-  if (ours.has(email)) {
-    return { ok: false as const, skipped: true as const };
-  }
-
-  const listId = listIdFromEnv();
-  if (listId == null || missingBrevoEnv().length > 0) {
-    return { ok: false as const, skipped: true as const };
-  }
-
-  const name = (input.name || "").trim();
-  const parts = name.split(/\s+/).filter(Boolean);
+  const [first, ...rest] = (input.name ?? "").trim().split(/\s+/);
   const attributes: Record<string, string> = {};
-  if (parts[0]) attributes.FIRSTNAME = parts[0];
-  if (parts.length > 1) attributes.LASTNAME = parts.slice(1).join(" ");
+  if (first) attributes.FIRSTNAME = first;
+  if (rest.length) attributes.LASTNAME = rest.join(" ");
+  if (input.source) attributes.SOURCE = input.source;
 
-  await brevo("/contacts", {
-    method: "POST",
-    body: JSON.stringify({
-      email,
-      updateEnabled: true,
-      listIds: [listId],
-      attributes: Object.keys(attributes).length ? attributes : undefined,
-    }),
-  });
+  const email = input.email.trim().toLowerCase();
+  const base = { email, listIds: [listId], updateEnabled: true };
 
-  return { ok: true as const, skipped: false as const, email };
+  try {
+    await brevo("/contacts", {
+      method: "POST",
+      body: JSON.stringify(
+        Object.keys(attributes).length ? { ...base, attributes } : base,
+      ),
+    });
+  } catch (err) {
+    // Brevo rejects attributes that don't exist on the account — still subscribe
+    if (!Object.keys(attributes).length) throw err;
+    await brevo("/contacts", {
+      method: "POST",
+      body: JSON.stringify(base),
+    });
+  }
 }
 
 export async function listBrevoCampaigns(limit = 50) {
@@ -166,11 +173,14 @@ export async function createAndSendCampaign(input: {
   listId?: number;
 }) {
   const listId =
-    input.listId ?? listIdFromEnv() ?? NaN;
+    input.listId ??
+    (process.env.BREVO_LIST_ID?.trim()
+      ? Number(process.env.BREVO_LIST_ID.trim())
+      : NaN);
 
   if (!Number.isFinite(listId)) {
     throw new Error(
-      "Set BREVO_LIST_ID in .env.local (Contacts → Lists → list id).",
+      "Set BREVO_LIST_ID in .env.local (Brevo → Contacts → Lists → list id).",
     );
   }
 
@@ -227,7 +237,7 @@ export function mapBrevoCampaign(c: BrevoCampaign) {
     name: c.name,
     subject: c.subject || c.name,
     status,
-    audience: "Subscriber list",
+    audience: "Brevo list",
     recipients: stats?.delivered ?? 0,
     opens: stats?.uniqueOpens ?? 0,
     clicks: stats?.uniqueClicks ?? 0,
