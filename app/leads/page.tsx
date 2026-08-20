@@ -1,35 +1,38 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  btnGhost,
-  btnPrimary,
-  btnSecondary,
-  inputClass,
-  Modal,
-} from "@/components/modal";
-import { PageHeader, StatusBadge } from "@/components/ui";
+import { btnPrimary, btnSecondary, inputClass } from "@/components/modal";
 import { useCrm } from "@/lib/crm-store";
 import { type Lead, type LeadStatus } from "@/lib/demo-data";
 import { formatDate } from "@/lib/format";
-import { leadTone } from "@/lib/status";
 
-const STAGES: {
-  id: LeadStatus;
-  title: string;
-  bar: string;
-  chip: string;
-}[] = [
-  { id: "new", title: "Need reply", bar: "bg-purple", chip: "bg-purple/30 text-cream" },
-  { id: "contacted", title: "Talking", bar: "bg-chat-out", chip: "bg-chat-out/30 text-cream" },
-  { id: "qualified", title: "Ready to book", bar: "bg-gold", chip: "bg-gold/20 text-gold" },
-  { id: "won", title: "Booked", bar: "bg-green", chip: "bg-green/25 text-sand" },
-  { id: "lost", title: "Not booked", bar: "bg-wine", chip: "bg-wine/25 text-pink" },
+const STAGES: { id: LeadStatus; title: string }[] = [
+  { id: "new", title: "Need reply" },
+  { id: "contacted", title: "Talking" },
+  { id: "qualified", title: "Ready to book" },
+  { id: "won", title: "Booked" },
+  { id: "lost", title: "Not booked" },
 ];
 
-function stageOf(id: LeadStatus) {
-  return STAGES.find((s) => s.id === id)!;
+const AVATAR = [
+  "bg-purple/70",
+  "bg-green/60",
+  "bg-gold/70",
+  "bg-wine/60",
+  "bg-accent/70",
+];
+
+function stageTitle(id: LeadStatus) {
+  return STAGES.find((s) => s.id === id)?.title ?? id;
+}
+
+function toneFor(email: string) {
+  let hash = 0;
+  for (let i = 0; i < email.length; i += 1) {
+    hash = (hash * 31 + email.charCodeAt(i)) % 9973;
+  }
+  return AVATAR[hash % AVATAR.length];
 }
 
 function initials(name: string, email: string) {
@@ -40,11 +43,26 @@ function initials(name: string, email: string) {
   return letters.toUpperCase();
 }
 
+function stageClass(status: LeadStatus) {
+  switch (status) {
+    case "new":
+      return "text-cream";
+    case "contacted":
+      return "text-chat-out-text";
+    case "qualified":
+      return "text-gold";
+    case "won":
+      return "text-sand";
+    default:
+      return "text-pink";
+  }
+}
+
 export default function LeadsPage() {
   const { leads, sales, updateLeadStatus, addSale, ready } = useCrm();
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState<LeadStatus | "all">("all");
-  const [selected, setSelected] = useState<Lead | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const map = Object.fromEntries(STAGES.map((s) => [s.id, 0])) as Record<
@@ -68,276 +86,289 @@ export default function LeadsPage() {
       .sort((a, b) => b.lastContact.localeCompare(a.lastContact));
   }, [leads, query, stage]);
 
-  const columns = stage === "all" ? STAGES : STAGES.filter((s) => s.id === stage);
+  const selected =
+    visible.find((l) => l.id === selectedId) ??
+    leads.find((l) => l.id === selectedId) ??
+    null;
+
+  useEffect(() => {
+    if (!ready) return;
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      return;
+    }
+    if (selectedId || visible.length === 0) return;
+    setSelectedId(visible[0].id);
+  }, [ready, selectedId, visible]);
+
+  const booked = selected
+    ? sales.some(
+        (s) =>
+          s.leadId === selected.id ||
+          s.email.toLowerCase() === selected.email.toLowerCase(),
+      )
+    : false;
 
   return (
-    <div>
-      <PageHeader
-        title="Leads"
-        action={
-          <Link href="/inbox" className={btnSecondary}>
-            Inbox
-          </Link>
-        }
-      />
-
-      <div className="flex flex-col gap-3">
-        <input
-          className={`${inputClass} sm:max-w-md`}
-          placeholder="Search…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
-          <StageChip
-            label="All"
-            count={leads.length}
-            active={stage === "all"}
-            onClick={() => setStage("all")}
-          />
-          {STAGES.map((s) => (
-            <StageChip
-              key={s.id}
-              label={s.title}
-              count={counts[s.id]}
-              active={stage === s.id}
-              tone={s.chip}
-              onClick={() => setStage(s.id)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {ready ? null : (
-        <p className="mt-6 text-sm text-mute">Loading…</p>
-      )}
-
-      {ready ? (
-        <div
-          className={`mt-6 grid gap-3 ${
-            stage === "all"
-              ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-5"
-              : "grid-cols-1 sm:max-w-sm"
+    <div className="-mx-3 flex min-h-[calc(100svh-7rem)] flex-col border-y border-line bg-panel sm:-mx-6 sm:min-h-[calc(100svh-8rem)] lg:-mx-8">
+      <div className="flex min-h-0 flex-1">
+        <aside
+          className={`min-w-0 flex-col border-r border-line ${
+            selected ? "hidden md:flex md:w-80 lg:w-96" : "flex w-full md:w-80 lg:w-96"
           }`}
         >
-          {columns.map((col) => {
-            const cards = visible.filter((l) => l.status === col.id);
-            return (
-              <section
-                key={col.id}
-                className="flex min-h-64 flex-col overflow-hidden border border-line bg-ash/40 xl:min-h-[min(32rem,calc(100svh-14rem))]"
-              >
-                <header className="shrink-0 border-b border-line bg-panel">
-                  <div className={`h-1 ${col.bar}`} />
-                  <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                    <p className="truncate text-sm font-semibold">{col.title}</p>
-                    <span className="flex h-5 min-w-5 items-center justify-center bg-ash px-1.5 text-[11px] font-bold text-mute">
-                      {cards.length}
-                    </span>
-                  </div>
-                </header>
-                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
-                  {cards.length === 0 ? (
-                    <p className="px-2 py-8 text-center text-xs text-mute">
-                      {leads.length === 0 ? "Waiting for Inbox" : "None"}
-                    </p>
-                  ) : (
-                    cards.map((lead) => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        onOpen={() => setSelected(lead)}
-                      />
-                    ))
-                  )}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      ) : null}
+          <div className="flex items-center justify-between gap-2 px-4 pt-4">
+            <h1 className="font-display text-lg tracking-wide">Leads</h1>
+            <Link
+              href="/inbox"
+              className="text-xs font-semibold text-sand hover:text-gold"
+            >
+              Inbox
+            </Link>
+          </div>
 
-      <Modal
-        open={!!selected}
-        title={selected?.name ?? "Lead"}
-        onClose={() => setSelected(null)}
-      >
-        {selected ? (
-          <LeadDetail
-            lead={selected}
-            booked={sales.some(
-              (s) =>
-                s.leadId === selected.id ||
-                s.email.toLowerCase() === selected.email.toLowerCase(),
+          <div className="px-4 pt-3">
+            <input
+              className={`${inputClass} rounded-full sm:rounded-none`}
+              placeholder="Search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 border-b border-line sm:grid-cols-6">
+            <FilterTab
+              label="All"
+              count={leads.length}
+              active={stage === "all"}
+              onClick={() => setStage("all")}
+            />
+            {STAGES.map((s) => (
+              <FilterTab
+                key={s.id}
+                label={s.title}
+                count={counts[s.id]}
+                active={stage === s.id}
+                onClick={() => setStage(s.id)}
+              />
+            ))}
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {!ready ? (
+              <p className="px-4 py-8 text-center text-sm text-mute">Loading…</p>
+            ) : visible.length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-mute">
+                {leads.length === 0 ? "No leads yet." : "Nothing matches."}
+              </p>
+            ) : (
+              visible.map((lead) => (
+                <button
+                  key={lead.id}
+                  type="button"
+                  onClick={() => setSelectedId(lead.id)}
+                  className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors ${
+                    lead.id === selectedId ? "bg-accent-soft" : "hover:bg-ash/50"
+                  }`}
+                >
+                  <span
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${toneFor(lead.email)}`}
+                  >
+                    {initials(lead.name, lead.email)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate text-sm font-semibold">
+                        {lead.name}
+                      </span>
+                      <span className="shrink-0 text-[11px] text-mute">
+                        {formatDate(lead.lastContact)}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="truncate text-xs text-mute">
+                        {lead.email}
+                      </span>
+                      <span
+                        className={`shrink-0 text-[11px] font-semibold ${stageClass(lead.status)}`}
+                      >
+                        {stageTitle(lead.status)}
+                      </span>
+                    </span>
+                  </span>
+                </button>
+              ))
             )}
-            onStatus={(status) => {
-              void updateLeadStatus(selected.id, status);
-              setSelected({ ...selected, status });
-            }}
-            onSale={() => {
-              void addSale({
-                customer: selected.name,
-                email: selected.email,
-                product: selected.notes.slice(0, 80) || "Tour booking",
-                amount: selected.value || 0,
-                source: "lead",
-                inquiryId: null,
-                leadId: selected.id,
-                notes: selected.notes,
-              });
-            }}
-          />
-        ) : null}
-      </Modal>
+          </div>
+        </aside>
+
+        <section
+          className={`min-w-0 flex-1 flex-col bg-canvas ${
+            selected ? "flex" : "hidden md:flex"
+          }`}
+        >
+          {!selected ? (
+            <div className="flex flex-1 items-center justify-center px-6">
+              <p className="text-sm text-mute">Select a person.</p>
+            </div>
+          ) : (
+            <>
+              <header className="flex items-center gap-3 border-b border-line bg-panel px-3 py-3 sm:px-5">
+                <button
+                  type="button"
+                  aria-label="Back"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center text-mute hover:text-ink md:hidden"
+                  onClick={() => setSelectedId(null)}
+                >
+                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
+                    <path
+                      d="M11 4 6 9l5 5"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${toneFor(selected.email)}`}
+                >
+                  {initials(selected.name, selected.email)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold">{selected.name}</p>
+                  <p className={`text-xs font-semibold ${stageClass(selected.status)}`}>
+                    {stageTitle(selected.status)}
+                  </p>
+                </div>
+              </header>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+                <dl className="max-w-lg space-y-3 text-sm">
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
+                      Email
+                    </dt>
+                    <dd className="mt-1">
+                      <a
+                        href={`mailto:${selected.email}`}
+                        className="text-sand hover:text-gold"
+                      >
+                        {selected.email}
+                      </a>
+                    </dd>
+                  </div>
+                  {selected.phone ? (
+                    <div>
+                      <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
+                        Phone
+                      </dt>
+                      <dd className="mt-1">
+                        <a href={`tel:${selected.phone}`} className="hover:text-gold">
+                          {selected.phone}
+                        </a>
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div>
+                    <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
+                      Last contact
+                    </dt>
+                    <dd className="mt-1">{formatDate(selected.lastContact)}</dd>
+                  </div>
+                </dl>
+
+                {selected.notes ? (
+                  <p className="mt-6 max-w-lg text-sm leading-relaxed text-mute">
+                    {selected.notes}
+                  </p>
+                ) : null}
+
+                <div className="mt-8 max-w-lg">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
+                    Stage
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STAGES.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => void updateLeadStatus(selected.id, s.id)}
+                        className={`px-3 py-2 text-xs font-semibold transition-colors ${
+                          selected.status === s.id
+                            ? "bg-accent text-white"
+                            : "border border-line text-mute hover:text-ink"
+                        }`}
+                      >
+                        {s.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-8 flex flex-wrap gap-2">
+                  <Link
+                    href={`/inbox?chat=${encodeURIComponent(selected.email)}`}
+                    className={btnSecondary}
+                  >
+                    Open chat
+                  </Link>
+                  {!booked ? (
+                    <button
+                      type="button"
+                      className={btnPrimary}
+                      onClick={() =>
+                        void addSale({
+                          customer: selected.name,
+                          email: selected.email,
+                          product: selected.notes.slice(0, 80) || "Tour booking",
+                          amount: selected.value || 0,
+                          source: "lead",
+                          inquiryId: null,
+                          leadId: selected.id,
+                          notes: selected.notes,
+                        })
+                      }
+                    >
+                      Create sale
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
 
-function StageChip({
+function FilterTab({
   label,
   count,
   active,
-  tone,
   onClick,
 }: {
   label: string;
   count: number;
   active: boolean;
-  tone?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex shrink-0 items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors ${
+      className={`min-w-0 px-1 py-2.5 text-[10px] font-semibold leading-tight sm:text-[11px] ${
         active
-          ? "bg-accent text-white"
-          : "border border-line bg-panel text-mute hover:text-ink"
+          ? "border-b-2 border-gold text-ink"
+          : "border-b-2 border-transparent text-mute hover:text-ink"
       }`}
     >
-      {label}
-      <span
-        className={`min-w-4 text-[10px] ${
-          active ? "text-white/80" : tone ?? "text-mute"
-        }`}
-      >
-        {count}
-      </span>
+      <span className="block truncate">{label}</span>
+      {count > 0 ? (
+        <span className="mt-0.5 block text-[10px] text-mute">{count}</span>
+      ) : (
+        <span className="mt-0.5 block h-3" />
+      )}
     </button>
-  );
-}
-
-function Avatar({ name, email }: { name: string; email: string }) {
-  return (
-    <span
-      aria-hidden
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-[11px] font-bold text-white"
-    >
-      {initials(name, email)}
-    </span>
-  );
-}
-
-function LeadCard({ lead, onOpen }: { lead: Lead; onOpen: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="flex w-full items-start gap-2.5 border border-line bg-panel p-2.5 text-left transition-colors hover:border-gold/40 hover:bg-accent-soft/30"
-    >
-      <Avatar name={lead.name} email={lead.email} />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold leading-tight">
-          {lead.name}
-        </span>
-        <span className="mt-0.5 block truncate text-[11px] text-mute">
-          {lead.email}
-        </span>
-        <span className="mt-1.5 block text-[10px] text-mute">
-          {formatDate(lead.lastContact)}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function LeadDetail({
-  lead,
-  booked,
-  onStatus,
-  onSale,
-}: {
-  lead: Lead;
-  booked: boolean;
-  onStatus: (status: LeadStatus) => void;
-  onSale: () => void;
-}) {
-  const current = stageOf(lead.status);
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent text-sm font-bold text-white">
-          {initials(lead.name, lead.email)}
-        </span>
-        <div className="min-w-0">
-          <p className="truncate font-semibold">{lead.name}</p>
-          <a
-            href={`mailto:${lead.email}`}
-            className="block truncate text-sm text-sand hover:text-gold"
-          >
-            {lead.email}
-          </a>
-          {lead.phone ? (
-            <a href={`tel:${lead.phone}`} className="text-sm text-mute hover:text-ink">
-              {lead.phone}
-            </a>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <StatusBadge tone={leadTone(lead.status)}>{current.title}</StatusBadge>
-        <span className="text-xs text-mute">Last {formatDate(lead.lastContact)}</span>
-      </div>
-
-      {lead.notes ? (
-        <p className="border border-line bg-ash px-3 py-2.5 text-sm leading-relaxed text-mute">
-          {lead.notes}
-        </p>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {STAGES.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            disabled={lead.status === s.id}
-            onClick={() => onStatus(s.id)}
-            className={
-              lead.status === s.id
-                ? btnPrimary
-                : `${btnGhost} border border-line`
-            }
-          >
-            {s.title}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Link
-          href={`/inbox?chat=${encodeURIComponent(lead.email)}`}
-          className={btnSecondary}
-        >
-          Open chat
-        </Link>
-        {!booked ? (
-          <button type="button" className={btnPrimary} onClick={onSale}>
-            Create sale
-          </button>
-        ) : null}
-      </div>
-    </div>
   );
 }
