@@ -288,8 +288,9 @@ export const fr: Messages = {
     login: {
       welcome: "Bon retour",
       subtitle: "Connectez-vous à l’espace Inkamoto Tours.",
+      emailPlaceholder: "vous@email.com",
       password: "Mot de passe",
-      passwordPlaceholder: "Saisir le mot de passe",
+      passwordPlaceholder: "Au moins 8 caractères",
       show: "Afficher",
       hide: "Masquer",
       showPassword: "Afficher le mot de passe",
@@ -298,6 +299,17 @@ export const fr: Messages = {
       signingIn: "Connexion…",
       failed: "Connexion impossible",
       footer: "inkamototours.com · espace privé",
+      continueGoogle: "Continuer avec Google",
+      orEmail: "Ou e-mail",
+      firstTime:
+        "Première fois avec cet e-mail ? Nous le enregistrons pour la prochaine connexion.",
+      googleOnly: "Cet e-mail utilise Google. Continuez avec Google.",
+      shortPassword: "Choisissez un mot de passe d’au moins 8 caractères.",
+      needDb: "L’e-mail nécessite Supabase. Exécutez crm_users.sql dans Setup, ou utilisez Google.",
+      dbError: "Impossible d’enregistrer cet e-mail. Vérifiez Supabase, puis réessayez.",
+      googleFailed: "La connexion Google a échoué. Réessayez, ou utilisez l’e-mail.",
+      googleSetup:
+        "Ajoutez les clés Google dans Setup, puis ce redirect dans Google Cloud : /api/auth/google/callback",
     },
     inbox: {
       title: "Boîte de réception",
@@ -689,7 +701,8 @@ export const fr: Messages = {
       authAfter: "Surcharges env optionnelles : CRM_ACCESS_EMAIL / CRM_ACCESS_PASSWORD.",
       supabaseTitle: "Supabase (requis)",
       supabaseWhere: "supabase.com → Nouveau projet → Settings → API",
-      supabaseAfter: "Collez supabase/schema.sql dans SQL Editor → Exécuter une fois.",
+      supabaseAfter:
+        "Collez supabase/schema.sql dans SQL Editor → Exécuter une fois. Si le CRM existe déjà, exécutez aussi supabase/crm_users.sql (enregistre les e-mails de connexion).",
       brevoTitle: "Envoi d’e-mails (réponses + newsletter)",
       brevoWhere:
         "brevo.com → Settings → SMTP & API → clés API · vérifier l’expéditeur",
@@ -699,7 +712,7 @@ export const fr: Messages = {
       imapAfter: "Boîte de contact@inkamototours.com — alimente l’onglet Boîte.",
       googleTitle: "Google Search Console",
       googleWhere:
-        "Google Cloud → activer Search Console API → client OAuth (Web) → redirect http://localhost:3000/api/google/oauth/callback",
+        "Google Cloud → activer Search Console API → client OAuth (Web) → redirects http://localhost:3000/api/google/oauth/callback et http://localhost:3000/api/auth/google/callback. Publiez l’écran de consentement pour que n’importe quel compte Google puisse se connecter.",
       googleAfter:
         "Mettez client id/secret dans .env.local, redémarrez, puis Connecter Google. L’URL est en général sc-domain:inkamototours.com (identique à Search Console).",
       googleConnect: "Connecter Google",

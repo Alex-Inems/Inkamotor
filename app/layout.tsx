@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Inria_Sans, Roboto, Staatliches } from "next/font/google";
 import { CrmShell } from "@/components/crm-shell";
+import { SESSION_COOKIE, readSessionToken } from "@/lib/auth";
+import { userFromClaims } from "@/lib/session";
 import "./globals.css";
 
 const staatliches = Staatliches({
@@ -34,7 +37,11 @@ export const viewport: Viewport = {
   themeColor: "#1c1b19",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const jar = await cookies();
+  const claims = await readSessionToken(jar.get(SESSION_COOKIE)?.value);
+  const user = userFromClaims(claims);
+
   return (
     <html
       lang="en"
@@ -42,7 +49,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${staatliches.variable} ${inriaSans.variable} ${roboto.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">
-        <CrmShell>{children}</CrmShell>
+        <CrmShell user={user}>{children}</CrmShell>
       </body>
     </html>
   );

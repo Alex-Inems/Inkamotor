@@ -286,8 +286,9 @@ export const en = {
     login: {
       welcome: "Welcome back",
       subtitle: "Sign in to the Inkamoto Tours workspace.",
+      emailPlaceholder: "you@email.com",
       password: "Password",
-      passwordPlaceholder: "Enter password",
+      passwordPlaceholder: "At least 8 characters",
       show: "Show",
       hide: "Hide",
       showPassword: "Show password",
@@ -296,6 +297,17 @@ export const en = {
       signingIn: "Signing in…",
       failed: "Login failed",
       footer: "inkamototours.com · private workspace",
+      continueGoogle: "Continue with Google",
+      orEmail: "Or use email",
+      firstTime:
+        "First time with this email? We’ll save it so you can sign in again next time.",
+      googleOnly: "This email uses Google sign-in. Continue with Google.",
+      shortPassword: "Choose a password with at least 8 characters.",
+      needDb: "Email sign-in needs Supabase. Run crm_users.sql in Setup, or use Google.",
+      dbError: "Could not save this email. Check Supabase, then try again.",
+      googleFailed: "Google sign-in didn’t work. Try again, or use email.",
+      googleSetup:
+        "Add the Google keys in Setup, then add this redirect in Google Cloud: /api/auth/google/callback",
     },
     inbox: {
       title: "Inbox",
@@ -684,7 +696,8 @@ export const en = {
       authAfter: "Optional env overrides: CRM_ACCESS_EMAIL / CRM_ACCESS_PASSWORD.",
       supabaseTitle: "Supabase (required)",
       supabaseWhere: "supabase.com → New project → Settings → API",
-      supabaseAfter: "Paste supabase/schema.sql in SQL Editor → Run once.",
+      supabaseAfter:
+        "Paste supabase/schema.sql in SQL Editor → Run once. If the CRM already exists, also run supabase/crm_users.sql (saves login emails).",
       brevoTitle: "Email sending (replies + newsletter)",
       brevoWhere:
         "brevo.com → Settings → SMTP & API → API keys · verify sender",
@@ -694,7 +707,7 @@ export const en = {
       imapAfter: "Mailbox for contact@inkamototours.com — fills the Inbox tab.",
       googleTitle: "Google Search Console",
       googleWhere:
-        "Google Cloud → enable Search Console API → OAuth client (Web) → add redirect http://localhost:3000/api/google/oauth/callback",
+        "Google Cloud → enable Search Console API → OAuth client (Web) → add redirects http://localhost:3000/api/google/oauth/callback and http://localhost:3000/api/auth/google/callback. Publish the consent screen so any Google account can sign in.",
       googleAfter:
         "Put client id/secret in .env.local, restart, then Connect Google. Site URL is usually sc-domain:inkamototours.com (must match Search Console).",
       googleConnect: "Connect Google",

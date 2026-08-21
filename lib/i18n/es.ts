@@ -288,8 +288,9 @@ export const es: Messages = {
     login: {
       welcome: "Bienvenido de nuevo",
       subtitle: "Entra al espacio de Inkamoto Tours.",
+      emailPlaceholder: "tu@email.com",
       password: "Contraseña",
-      passwordPlaceholder: "Introduce la contraseña",
+      passwordPlaceholder: "Al menos 8 caracteres",
       show: "Mostrar",
       hide: "Ocultar",
       showPassword: "Mostrar contraseña",
@@ -298,6 +299,17 @@ export const es: Messages = {
       signingIn: "Entrando…",
       failed: "Inicio de sesión fallido",
       footer: "inkamototours.com · espacio privado",
+      continueGoogle: "Continuar con Google",
+      orEmail: "O usa el email",
+      firstTime:
+        "¿Primera vez con este email? Lo guardamos para que puedas entrar la próxima vez.",
+      googleOnly: "Este email entra con Google. Continúa con Google.",
+      shortPassword: "Elige una contraseña de al menos 8 caracteres.",
+      needDb: "El email necesita Supabase. Ejecuta crm_users.sql en Setup, o usa Google.",
+      dbError: "No se pudo guardar este email. Revisa Supabase e inténtalo de nuevo.",
+      googleFailed: "No se pudo entrar con Google. Prueba otra vez o usa el email.",
+      googleSetup:
+        "Añade las claves de Google en Setup y este redirect en Google Cloud: /api/auth/google/callback",
     },
     inbox: {
       title: "Bandeja",
@@ -689,7 +701,8 @@ export const es: Messages = {
       authAfter: "Overrides opcionales: CRM_ACCESS_EMAIL / CRM_ACCESS_PASSWORD.",
       supabaseTitle: "Supabase (obligatorio)",
       supabaseWhere: "supabase.com → New project → Settings → API",
-      supabaseAfter: "Pega supabase/schema.sql en SQL Editor → Run una vez.",
+      supabaseAfter:
+        "Pega supabase/schema.sql en SQL Editor → Run una vez. Si el CRM ya existía, ejecuta también supabase/crm_users.sql (guarda los emails de acceso).",
       brevoTitle: "Envío de email (respuestas + newsletter)",
       brevoWhere:
         "brevo.com → Settings → SMTP & API → API keys · verificar remitente",
@@ -699,7 +712,7 @@ export const es: Messages = {
       imapAfter: "Buzón de contact@inkamototours.com — llena la pestaña Bandeja.",
       googleTitle: "Google Search Console",
       googleWhere:
-        "Google Cloud → activa Search Console API → cliente OAuth (Web) → redirect http://localhost:3000/api/google/oauth/callback",
+        "Google Cloud → activa Search Console API → cliente OAuth (Web) → redirects http://localhost:3000/api/google/oauth/callback y http://localhost:3000/api/auth/google/callback. Publica la pantalla de consentimiento para que cualquier cuenta de Google pueda entrar.",
       googleAfter:
         "Pon client id/secret en .env.local, reinicia y pulsa Conectar Google. La URL suele ser sc-domain:inkamototours.com (igual que en Search Console).",
       googleConnect: "Conectar Google",

@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { InkamotoLogo } from "@/components/brand";
+import { UserAvatar } from "@/components/user-avatar";
 import { LanguageSwitcher, useLocale } from "@/lib/i18n";
 import { useCrm } from "@/lib/crm-store";
+import { useSessionUser } from "@/lib/session-user";
 import {
-  currentUser,
   currentWorkspace,
   formatLastLogin,
   notifications as seedNotifications,
@@ -23,6 +24,7 @@ export function Topbar({
 }) {
   const { pushToast } = useCrm();
   const { t, locale } = useLocale();
+  const currentUser = useSessionUser();
   const [userOpen, setUserOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifications, setNotifications] = useState(seedNotifications);
@@ -155,13 +157,10 @@ export function Topbar({
               }}
               className="flex h-11 items-center gap-2 border border-transparent py-1 pl-1 pr-2 transition-colors hover:border-line hover:bg-ash"
             >
-              <span
-                className="flex h-8 w-8 items-center justify-center text-xs font-bold text-white"
-                style={{ background: currentUser.avatarHue }}
-                aria-hidden
-              >
-                {currentUser.initials}
-              </span>
+              <UserAvatar
+                user={currentUser}
+                className="h-8 w-8 shrink-0 text-xs"
+              />
               <span className="hidden text-left sm:block">
                 <span className="block text-sm font-semibold leading-tight text-ink">
                   {currentUser.name}
@@ -180,12 +179,10 @@ export function Topbar({
               >
                 <div className="border-b border-line px-4 py-3">
                   <div className="flex items-center gap-3">
-                    <span
-                      className="flex h-10 w-10 items-center justify-center text-sm font-bold text-white"
-                      style={{ background: currentUser.avatarHue }}
-                    >
-                      {currentUser.initials}
-                    </span>
+                    <UserAvatar
+                      user={currentUser}
+                      className="h-10 w-10 shrink-0 text-sm"
+                    />
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-ink">
                         {currentUser.name}

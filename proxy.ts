@@ -20,11 +20,19 @@ export async function proxy(request: NextRequest) {
   const isLoginApi = pathname === "/api/auth/login";
   const isLogoutApi = pathname === "/api/auth/logout";
   const isGoogleOAuthCallback = pathname === "/api/google/oauth/callback";
+  const isGoogleLoginStart = pathname === "/api/auth/google/start";
+  const isGoogleLoginCallback = pathname === "/api/auth/google/callback";
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const authed = await verifySessionToken(token);
 
-  if (isLoginApi || isLogoutApi || isGoogleOAuthCallback) {
+  if (
+    isLoginApi ||
+    isLogoutApi ||
+    isGoogleOAuthCallback ||
+    isGoogleLoginStart ||
+    isGoogleLoginCallback
+  ) {
     return NextResponse.next();
   }
 

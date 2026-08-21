@@ -1,5 +1,11 @@
 import { localeMeta, type Locale } from "@/lib/i18n/config";
 
+export type SessionClaims = {
+  email: string;
+  name: string;
+  picture?: string;
+};
+
 export type SessionUser = {
   id: string;
   name: string;
@@ -11,6 +17,7 @@ export type SessionUser = {
   avatarHue: string;
   timezone: string;
   lastLoginAt: string;
+  picture?: string;
 };
 
 export type Workspace = {
@@ -50,6 +57,31 @@ export const notifications: {
   time: string;
   unread: boolean;
 }[] = [];
+
+function initialsFrom(name: string, email: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+  }
+  if (parts[0] && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  return email.slice(0, 2).toUpperCase() || "IT";
+}
+
+export function userFromClaims(claims: SessionClaims | null): SessionUser {
+  if (!claims) return currentUser;
+  const name = claims.name.trim() || claims.email;
+  const firstName = name.split(/\s+/)[0] || name;
+  return {
+    ...currentUser,
+    id: `usr_${claims.email}`,
+    name,
+    firstName,
+    email: claims.email,
+    initials: initialsFrom(name, claims.email),
+    lastLoginAt: new Date().toISOString(),
+    picture: claims.picture,
+  };
+}
 
 export function formatLastLogin(iso: string, locale: Locale = "en") {
   return new Intl.DateTimeFormat(localeMeta[locale].bcp47, {

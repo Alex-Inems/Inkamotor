@@ -12,7 +12,7 @@ import {
   type Sale,
 } from "@/lib/demo-data";
 import { formatDate, formatMoney, formatNumber, formatPercent } from "@/lib/format";
-import { currentUser } from "@/lib/session";
+import { useSessionUser } from "@/lib/session-user";
 import { invoiceTone, leadTone } from "@/lib/status";
 import { localeMeta, useLocale } from "@/lib/i18n";
 
@@ -107,6 +107,7 @@ export default function OverviewPage() {
     loadError,
   } = useCrm();
   const { t, locale } = useLocale();
+  const currentUser = useSessionUser();
   const [mail, setMail] = useState<OverviewMail[]>([]);
   const hello = `${t("greet.hello")}, ${currentUser.firstName}`;
 

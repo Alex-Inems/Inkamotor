@@ -3,6 +3,7 @@ import {
   CRM_LOGIN_PASSWORD,
   CRM_LOGIN_SESSION_SECRET,
 } from "@/lib/auth-credentials";
+import type { SessionClaims } from "@/lib/session";
 
 export const SESSION_COOKIE = "inkamoto_crm_session";
 export const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 14; // 14 days
@@ -82,33 +83,90 @@ function timingSafeEqualString(a: string, b: string) {
   return timingSafeEqualBytes(aa, bb);
 }
 
-export async function createSessionToken(now = Date.now()) {
-  const secret = sessionSecret();
-  const exp = String(now + SESSION_TTL_MS);
-  const payload = `v1.${exp}`;
-  const sig = await hmacSign(secret, payload);
-  return `${payload}.${sig}`;
+export function workspaceSessionClaims(): SessionClaims {
+  return {
+    email: expectedEmail(),
+    name: "Inkamoto Team",
+  };
 }
 
-export async function verifySessionToken(token: string | undefined | null) {
-  if (!token) return false;
-  const secret = sessionSecret();
-  const parts = token.split(".");
-  if (parts.length !== 3 || parts[0] !== "v1") return false;
-  const [, exp, sig] = parts;
-  if (!exp || !sig) return false;
-  const payload = `v1.${exp}`;
-  const expected = await hmacSign(secret, payload);
+function encodeClaims(claims: SessionClaims) {
+  return toBase64Url(new TextEncoder().encode(JSON.stringify(claims)));
+}
+
+function decodeClaims(body: string): SessionClaims | null {
   try {
-    const a = fromBase64Url(sig);
-    const b = fromBase64Url(expected);
-    if (!timingSafeEqualBytes(a, b)) return false;
+    const json = new TextDecoder().decode(fromBase64Url(body));
+    const raw = JSON.parse(json) as Partial<SessionClaims>;
+    const email = raw.email?.trim().toLowerCase() ?? "";
+    if (!email || !email.includes("@")) return null;
+    const name = (raw.name?.trim() || email).slice(0, 80);
+    const picture =
+      typeof raw.picture === "string" ? safePictureUrl(raw.picture) : undefined;
+    return picture ? { email, name, picture } : { email, name };
+  } catch {
+    return null;
+  }
+}
+
+function safePictureUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return undefined;
+    if (!parsed.hostname.endsWith("googleusercontent.com")) return undefined;
+    return url.slice(0, 500);
+  } catch {
+    return undefined;
+  }
+}
+
+async function tokenSignatureOk(payload: string, sig: string) {
+  const expected = await hmacSign(sessionSecret(), payload);
+  try {
+    return timingSafeEqualBytes(fromBase64Url(sig), fromBase64Url(expected));
   } catch {
     return false;
   }
+}
+
+function expValid(exp: string) {
   const expMs = Number(exp);
-  if (!Number.isFinite(expMs) || expMs < Date.now()) return false;
-  return true;
+  return Number.isFinite(expMs) && expMs >= Date.now();
+}
+
+export async function createSessionToken(
+  claims: SessionClaims = workspaceSessionClaims(),
+  now = Date.now(),
+) {
+  const exp = String(now + SESSION_TTL_MS);
+  const body = encodeClaims(claims);
+  const payload = `v2.${exp}.${body}`;
+  const sig = await hmacSign(sessionSecret(), payload);
+  return `${payload}.${sig}`;
+}
+
+export async function readSessionToken(
+  token: string | undefined | null,
+): Promise<SessionClaims | null> {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts[0] === "v1" && parts.length === 3) {
+    const [, exp, sig] = parts;
+    if (!exp || !sig || !expValid(exp)) return null;
+    if (!(await tokenSignatureOk(`v1.${exp}`, sig))) return null;
+    return workspaceSessionClaims();
+  }
+  if (parts[0] === "v2" && parts.length === 4) {
+    const [, exp, body, sig] = parts;
+    if (!exp || !body || !sig || !expValid(exp)) return null;
+    if (!(await tokenSignatureOk(`v2.${exp}.${body}`, sig))) return null;
+    return decodeClaims(body);
+  }
+  return null;
+}
+
+export async function verifySessionToken(token: string | undefined | null) {
+  return (await readSessionToken(token)) != null;
 }
 
 export function credentialsMatch(email: string, password: string) {

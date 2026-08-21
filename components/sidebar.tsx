@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { InkamotoLogo } from "@/components/brand";
-import { currentUser, currentWorkspace } from "@/lib/session";
+import { UserAvatar } from "@/components/user-avatar";
+import { currentWorkspace } from "@/lib/session";
+import { useSessionUser } from "@/lib/session-user";
 import { useT } from "@/lib/i18n";
 
 const nav = [
@@ -26,6 +28,7 @@ export function Sidebar({
   onClose: () => void;
 }) {
   const t = useT();
+  const currentUser = useSessionUser();
   const visibleNav = nav;
 
   return (
@@ -93,12 +96,10 @@ export function Sidebar({
 
       <div className="mt-auto border-t border-line px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-3">
-          <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center text-xs font-bold text-white"
-            style={{ background: currentUser.avatarHue }}
-          >
-            {currentUser.initials}
-          </span>
+          <UserAvatar
+            user={currentUser}
+            className="h-9 w-9 shrink-0 text-xs"
+          />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
               {currentUser.name}

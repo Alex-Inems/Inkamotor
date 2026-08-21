@@ -9,6 +9,8 @@ import { ToastStack } from "./toast-stack";
 import { FirstRunTour } from "./first-run-tour";
 import { CrmProvider } from "@/lib/crm-store";
 import { LocaleProvider, useT } from "@/lib/i18n";
+import { SessionUserProvider } from "@/lib/session-user";
+import type { SessionUser } from "@/lib/session";
 
 const pageKeys: Record<string, string> = {
   "/": "nav.overview",
@@ -24,7 +26,13 @@ const pageKeys: Record<string, string> = {
   "/setup": "nav.setup",
 };
 
-export function CrmShell({ children }: { children: React.ReactNode }) {
+export function CrmShell({
+  children,
+  user,
+}: {
+  children: React.ReactNode;
+  user: SessionUser;
+}) {
   const pathname = usePathname();
   if (pathname === "/login") {
     return <LocaleProvider>{children}</LocaleProvider>;
@@ -32,9 +40,11 @@ export function CrmShell({ children }: { children: React.ReactNode }) {
 
   return (
     <LocaleProvider>
-      <CrmProvider>
-        <CrmShellInner>{children}</CrmShellInner>
-      </CrmProvider>
+      <SessionUserProvider user={user}>
+        <CrmProvider>
+          <CrmShellInner>{children}</CrmShellInner>
+        </CrmProvider>
+      </SessionUserProvider>
     </LocaleProvider>
   );
 }
