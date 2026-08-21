@@ -16,6 +16,9 @@ export type GscSnapshot = GscMetrics & {
 export type GscDailyRow = GscMetrics & { date: string };
 export type GscQueryRow = GscMetrics & { query: string };
 export type GscPageRow = GscMetrics & { page: string };
+export type GscCountryRow = GscMetrics & { country: string };
+export type GscDeviceRow = GscMetrics & { device: string };
+export type GscAppearanceRow = GscMetrics & { appearance: string };
 
 export type GscSyncInfo = {
   status: "ok" | "error";
@@ -28,6 +31,9 @@ export type GscPayload = {
   daily: GscDailyRow[];
   queries: GscQueryRow[];
   pages: GscPageRow[];
+  countries: GscCountryRow[];
+  devices: GscDeviceRow[];
+  appearances: GscAppearanceRow[];
   lastSync: GscSyncInfo | null;
 };
 
@@ -35,4 +41,12 @@ export type ApiErrorBody = {
   error: string;
   code: "missing_credentials" | "sync_failed";
   missing?: string[];
+};
+
+export type TrendsPoint = { date: string; values: number[] };
+export type TrendsPayload = {
+  terms: string[];
+  geo: string;
+  points: TrendsPoint[];
+  averages: number[];
 };

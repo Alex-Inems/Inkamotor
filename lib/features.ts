@@ -1,10 +1,11 @@
 /** Nav / feature gates driven by env readiness (server). */
 
+import { missingGoogleEnv } from "@/lib/ads/search-console";
 import { missingEnv } from "@/lib/api";
 
 // Website forms arrive as email in the mailbox, so no webhook feature is needed.
-// Google / Meta are paused: "googleSearchConsole" and "metaAds" stay out for now.
-export type FeatureId = "supabase" | "brevo" | "imap";
+// Meta Ads stays paused until those keys are added.
+export type FeatureId = "supabase" | "brevo" | "imap" | "googleSearchConsole";
 
 export type FeatureState = {
   id: FeatureId;
@@ -15,20 +16,7 @@ export type FeatureState = {
 };
 
 export function getFeatureStates(): FeatureState[] {
-  // Google / Meta env checks commented out — not required for now.
-  // const googleMissing = missingEnv([
-  //   "GOOGLE_CLIENT_ID",
-  //   "GOOGLE_CLIENT_SECRET",
-  //   "GOOGLE_REFRESH_TOKEN",
-  //   "GSC_SITE_URL",
-  // ]);
-  // const metaMissing = missingEnv([
-  //   "META_APP_ID",
-  //   "META_APP_SECRET",
-  //   "META_ACCESS_TOKEN",
-  //   "META_AD_ACCOUNT_ID",
-  // ]);
-
+  const googleMissing = missingGoogleEnv();
   const supabaseMissing = missingEnv([
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
@@ -67,20 +55,13 @@ export function getFeatureStates(): FeatureState[] {
       missing: imapMissing,
       label: "Incoming mailbox",
     },
-    // {
-    //   id: "googleSearchConsole",
-    //   ready: false,
-    //   paused: true,
-    //   missing: [],
-    //   label: "Google Search Console",
-    // },
-    // {
-    //   id: "metaAds",
-    //   ready: false,
-    //   paused: true,
-    //   missing: [],
-    //   label: "Meta Ads",
-    // },
+    {
+      id: "googleSearchConsole",
+      ready: googleMissing.length === 0,
+      paused: googleMissing.length > 0,
+      missing: googleMissing,
+      label: "Google Search Console",
+    },
   ];
 }
 

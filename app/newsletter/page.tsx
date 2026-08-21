@@ -13,6 +13,7 @@ import { EmptyHint, KpiCard, PageHeader, Panel, StatusBadge } from "@/components
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
+import { HtmlEditor } from "@/components/html-editor";
 
 type LiveCampaign = {
   id: string;
@@ -38,6 +39,15 @@ type Subscriber = {
   addedAt: string | null;
 };
 
+type Template = {
+  id: string;
+  name: string;
+  subject: string;
+  preview: string;
+  html: string;
+  builtin: boolean;
+};
+
 type ApiError = { error: string; missing?: string[] };
 
 function openRate(c: LiveCampaign) {
@@ -52,7 +62,7 @@ function clickRate(c: LiveCampaign) {
 
 function tone(status: string) {
   if (status === "sent") return "success" as const;
-  if (status === "scheduled") return "info" as const;
+  if (status === "sending" || status === "scheduled") return "info" as const;
   if (status === "archived") return "neutral" as const;
   return "warning" as const;
 }
@@ -76,6 +86,12 @@ export default function NewsletterPage() {
   const [addingSubscriber, setAddingSubscriber] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState("");
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [templateId, setTemplateId] = useState("");
+  const [editorKey, setEditorKey] = useState("blank");
+  const [when, setWhen] = useState<"now" | "later">("now");
+  const [scheduleAt, setScheduleAt] = useState("");
+  const [busyEmail, setBusyEmail] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     subject: "",
@@ -115,10 +131,18 @@ export default function NewsletterPage() {
     setAutoSubscribe(Boolean(data.autoSubscribe));
   }, [t]);
 
+  const loadTemplates = useCallback(async () => {
+    const res = await fetch("/api/newsletter/templates");
+    const json = await res.json();
+    if (!res.ok) return;
+    setTemplates((json as { templates: Template[] }).templates ?? []);
+  }, []);
+
   useEffect(() => {
     void loadSubscribers();
+    void loadTemplates();
     load().finally(() => setLoading(false));
-  }, [load, loadSubscribers]);
+  }, [load, loadSubscribers, loadTemplates]);
 
   useEffect(() => {
     if (openAdd) void loadSubscribers();
@@ -173,6 +197,80 @@ export default function NewsletterPage() {
     }
   }
 
+  async function setBlocked(email: string, blocked: boolean) {
+    setBusyEmail(email);
+    try {
+      const res = await fetch("/api/newsletter/subscribers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, blocked }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        pushToast((json as ApiError).error || t("pages.newsletter.updateFailed"));
+        return;
+      }
+      pushToast(
+        blocked
+          ? t("pages.newsletter.unsubscribedOk", { email })
+          : t("pages.newsletter.resubscribedOk", { email }),
+      );
+      await loadSubscribers();
+    } finally {
+      setBusyEmail(null);
+    }
+  }
+
+  function applyTemplate(id: string) {
+    setTemplateId(id);
+    const tpl = templates.find((item) => item.id === id);
+    if (!tpl) return;
+    setForm({
+      name: form.name || tpl.name,
+      subject: tpl.subject,
+      preview: tpl.preview,
+      html: tpl.html,
+    });
+    setEditorKey(`${id}-${Date.now()}`);
+  }
+
+  async function saveTemplate() {
+    if (!form.subject.trim() || !form.html.trim()) {
+      pushToast(t("pages.newsletter.templateNeedBody"));
+      return;
+    }
+    const res = await fetch("/api/newsletter/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: form.name.trim() || form.subject.trim(),
+        subject: form.subject.trim(),
+        preview: form.preview.trim(),
+        html: form.html,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      pushToast((json as ApiError).error || t("pages.newsletter.templateSaveFailed"));
+      return;
+    }
+    pushToast(t("pages.newsletter.templateSaved"));
+    await loadTemplates();
+  }
+
+  async function deleteTemplate(id: string) {
+    const del = await fetch(`/api/newsletter/templates?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    const json = await del.json();
+    if (!del.ok) {
+      pushToast((json as ApiError).error || t("pages.newsletter.templateDeleteFailed"));
+      return;
+    }
+    if (templateId === id) setTemplateId("");
+    await loadTemplates();
+  }
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return campaigns;
@@ -194,6 +292,10 @@ export default function NewsletterPage() {
       pushToast(t("pages.newsletter.needRecipient"));
       return;
     }
+    if (when === "later" && !scheduleAt) {
+      pushToast(t("pages.newsletter.needSchedule"));
+      return;
+    }
     setSending(true);
     try {
       const html =
@@ -208,6 +310,7 @@ export default function NewsletterPage() {
           previewText: form.preview.trim(),
           htmlContent: html,
           emails: selectedEmails,
+          scheduledAt: when === "later" ? scheduleAt : undefined,
         }),
       });
       const json = await res.json();
@@ -216,9 +319,17 @@ export default function NewsletterPage() {
         pushToast((json as ApiError).error || t("pages.newsletter.sendFailed"));
         return;
       }
-      pushToast(t("pages.newsletter.campaignSent"));
+      pushToast(
+        (json as { scheduled?: boolean }).scheduled
+          ? t("pages.newsletter.campaignScheduled")
+          : t("pages.newsletter.campaignSent"),
+      );
       closeComposer();
       setForm({ name: "", subject: "", preview: "", html: "" });
+      setWhen("now");
+      setScheduleAt("");
+      setTemplateId("");
+      setEditorKey(`blank-${Date.now()}`);
       await load();
     } finally {
       setSending(false);
@@ -351,6 +462,7 @@ export default function NewsletterPage() {
                       <th>{t("common.source")}</th>
                       <th>{t("common.status")}</th>
                       <th>{t("common.added")}</th>
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -378,6 +490,18 @@ export default function NewsletterPage() {
                           {s.addedAt
                             ? formatDate(s.addedAt.slice(0, 10), locale)
                             : t("common.dash")}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            disabled={busyEmail === s.email}
+                            onClick={() => void setBlocked(s.email, !s.blocked)}
+                          >
+                            {s.blocked
+                              ? t("pages.newsletter.resubscribe")
+                              : t("pages.newsletter.unsubscribe")}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -436,7 +560,11 @@ export default function NewsletterPage() {
                       <td>{formatPercent(openRate(c))}</td>
                       <td>{formatPercent(clickRate(c))}</td>
                       <td className="whitespace-nowrap text-mute">
-                        {c.sentAt ? formatDate(c.sentAt.slice(0, 10), locale) : t("common.dash")}
+                        {c.sentAt
+                          ? formatDate(c.sentAt.slice(0, 10), locale)
+                          : c.scheduledAt
+                            ? formatDate(c.scheduledAt.slice(0, 10), locale)
+                            : t("common.dash")}
                       </td>
                       <td>
                         <button
@@ -460,6 +588,35 @@ export default function NewsletterPage() {
 
       <Modal open={openAdd} title={t("pages.newsletter.sendTitle")} onClose={closeComposer} wide>
         <form className="grid gap-3" onSubmit={submit}>
+          <Field label={t("pages.newsletter.template")}>
+            <div className="flex flex-wrap gap-2">
+              <select
+                className={inputClass}
+                value={templateId}
+                onChange={(e) => applyTemplate(e.target.value)}
+              >
+                <option value="">{t("pages.newsletter.pickTemplate")}</option>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={tpl.id}>
+                    {tpl.name}
+                    {tpl.builtin ? ` · ${t("pages.newsletter.builtin")}` : ""}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className={btnGhost} onClick={() => void saveTemplate()}>
+                {t("pages.newsletter.saveTemplate")}
+              </button>
+              {templateId && !templates.find((tpl) => tpl.id === templateId)?.builtin ? (
+                <button
+                  type="button"
+                  className={btnGhost}
+                  onClick={() => void deleteTemplate(templateId)}
+                >
+                  {t("pages.newsletter.deleteTemplate")}
+                </button>
+              ) : null}
+            </div>
+          </Field>
           <Field label={t("pages.newsletter.internalName")}>
             <input
               className={inputClass}
@@ -483,13 +640,47 @@ export default function NewsletterPage() {
               onChange={(e) => setForm({ ...form, preview: e.target.value })}
             />
           </Field>
-          <Field label={t("pages.newsletter.htmlBody")}>
-            <textarea
-              className={`${inputClass} min-h-32 font-mono text-xs`}
-              value={form.html}
-              onChange={(e) => setForm({ ...form, html: e.target.value })}
+          <Field label={t("pages.newsletter.body")}>
+            <HtmlEditor
+              html={form.html}
+              resetKey={editorKey}
+              onChange={(html) => setForm({ ...form, html })}
             />
           </Field>
+          <fieldset className="space-y-2">
+            <legend className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
+              {t("pages.newsletter.when")}
+            </legend>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="when"
+                  checked={when === "now"}
+                  onChange={() => setWhen("now")}
+                />
+                {t("pages.newsletter.sendNowOption")}
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="when"
+                  checked={when === "later"}
+                  onChange={() => setWhen("later")}
+                />
+                {t("pages.newsletter.scheduleOption")}
+              </label>
+            </div>
+            {when === "later" ? (
+              <input
+                type="datetime-local"
+                className={inputClass}
+                value={scheduleAt}
+                min={new Date().toISOString().slice(0, 16)}
+                onChange={(e) => setScheduleAt(e.target.value)}
+              />
+            ) : null}
+          </fieldset>
           <div className="space-y-2">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
@@ -559,7 +750,9 @@ export default function NewsletterPage() {
             )}
           </div>
           <p className="text-xs text-mute">
-            {t("pages.newsletter.sendsNow")}
+            {when === "later"
+              ? t("pages.newsletter.sendsLater")
+              : t("pages.newsletter.sendsNow")}
           </p>
           <div className="flex flex-wrap gap-2">
             <button
@@ -567,7 +760,11 @@ export default function NewsletterPage() {
               className={btnPrimary}
               disabled={sending || selectedEmails.length === 0}
             >
-              {sending ? t("common.sending") : t("pages.newsletter.sendNow")}
+              {sending
+                ? t("common.sending")
+                : when === "later"
+                  ? t("pages.newsletter.scheduleSend")
+                  : t("pages.newsletter.sendNow")}
             </button>
             <button
               type="button"
@@ -601,6 +798,12 @@ export default function NewsletterPage() {
                 clicks: formatPercent(clickRate(selected)),
               })}
             </p>
+            {selected.scheduledAt ? (
+              <p>
+                <span className="text-mute">{t("pages.newsletter.scheduledFor")}: </span>
+                {formatDate(selected.scheduledAt.slice(0, 10), locale)}
+              </p>
+            ) : null}
             {selected.preview ? (
               <p className="text-mute">{selected.preview}</p>
             ) : null}

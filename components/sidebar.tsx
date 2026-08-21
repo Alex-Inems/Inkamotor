@@ -6,17 +6,14 @@ import { currentUser, currentWorkspace } from "@/lib/session";
 import { useT } from "@/lib/i18n";
 
 const nav = [
-  { href: "/", key: "nav.overview", icon: OverviewIcon },
-  { href: "/inbox", key: "nav.inbox", icon: InboxIcon },
-  { href: "/leads", key: "nav.leads", icon: LeadsIcon },
-  { href: "/bookings", key: "nav.sales", icon: SalesIcon },
-  // Google / Meta — paused (no env required)
-  // { href: "/analytics", key: "nav.analytics", icon: AnalyticsIcon },
-  // { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
-  // { href: "/ads/meta", key: "nav.metaAds", icon: MetaIcon },
-  { href: "/invoices", key: "nav.invoices", icon: InvoiceIcon },
-  { href: "/newsletter", key: "nav.newsletter", icon: NewsletterIcon },
-  { href: "/setup", key: "nav.setup", icon: SetupIcon },
+  { href: "/", key: "nav.overview", icon: OverviewIcon, tour: "overview" },
+  { href: "/inbox", key: "nav.inbox", icon: InboxIcon, tour: "inbox" },
+  { href: "/leads", key: "nav.leads", icon: LeadsIcon, tour: "leads" },
+  { href: "/bookings", key: "nav.sales", icon: SalesIcon, tour: "bookings" },
+  { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
+  { href: "/invoices", key: "nav.invoices", icon: InvoiceIcon, tour: "invoices" },
+  { href: "/newsletter", key: "nav.newsletter", icon: NewsletterIcon, tour: "newsletter" },
+  { href: "/setup", key: "nav.setup", icon: SetupIcon, tour: "setup" },
 ];
 
 export function Sidebar({
@@ -79,6 +76,7 @@ export function Sidebar({
             <Link
               key={item.href}
               href={item.href}
+              data-tour={item.tour}
               suppressHydrationWarning
               className={`flex min-h-11 shrink-0 items-center gap-2.5 px-3 py-2.5 text-sm font-medium uppercase tracking-[0.06em] transition-colors ${
                 active

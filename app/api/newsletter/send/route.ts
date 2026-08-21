@@ -5,6 +5,7 @@ import {
   missingBrevoEnv,
   sendTransactionalEmail,
 } from "@/lib/brevo";
+import { toBrevoScheduledAt, wrapCampaignHtml } from "@/lib/newsletter/html";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -15,6 +16,7 @@ type Body = {
   htmlContent?: string;
   previewText?: string;
   emails?: string[];
+  scheduledAt?: string;
   /** If true, send as one transactional email to `toEmail` instead of a campaign */
   transactional?: boolean;
   toEmail?: string;
@@ -50,9 +52,10 @@ export async function POST(request: Request) {
   }
 
   const subject = body.subject?.trim();
-  const html =
-    body.htmlContent?.trim() ||
-    `<p>${(body.previewText || subject || "").replace(/</g, "&lt;")}</p>`;
+  const html = wrapCampaignHtml(
+    body.htmlContent?.trim() || "",
+    body.previewText || subject || "",
+  );
 
   if (!subject) {
     return jsonError(400, { error: "Subject is required", code: "send_failed" });
@@ -99,14 +102,23 @@ export async function POST(request: Request) {
       });
     }
 
-    const id = await createAndSendCampaign({
+    const created = await createAndSendCampaign({
       name: body.name?.trim() || subject,
       subject,
       htmlContent: html,
       previewText: body.previewText,
       emails,
+      scheduledAt: body.scheduledAt
+        ? toBrevoScheduledAt(body.scheduledAt)
+        : undefined,
     });
-    return Response.json({ ok: true, mode: "campaign", id, recipients: emails.length });
+    return Response.json({
+      ok: true,
+      mode: "campaign",
+      id: created.id,
+      scheduled: created.scheduled,
+      recipients: emails.length,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Send failed";
     return jsonError(502, { error: message, code: "send_failed" });

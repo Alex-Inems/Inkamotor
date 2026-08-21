@@ -4,6 +4,7 @@ import {
   listBrevoContacts,
   mapBrevoContact,
   missingBrevoEnv,
+  setContactBlacklisted,
   subscriberListId,
 } from "@/lib/brevo";
 import { autoSubscribeEnabled } from "@/lib/mail/auto-subscribe";
@@ -70,6 +71,41 @@ export async function POST(request: Request) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Could not add subscriber";
+    return jsonError(502, { error: message, code: "send_failed" });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const missing = missingBrevoEnv();
+  if (missing.length > 0) {
+    return jsonError(503, {
+      error: "Email sending isn’t configured yet.",
+      code: "missing_credentials",
+      missing,
+    });
+  }
+
+  let body: { email?: string; blocked?: boolean };
+  try {
+    body = (await request.json()) as { email?: string; blocked?: boolean };
+  } catch {
+    return jsonError(400, { error: "Invalid JSON", code: "send_failed" });
+  }
+
+  const email = body.email?.trim().toLowerCase();
+  if (!email || typeof body.blocked !== "boolean") {
+    return jsonError(400, {
+      error: "email and blocked are required",
+      code: "send_failed",
+    });
+  }
+
+  try {
+    await setContactBlacklisted(email, body.blocked);
+    return Response.json({ ok: true, email, blocked: body.blocked });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Could not update subscriber";
     return jsonError(502, { error: message, code: "send_failed" });
   }
 }

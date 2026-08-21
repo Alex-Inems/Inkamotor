@@ -43,6 +43,7 @@ export function newsletterTone(status: string) {
   switch (status) {
     case "sent":
       return "success" as const;
+    case "sending":
     case "scheduled":
       return "info" as const;
     case "draft":

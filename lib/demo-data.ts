@@ -17,7 +17,7 @@ export type InvoiceStatus = "draft" | "sent" | "paid" | "overdue" | "void";
 
 export type AdStatus = "active" | "paused" | "ended";
 
-export type NewsletterStatus = "draft" | "scheduled" | "sent" | "archived";
+export type NewsletterStatus = "draft" | "scheduled" | "sending" | "sent" | "archived";
 
 export type InquiryChannel =
   | "contact_form"

@@ -304,3 +304,229 @@ button {
 .login-modal-enter {
   animation: login-in 0.45s ease-out;
 }
+
+.html-editor {
+  min-height: 12rem;
+  border: 1px solid var(--line);
+  background: #f7f4ee;
+  color: #1c1b19;
+  padding: 0.85rem 1rem;
+  outline: none;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.html-editor:focus {
+  border-color: var(--gold);
+}
+
+.html-editor h1,
+.html-editor h2 {
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 400;
+  margin: 0.4em 0;
+}
+
+.html-editor p {
+  margin: 0.4em 0;
+}
+
+.html-editor ul {
+  margin: 0.4em 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.html-editor a {
+  color: #31595d;
+}
+
+.tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+}
+
+.tour-mask {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+.tour-glow {
+  position: fixed;
+  z-index: 81;
+  border-radius: 3px;
+  pointer-events: none;
+  animation: tour-breathe 1.8s ease-in-out infinite;
+  transition:
+    top 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.tour-connector {
+  position: fixed;
+  inset: 0;
+  z-index: 82;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.tour-connector path {
+  animation: tour-dash 0.9s linear infinite;
+}
+
+.tour-card {
+  position: fixed;
+  z-index: 84;
+  overflow: hidden;
+  pointer-events: auto;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--panel) 94%, #1c1b19);
+  box-shadow:
+    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 0 0 1px color-mix(in srgb, var(--gold) 14%, transparent);
+  backdrop-filter: blur(12px);
+  animation: tour-card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tour-badge {
+  display: inline-flex;
+  height: 1.75rem;
+  min-width: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #f7f4ee;
+}
+
+.tour-dot {
+  height: 6px;
+  width: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  transition:
+    width 0.25s ease,
+    background 0.25s ease;
+}
+
+.tour-dot-on {
+  width: 18px;
+  background: var(--gold);
+}
+
+.tour-dot-done {
+  background: color-mix(in srgb, var(--gold) 45%, var(--line));
+}
+
+.tour-path {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tour-path li {
+  position: relative;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cream);
+  background: var(--ash);
+  border: 1px solid var(--line);
+  animation: tour-chip 0.5s ease both;
+}
+
+.tour-path li:nth-child(1) {
+  animation-delay: 0.08s;
+}
+.tour-path li:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.tour-path li:nth-child(3) {
+  animation-delay: 0.24s;
+}
+.tour-path li:nth-child(4) {
+  animation-delay: 0.32s;
+}
+
+.tour-path li:not(:last-child) {
+  margin-right: 0.55rem;
+}
+
+.tour-path li:not(:last-child)::after {
+  content: "→";
+  position: absolute;
+  right: -0.7rem;
+  color: var(--gold);
+  font-size: 0.7rem;
+}
+
+@keyframes tour-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes tour-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes tour-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes tour-chip {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1023px) {
+  .tour-connector {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-card,
+  .tour-glow,
+  .tour-path li,
+  .tour-connector path {
+    animation: none;
+    transition: none;
+  }
+}

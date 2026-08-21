@@ -16,12 +16,11 @@ export async function GET() {
     ]),
   );
 
-  // Auth is always ready (hardcoded credentials)
   return Response.json({
     status: {
       auth: { ready: true, paused: false, missing: [] as string[] },
       ...status,
     },
-    hint: "Fill Supabase, email sending, and the mailbox. Website forms arrive as email — no webhook needed.",
+    hint: "Fill Supabase, email, mailbox, and Google Search Console. Website forms arrive as email — no webhook needed.",
   });
 }

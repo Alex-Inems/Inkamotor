@@ -9,8 +9,7 @@ export async function GET() {
 
   return Response.json({
     features: byId,
-    /** Always hide Google / Meta routes — no env required for those. */
-    hiddenNav: ["/search-console", "/analytics", "/ads/meta"],
-    hint: "Google + Meta are paused. Only Supabase, email sending, and the mailbox are checked.",
+    hiddenNav: ["/ads/meta"],
+    hint: "Meta Ads stays paused. Search Console is live once Google env is set.",
   });
 }

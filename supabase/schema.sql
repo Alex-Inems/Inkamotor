@@ -162,6 +162,18 @@ alter table sales enable row level security;
 alter table invoices enable row level security;
 alter table newsletter_campaigns enable row level security;
 
+create table if not exists newsletter_templates (
+  id text primary key,
+  name text not null,
+  subject text not null default '',
+  preview text not null default '',
+  html text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table newsletter_templates enable row level security;
+
 create table if not exists mail_translations (
   locale text not null,
   source_hash text not null,

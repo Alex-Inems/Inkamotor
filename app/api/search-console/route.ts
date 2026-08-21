@@ -1,23 +1,27 @@
-import { NextResponse } from "next/server";
-import type { ApiErrorBody } from "@/lib/ads/gsc-types";
+import { jsonError } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Google Search Console — PAUSED.
- * Does not read GOOGLE_* env. Live loader commented out until Google is enabled.
- */
 export async function GET() {
-  // const { loadSearchConsole, missingGoogleEnv } = await import("@/lib/ads/search-console");
-  // const missing = missingGoogleEnv();
-  // if (missing.length > 0) { ... }
-  // const payload = await loadSearchConsole();
-  // return NextResponse.json(payload);
+  const { loadSearchConsole, missingGoogleEnv } = await import(
+    "@/lib/ads/search-console"
+  );
+  const missing = missingGoogleEnv();
+  if (missing.length > 0) {
+    return jsonError(503, {
+      error: "Google Search Console is not configured yet.",
+      code: "missing_credentials",
+      missing,
+    });
+  }
 
-  const body: ApiErrorBody = {
-    error: "Google Search Console is paused (no Google env required).",
-    code: "missing_credentials",
-    missing: [],
-  };
-  return NextResponse.json(body, { status: 503 });
+  try {
+    const payload = await loadSearchConsole();
+    return Response.json(payload);
+  } catch (err) {
+    return jsonError(502, {
+      error: err instanceof Error ? err.message : "Search Console sync failed",
+      code: "sync_failed",
+    });
+  }
 }

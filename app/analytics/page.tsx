@@ -1,15 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { PausedFeature } from "@/components/paused-feature";
-import { useT } from "@/lib/i18n";
-
-/** Analytics / Google — paused. Live UI kept in analytics-live.tsx (not mounted). */
+/** Combined analytics (Meta) stays paused — organic search lives at Search Console. */
 export default function AnalyticsPage() {
-  const t = useT();
-  return (
-    <PausedFeature
-      title={t("pages.analytics.title")}
-      description={t("pages.analytics.pausedDescription")}
-    />
-  );
+  redirect("/search-console");
 }

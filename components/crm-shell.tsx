@@ -6,6 +6,7 @@ import { ColorStripe } from "./brand";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { ToastStack } from "./toast-stack";
+import { FirstRunTour } from "./first-run-tour";
 import { CrmProvider } from "@/lib/crm-store";
 import { LocaleProvider, useT } from "@/lib/i18n";
 
@@ -13,12 +14,11 @@ const pageKeys: Record<string, string> = {
   "/": "nav.overview",
   "/inbox": "nav.inbox",
   "/follow-ups": "nav.followUps",
-  // "/analytics": "nav.analytics", // Google paused
+  "/analytics": "nav.searchConsole",
   "/leads": "pages.leads.title",
   "/sales": "nav.sales",
   "/bookings": "nav.sales",
-  // "/search-console": "nav.searchConsole", // Google paused
-  // "/ads/meta": "nav.metaAds", // Meta paused
+  "/search-console": "nav.searchConsole",
   "/invoices": "nav.invoices",
   "/newsletter": "nav.newsletter",
   "/setup": "nav.setup",
@@ -107,8 +107,6 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
       />
       <div
         className={`min-w-0 lg:pl-60 ${
-          // The inbox is an app pane, not a document: fill the viewport and
-          // let its own panes scroll.
           fullBleed
             ? "flex h-[calc(var(--crm-vvh,100dvh)-6px)] flex-col"
             : ""
@@ -130,6 +128,10 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <ToastStack />
+      <FirstRunTour
+        onNeedNav={() => setNavOpen(true)}
+        onCloseNav={() => setNavOpen(false)}
+      />
     </div>
   );
 }

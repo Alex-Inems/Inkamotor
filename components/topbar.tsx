@@ -10,6 +10,7 @@ import {
   formatLastLogin,
   notifications as seedNotifications,
 } from "@/lib/session";
+import { startTour } from "@/lib/onboarding";
 
 export function Topbar({
   title,
@@ -212,6 +213,13 @@ export function Topbar({
                 </div>
 
                 <div className="py-1">
+                  <MenuItem
+                    label={t("tour.replay")}
+                    onClick={() => {
+                      setUserOpen(false);
+                      startTour();
+                    }}
+                  />
                   <MenuItem
                     label={t("topbar.accountSettings")}
                     onClick={() => {

@@ -142,6 +142,21 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
     invoices.error;
   if (err) throw new Error(err.message);
 
+  const today = todayIso();
+  const overdueIds = (invoices.data ?? [])
+    .filter(
+      (row) =>
+        String((row as { status?: string }).status) === "sent" &&
+        String((row as { due_date?: string }).due_date).slice(0, 10) < today,
+    )
+    .map((row) => String((row as { id: string }).id));
+  if (overdueIds.length) {
+    await sb
+      .from("invoices")
+      .update({ status: "overdue", updated_at: new Date().toISOString() })
+      .in("id", overdueIds);
+  }
+
   return {
     ...emptySnapshot(),
     siteInquiries: (inquiries.data ?? [])
@@ -154,9 +169,13 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
       .map((r) => mapFollowUp(r as Record<string, unknown>))
       .filter((f) => !/^fu_\d+$/.test(f.id)),
     sales: (sales.data ?? []).map((r) => mapSale(r as Record<string, unknown>)),
-    invoices: (invoices.data ?? []).map((r) =>
-      mapInvoice(r as Record<string, unknown>),
-    ),
+    invoices: (invoices.data ?? []).map((r) => {
+      const mapped = mapInvoice(r as Record<string, unknown>);
+      if (overdueIds.includes(mapped.id) && mapped.status === "sent") {
+        return { ...mapped, status: "overdue" as const };
+      }
+      return mapped;
+    }),
   };
 }
 

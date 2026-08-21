@@ -40,6 +40,7 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 1. Create a project at [supabase.com](https://supabase.com).
 2. **SQL Editor → New query** → paste and run `supabase/schema.sql` once.
 3. If the project already had an older schema, also run `supabase/mail_replies.sql` (stores sent replies).
+4. For saved newsletter templates, run `supabase/billing_and_templates.sql`.
 
 ## Environment variables
 

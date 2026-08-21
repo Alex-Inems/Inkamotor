@@ -40,8 +40,7 @@ export async function POST(request: Request) {
   }
 
   const subject =
-    body.subject?.trim() ||
-    `Invoice ${number} from ${invoiceCompany.name}`;
+    body.subject?.trim() || `Invoice ${number} from ${invoiceCompany.name}`;
 
   const html =
     body.htmlContent?.trim() ||
@@ -50,8 +49,7 @@ export async function POST(request: Request) {
       <p>Please find invoice <strong>${number}</strong>${
         body.totalLabel ? ` (${body.totalLabel})` : ""
       } from ${invoiceCompany.name}.</p>
-      <p>${invoiceCompany.paymentNote}</p>
-      <p>Open the CRM for the PDF preview, or reply to this email with any questions.</p>
+      <p>Reply to this email with any questions.</p>
       <p>— ${invoiceCompany.name}<br/>${invoiceCompany.email}<br/>${invoiceCompany.phone}</p>
     </div>`;
 

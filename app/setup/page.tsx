@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { btnSecondary } from "@/components/modal";
+import { btnPrimary, btnSecondary } from "@/components/modal";
 import { EmptyHint, PageHeader, Panel, StatusBadge } from "@/components/ui";
 import { useT } from "@/lib/i18n";
 
@@ -18,7 +18,14 @@ type SetupResponse = {
 
 const GUIDES: Record<
   string,
-  { titleKey: string; whereKey: string; keys: string[]; afterKey?: string }
+  {
+    titleKey: string;
+    whereKey: string;
+    keys: string[];
+    afterKey?: string;
+    connectHref?: string;
+    connectKey?: string;
+  }
 > = {
   auth: {
     titleKey: "pages.setup.authTitle",
@@ -48,6 +55,19 @@ const GUIDES: Record<
     whereKey: "pages.setup.imapWhere",
     keys: ["IMAP_HOST", "IMAP_PORT", "IMAP_USER", "IMAP_PASSWORD"],
     afterKey: "pages.setup.imapAfter",
+  },
+  googleSearchConsole: {
+    titleKey: "pages.setup.googleTitle",
+    whereKey: "pages.setup.googleWhere",
+    keys: [
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "GOOGLE_REFRESH_TOKEN",
+      "GSC_SITE_URL",
+    ],
+    afterKey: "pages.setup.googleAfter",
+    connectHref: "/api/google/oauth/start",
+    connectKey: "pages.setup.googleConnect",
   },
 };
 
@@ -144,6 +164,15 @@ export default function SetupPage() {
                   </ul>
                   {guide.afterKey ? (
                     <p className="mt-3 text-xs text-mute">{t(guide.afterKey)}</p>
+                  ) : null}
+                  {guide.connectHref &&
+                  guide.connectKey &&
+                  !st?.missing?.includes("GOOGLE_CLIENT_ID") &&
+                  !st?.missing?.includes("GOOGLE_CLIENT_SECRET") &&
+                  !ready ? (
+                    <a href={guide.connectHref} className={`${btnPrimary} mt-3 inline-flex`}>
+                      {t(guide.connectKey)}
+                    </a>
                   ) : null}
                 </Panel>
               );
