@@ -57,9 +57,11 @@ export function KpiCard({
 export function StatusBadge({
   tone,
   children,
+  compact,
 }: {
   tone: "neutral" | "info" | "success" | "warning" | "danger";
   children: React.ReactNode;
+  compact?: boolean;
 }) {
   const tones = {
     neutral: "bg-ash text-ink",
@@ -71,7 +73,11 @@ export function StatusBadge({
 
   return (
     <span
-      className={`inline-flex max-w-full px-2 py-0.5 text-xs font-semibold capitalize leading-snug ${tones[tone]}`}
+      className={`inline-flex shrink-0 whitespace-nowrap font-semibold capitalize leading-none ${
+        compact
+          ? "px-1.5 py-1 text-[10px] tracking-[0.04em]"
+          : "px-2 py-0.5 text-xs leading-snug"
+      } ${tones[tone]}`}
     >
       {children}
     </span>

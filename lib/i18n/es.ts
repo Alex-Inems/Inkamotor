@@ -158,6 +158,13 @@ export const es: Messages = {
     won: "Reservado",
     lost: "No reservado",
   },
+  stagesShort: {
+    new: "Nuevo",
+    contacted: "Habla",
+    qualified: "Listo",
+    won: "Hecho",
+    lost: "No",
+  },
   toast: {
     saleCreated: "Reserva creada",
     saveFailed: "No se pudo guardar",

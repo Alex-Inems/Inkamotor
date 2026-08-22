@@ -156,6 +156,13 @@ export const en = {
     won: "Booked",
     lost: "Not booked",
   },
+  stagesShort: {
+    new: "New",
+    contacted: "Talk",
+    qualified: "Ready",
+    won: "Booked",
+    lost: "Lost",
+  },
   toast: {
     saleCreated: "Booking created",
     saveFailed: "Save failed",

@@ -363,7 +363,7 @@ export default function OverviewPage() {
               {recentMail.map((m) => (
                 <li
                   key={m.id}
-                  className="flex flex-col gap-2 py-3.5 first:pt-0 last:pb-0 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between min-[520px]:gap-4"
+                  className="flex items-start justify-between gap-2 py-3.5 first:pt-0 last:pb-0"
                 >
                   <div className="min-w-0">
                     <p className="font-medium leading-snug break-words">
@@ -373,7 +373,7 @@ export default function OverviewPage() {
                       {m.subject}
                     </p>
                   </div>
-                  <StatusBadge tone={m.isRead ? "neutral" : "info"}>
+                  <StatusBadge compact tone={m.isRead ? "neutral" : "info"}>
                     {m.isRead ? t("common.read") : t("status.new")}
                   </StatusBadge>
                 </li>
@@ -399,7 +399,7 @@ export default function OverviewPage() {
               {recentLeads.map((lead) => (
                 <li
                   key={lead.id}
-                  className="flex flex-col gap-2 py-3.5 first:pt-0 last:pb-0 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between min-[520px]:gap-4"
+                  className="flex items-start justify-between gap-2 py-3.5 first:pt-0 last:pb-0"
                 >
                   <div className="min-w-0">
                     <p className="font-medium leading-snug break-words">{lead.name}</p>
@@ -407,8 +407,8 @@ export default function OverviewPage() {
                       {formatDate(lead.createdAt, locale)} · {lead.email}
                     </p>
                   </div>
-                  <StatusBadge tone={leadTone(lead.status)}>
-                    {t(`stages.${lead.status}`)}
+                  <StatusBadge compact tone={leadTone(lead.status)}>
+                    {t(`stagesShort.${lead.status}`)}
                   </StatusBadge>
                 </li>
               ))}
@@ -438,7 +438,7 @@ export default function OverviewPage() {
                       <td>{inv.number}</td>
                       <td>{inv.client}</td>
                       <td>
-                        <StatusBadge tone={invoiceTone(inv.status)}>
+                        <StatusBadge compact tone={invoiceTone(inv.status)}>
                           {t(`status.${inv.status}`)}
                         </StatusBadge>
                       </td>
