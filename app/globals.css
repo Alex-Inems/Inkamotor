@@ -25,6 +25,8 @@
   --chat-out-text: #fbf8f1;
   --background: var(--canvas);
   --foreground: var(--ink);
+  --crm-sidebar: 15rem;
+  --crm-gutter: max(0.75rem, env(safe-area-inset-left));
 }
 
 @theme inline {
@@ -118,7 +120,7 @@ button {
 
 .data-table {
   width: 100%;
-  min-width: 640px;
+  min-width: 36rem;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.875rem;
@@ -139,6 +141,18 @@ button {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+}
+
+@media (max-width: 639px) {
+  .data-table {
+    min-width: 28rem;
+    font-size: 0.8125rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 0.65rem 0.7rem;
+  }
 }
 
 .data-table tr:last-child td {
@@ -233,6 +247,10 @@ button {
 }
 
 @media (max-width: 640px) {
+  :root {
+    --crm-gutter: max(0.65rem, env(safe-area-inset-left));
+  }
+
   input,
   select,
   textarea {

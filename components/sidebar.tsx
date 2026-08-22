@@ -15,7 +15,6 @@ const nav = [
   { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
   { href: "/invoices", key: "nav.invoices", icon: InvoiceIcon, tour: "invoices" },
   { href: "/newsletter", key: "nav.newsletter", icon: NewsletterIcon, tour: "newsletter" },
-  { href: "/setup", key: "nav.setup", icon: SetupIcon, tour: "setup" },
 ];
 
 export function Sidebar({
@@ -34,17 +33,13 @@ export function Sidebar({
   return (
     <aside
       id="app-nav"
-      className={`fixed inset-y-0 left-0 z-[45] flex w-[min(20rem,88vw)] flex-col border-r border-line bg-ash pt-[6px] shadow-xl transition-transform duration-200 ease-out lg:bottom-0 lg:top-[6px] lg:z-40 lg:w-60 lg:translate-x-0 lg:pt-0 lg:shadow-none ${
+      className={`fixed inset-y-0 left-0 z-[45] flex w-[min(18.5rem,calc(100vw-2.75rem))] flex-col border-r border-line bg-ash pt-[6px] shadow-xl transition-transform duration-200 ease-out pl-[env(safe-area-inset-left)] lg:bottom-0 lg:top-[6px] lg:z-40 lg:w-[var(--crm-sidebar)] lg:translate-x-0 lg:pt-0 lg:shadow-none ${
         open ? "translate-x-0" : "pointer-events-none -translate-x-full lg:pointer-events-auto lg:translate-x-0"
       }`}
     >
       <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5">
         <div className="min-w-0">
           <InkamotoLogo className="h-7 w-auto" />
-          <p className="mt-2 font-display text-sm tracking-[0.14em] text-mute">
-            {t("brand.crm")}
-          </p>
-          <p className="truncate text-xs text-mute">{currentWorkspace.slug}</p>
         </div>
         <button
           type="button"
@@ -63,7 +58,7 @@ export function Sidebar({
         <p className="mt-0.5 truncate text-sm font-semibold text-ink">
           {currentWorkspace.name}
         </p>
-        <p className="text-xs text-mute">
+        <p className="text-xs leading-snug text-mute">
           {currentWorkspace.plan} · {currentWorkspace.region}
         </p>
       </div>
@@ -81,7 +76,7 @@ export function Sidebar({
               href={item.href}
               data-tour={item.tour}
               suppressHydrationWarning
-              className={`flex min-h-11 shrink-0 items-center gap-2.5 px-3 py-2.5 text-sm font-medium uppercase tracking-[0.06em] transition-colors ${
+              className={`flex min-h-11 shrink-0 items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors sm:text-sm ${
                 active
                   ? "bg-accent text-white"
                   : "text-mute hover:bg-panel hover:text-ink"
@@ -178,15 +173,24 @@ function InboxIcon({ active }: { active?: boolean }) {
 function SalesIcon({ active }: { active?: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M3 12.5 8 3.5l5 9H3Z"
+      <rect
+        x="2"
+        y="3.2"
+        width="12"
+        height="11"
+        rx="1"
         stroke="currentColor"
         strokeWidth="1.4"
-        strokeLinejoin="round"
         opacity={active === false ? 0.85 : 1}
       />
       <path
-        d="M6.2 9.5h3.6"
+        d="M2 6.5h12M5.2 1.8v2.6M10.8 1.8v2.6"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M5.2 9.2h1.2M7.4 9.2h1.2M9.6 9.2h1.2M5.2 11.4h1.2M7.4 11.4h1.2"
         stroke="currentColor"
         strokeWidth="1.4"
         strokeLinecap="round"
@@ -213,13 +217,19 @@ function LeadsIcon({ active }: { active: boolean }) {
 function SearchConsoleIcon({ active }: { active?: boolean }) {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M8 2.5v11M3.5 6.5 8 2.5l4.5 4M3.5 9.5 8 13.5l4.5-4"
+      <circle
+        cx="7"
+        cy="7"
+        r="4.2"
         stroke="currentColor"
         strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
         opacity={active === false ? 0.85 : 1}
+      />
+      <path
+        d="M10.2 10.2 14 14"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -276,27 +286,6 @@ function NewsletterIcon({ active }: { active?: boolean }) {
         stroke="currentColor"
         strokeWidth="1.4"
         strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SetupIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <circle
-        cx="8"
-        cy="8"
-        r="2.2"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        opacity={active === false ? 0.85 : 1}
-      />
-      <path
-        d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.2 3.2l1.3 1.3M11.5 11.5l1.3 1.3M12.8 3.2l-1.3 1.3M4.5 11.5l-1.3 1.3"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
       />
     </svg>
   );

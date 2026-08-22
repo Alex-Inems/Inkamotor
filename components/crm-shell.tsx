@@ -116,7 +116,7 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
         onClose={() => setNavOpen(false)}
       />
       <div
-        className={`min-w-0 lg:pl-60 ${
+        className={`min-w-0 lg:pl-[var(--crm-sidebar)] ${
           fullBleed
             ? "flex h-[calc(var(--crm-vvh,100dvh)-6px)] flex-col"
             : ""
@@ -131,7 +131,7 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
           className={
             fullBleed
               ? "min-h-0 flex-1 overflow-hidden"
-              : "mx-auto w-full max-w-7xl px-3 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8"
+              : "mx-auto w-full max-w-7xl px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8"
           }
         >
           {children}

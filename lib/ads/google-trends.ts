@@ -4,10 +4,17 @@ import type { TrendsPayload, TrendsPoint } from "@/lib/ads/gsc-types";
 const HOST = "trends.google.com";
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const HEADERS = {
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "User-Agent": UA,
+  Referer: "https://trends.google.com/trends/explore",
+};
 
 type Cache = { key: string; payload: TrendsPayload; expiresAt: number };
 
 let cache: Cache | null = null;
+const inflight = new Map<string, Promise<TrendsPayload>>();
 const CACHE_MS = 60 * 60 * 1000;
 
 export function defaultTrendsBrand() {
@@ -33,6 +40,10 @@ export function sanitizeTrendsTerms(input: string[], brand: string) {
   return [brand, ...unique];
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function cookieHeader(setCookie: string[], previous = "") {
   const next = setCookie.map((row) => row.split(";")[0]?.trim()).filter(Boolean);
   if (!previous) return next.join("; ");
@@ -48,10 +59,15 @@ function cookieHeader(setCookie: string[], previous = "") {
   return [...map.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
+function hasNid(cookie: string) {
+  return /(?:^|;\s*)NID=/.test(cookie);
+}
+
 function parseTrendsJson(text: string) {
-  const start = text.indexOf("{");
+  const cleaned = text.replace(/^\)\]\}'?,?\s*/, "");
+  const start = cleaned.indexOf("{");
   if (start < 0) throw new Error("Google Trends returned no data");
-  return JSON.parse(text.slice(start)) as Record<string, unknown>;
+  return JSON.parse(cleaned.slice(start)) as Record<string, unknown>;
 }
 
 function seriesAverages(
@@ -77,9 +93,7 @@ async function trendsGet(path: string, cookie: string) {
       hostname: HOST,
       path: currentPath,
       headers: {
-        Accept: "application/json, text/plain, */*",
-        "User-Agent": UA,
-        Referer: "https://trends.google.com/trends/explore",
+        ...HEADERS,
         ...(currentCookie ? { Cookie: currentCookie } : {}),
       },
     });
@@ -100,12 +114,26 @@ async function trendsGet(path: string, cookie: string) {
   throw new Error("Google Trends redirected too many times");
 }
 
+async function warmSession() {
+  const paths = [
+    "/_/TrendsUi/data/batchexecute",
+    "/trends/explore?hl=en-US",
+    "/trends/",
+  ];
+  let cookie = "";
+  for (const path of paths) {
+    const res = await trendsGet(path, cookie);
+    cookie = res.cookie;
+    if (hasNid(cookie)) return cookie;
+  }
+  return cookie;
+}
+
 async function fetchTrends(terms: string[], geo: string): Promise<TrendsPayload> {
-  const warmup = await trendsGet(
-    geo ? `/trends/?geo=${encodeURIComponent(geo)}` : "/trends/",
-    "",
-  );
-  let cookie = warmup.cookie;
+  let cookie = await warmSession();
+  if (!hasNid(cookie)) {
+    throw new Error("Google Trends did not start a session");
+  }
 
   const hl = "en-US";
   const tz = "-60";
@@ -119,7 +147,13 @@ async function fetchTrends(terms: string[], geo: string): Promise<TrendsPayload>
     property: "",
   };
   const explorePath = `/trends/api/explore?hl=${hl}&tz=${tz}&req=${encodeURIComponent(JSON.stringify(exploreReq))}`;
-  const explored = await trendsGet(explorePath, cookie);
+
+  let explored = await trendsGet(explorePath, cookie);
+  if (explored.status === 429) {
+    await sleep(800);
+    cookie = await warmSession();
+    explored = await trendsGet(explorePath, cookie);
+  }
   cookie = explored.cookie;
 
   if (explored.status >= 400) {
@@ -132,13 +166,20 @@ async function fetchTrends(terms: string[], geo: string): Promise<TrendsPayload>
     token?: string;
     request?: unknown;
   }>;
-  const series = widgets.find((w) => w.id === "TIMESERIES");
+  const series =
+    widgets.find((w) => w.id === "TIMESERIES") ??
+    widgets.find((w) => w.token && w.request);
   if (!series?.token || !series.request) {
     throw new Error("Google Trends did not return a timeline");
   }
 
+  await sleep(400);
   const dataPath = `/trends/api/widgetdata/multiline?hl=${hl}&tz=${tz}&req=${encodeURIComponent(JSON.stringify(series.request))}&token=${encodeURIComponent(series.token)}`;
-  const data = await trendsGet(dataPath, cookie);
+  let data = await trendsGet(dataPath, cookie);
+  if (data.status === 429) {
+    await sleep(800);
+    data = await trendsGet(dataPath, cookie);
+  }
   if (data.status >= 400) {
     throw new Error("Google Trends is busy right now");
   }
@@ -168,6 +209,29 @@ async function fetchTrends(terms: string[], geo: string): Promise<TrendsPayload>
   };
 }
 
+async function loadTrendsUncached(
+  terms: string[],
+  geo: string,
+): Promise<TrendsPayload> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await sleep(700 * attempt);
+    try {
+      let payload = await fetchTrends(terms, geo);
+      if (payload.points.length === 0 && geo) {
+        await sleep(400);
+        payload = await fetchTrends(terms, "");
+      }
+      return payload;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Could not load search interest from Google right now");
+}
+
 export async function loadGoogleTrends(
   extraTerms: string[],
   geo = defaultTrendsGeo(),
@@ -179,10 +243,17 @@ export async function loadGoogleTrends(
     return cache.payload;
   }
 
-  let payload = await fetchTrends(terms, geo);
-  if (payload.points.length === 0 && geo) {
-    payload = await fetchTrends(terms, "");
-  }
-  cache = { key, payload, expiresAt: Date.now() + CACHE_MS };
-  return payload;
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const promise = loadTrendsUncached(terms, geo)
+    .then((payload) => {
+      cache = { key, payload, expiresAt: Date.now() + CACHE_MS };
+      return payload;
+    })
+    .finally(() => {
+      inflight.delete(key);
+    });
+  inflight.set(key, promise);
+  return promise;
 }

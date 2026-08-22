@@ -168,14 +168,6 @@ export default function OverviewPage() {
     return (
       <div className="border border-wine/40 bg-wine/10 px-4 py-3 text-sm">
         <p className="font-semibold text-pink">{loadError}</p>
-        <p className="mt-2 text-mute">
-          {t("overview.setupBefore")}{" "}
-          <Link href="/setup" className="text-sand hover:text-gold">
-            {t("overview.setupLink")}
-          </Link>{" "}
-          {t("overview.setupAfter")}{" "}
-          <code className="text-sand">supabase/schema.sql</code>.
-        </p>
       </div>
     );
   }
@@ -184,36 +176,36 @@ export default function OverviewPage() {
     <div>
       <PageHeader title={hello} />
 
-      <div className="mb-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <div className="border border-green/30 bg-[linear-gradient(135deg,#24383a_0%,#252422_55%,#1c1b19_100%)] p-5 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sand">
+      <div className="mb-4 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="border border-green/30 bg-[linear-gradient(135deg,#24383a_0%,#252422_55%,#1c1b19_100%)] px-5 py-5 sm:px-6 sm:py-6 lg:px-7 lg:py-7">
+          <p className="text-[0.7rem] font-semibold uppercase leading-snug tracking-[0.14em] text-sand">
             {t("overview.profitability")}
           </p>
-          <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-3">
-            <div>
-              <p className="text-sm text-mute">{t("overview.netProfit")}</p>
-              <p className="font-display text-3xl tracking-wide text-gold sm:text-4xl">
+          <div className="mt-4 grid grid-cols-1 gap-x-6 gap-y-5 min-[480px]:grid-cols-2">
+            <div className="min-w-0">
+              <p className="text-sm leading-snug text-mute">{t("overview.netProfit")}</p>
+              <p className="mt-1 font-display text-3xl leading-none tracking-wide break-words text-gold sm:text-4xl">
                 {money(stats.netProfit)}
               </p>
             </div>
-            <div>
-              <p className="text-sm text-mute">{t("overview.profitMargin")}</p>
-              <p className="font-display text-2xl tracking-wide text-gold">
+            <div className="min-w-0">
+              <p className="text-sm leading-snug text-mute">{t("overview.profitMargin")}</p>
+              <p className="mt-1 font-display text-2xl leading-none tracking-wide break-words text-gold">
                 {formatPercent(stats.profitMargin)}
               </p>
             </div>
-            <div>
-              <p className="text-sm text-mute">{t("overview.grossProfit")}</p>
-              <p className="font-display text-2xl font-bold">
+            <div className="min-w-0">
+              <p className="text-sm leading-snug text-mute">{t("overview.grossProfit")}</p>
+              <p className="mt-1 font-display text-2xl font-bold leading-none break-words">
                 {money(stats.grossProfit)}
               </p>
             </div>
-            <div>
-              <p className="text-sm text-mute">{t("overview.trailingProfit")}</p>
-              <p className="font-display text-2xl font-bold">
+            <div className="min-w-0">
+              <p className="text-sm leading-snug text-mute">{t("overview.trailingProfit")}</p>
+              <p className="mt-1 font-display text-2xl font-bold leading-none break-words">
                 {money(stats.trailingProfit)}
               </p>
-              <p className="mt-1 text-xs text-mute">
+              <p className="mt-2 text-xs leading-relaxed text-mute">
                 {t("overview.trailingHint", {
                   sales: money(stats.periodRevenue),
                   ads: money(stats.periodAdSpend),
@@ -222,7 +214,7 @@ export default function OverviewPage() {
               </p>
             </div>
           </div>
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-mute">
+          <p className="mt-5 text-sm leading-relaxed text-mute">
             {t("overview.surplus", {
               sales: money(stats.salesRevenue),
               cogs: money(stats.cogs),
@@ -233,41 +225,41 @@ export default function OverviewPage() {
             })}
           </p>
         </div>
-        <div className="border border-line bg-panel p-5 sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mute">
+        <div className="border border-line bg-panel px-5 py-5 sm:px-6 sm:py-6 lg:px-7 lg:py-7">
+          <p className="text-[0.7rem] font-semibold uppercase leading-snug tracking-[0.14em] text-mute">
             {t("overview.pnl")}
           </p>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-mute">{t("overview.salesRevenue")}</dt>
-              <dd className="font-semibold">{money(stats.salesRevenue)}</dd>
+          <dl className="mt-4 space-y-3.5 text-sm">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <dt className="min-w-0 leading-snug text-mute">{t("overview.salesRevenue")}</dt>
+              <dd className="shrink-0 font-semibold tabular-nums">{money(stats.salesRevenue)}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-mute">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <dt className="min-w-0 leading-snug text-mute">
                 {t("overview.cogs")}
                 {stats.cogsRate > 0
                   ? ` (${Math.round(stats.cogsRate * 100)}%)`
                   : ""}
               </dt>
-              <dd className="font-semibold text-mute">−{money(stats.cogs)}</dd>
+              <dd className="shrink-0 font-semibold tabular-nums text-mute">−{money(stats.cogs)}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-mute">{t("overview.grossProfit")}</dt>
-              <dd className="font-semibold">{money(stats.grossProfit)}</dd>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <dt className="min-w-0 leading-snug text-mute">{t("overview.grossProfit")}</dt>
+              <dd className="shrink-0 font-semibold tabular-nums">{money(stats.grossProfit)}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <dt className="text-mute">{t("overview.adSpend")}</dt>
-              <dd className="font-semibold text-mute">−{money(stats.adSpend)}</dd>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <dt className="min-w-0 leading-snug text-mute">{t("overview.adSpend")}</dt>
+              <dd className="shrink-0 font-semibold tabular-nums text-mute">−{money(stats.adSpend)}</dd>
             </div>
-            <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
-              <dt className="font-semibold">{t("overview.netProfit")}</dt>
-              <dd className="font-semibold text-gold">{money(stats.netProfit)}</dd>
+            <div className="flex flex-col gap-1 border-t border-line pt-3.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+              <dt className="min-w-0 font-semibold leading-snug">{t("overview.netProfit")}</dt>
+              <dd className="shrink-0 font-semibold tabular-nums text-gold">{money(stats.netProfit)}</dd>
             </div>
           </dl>
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label={t("overview.openLeads")}
           value={num(stats.openLeads)}
@@ -297,8 +289,8 @@ export default function OverviewPage() {
         />
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+      <div className="mt-6 grid gap-4 xl:grid-cols-5">
+        <div className="xl:col-span-3">
           {analyticsSeries.length > 0 ? (
             <LineChart
               title={t("overview.revenueLeads")}
@@ -314,7 +306,7 @@ export default function OverviewPage() {
             <EmptyHint>{t("overview.noSalesLeads")}</EmptyHint>
           )}
         </div>
-        <div className="lg:col-span-2">
+        <div className="xl:col-span-2">
           {channelMix.length > 0 ? (
             <DonutChart title={t("overview.leadSourceMix")} segments={channelMix} />
           ) : (
@@ -336,18 +328,15 @@ export default function OverviewPage() {
           <EmptyHint>{t("overview.monthlyFromSales")}</EmptyHint>
         )}
         <Panel title={t("overview.quickLinks")}>
-          <div className="flex flex-col gap-2 text-sm">
-            <Link href="/inbox" className="text-sand hover:text-gold">
+          <div className="flex flex-col gap-1 text-sm">
+            <Link href="/inbox" className="py-1.5 leading-relaxed text-sand hover:text-gold">
               {t("overview.inboxReplies")}
             </Link>
-            <Link href="/newsletter" className="text-sand hover:text-gold">
+            <Link href="/newsletter" className="py-1.5 leading-relaxed text-sand hover:text-gold">
               {t("nav.newsletter")}
             </Link>
-            <Link href="/invoices" className="text-sand hover:text-gold">
+            <Link href="/invoices" className="py-1.5 leading-relaxed text-sand hover:text-gold">
               {t("nav.invoices")}
-            </Link>
-            <Link href="/setup" className="text-sand hover:text-gold">
-              {t("nav.setup")}
             </Link>
           </div>
         </Panel>
@@ -374,13 +363,15 @@ export default function OverviewPage() {
               {recentMail.map((m) => (
                 <li
                   key={m.id}
-                  className="flex items-start justify-between gap-3 py-3"
+                  className="flex flex-col gap-2 py-3.5 first:pt-0 last:pb-0 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between min-[520px]:gap-4"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-medium">
+                    <p className="font-medium leading-snug break-words">
                       {m.fromName || m.fromEmail}
                     </p>
-                    <p className="truncate text-xs text-mute">{m.subject}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-mute break-words">
+                      {m.subject}
+                    </p>
                   </div>
                   <StatusBadge tone={m.isRead ? "neutral" : "info"}>
                     {m.isRead ? t("common.read") : t("status.new")}
@@ -408,11 +399,11 @@ export default function OverviewPage() {
               {recentLeads.map((lead) => (
                 <li
                   key={lead.id}
-                  className="flex items-start justify-between gap-3 py-3"
+                  className="flex flex-col gap-2 py-3.5 first:pt-0 last:pb-0 min-[520px]:flex-row min-[520px]:items-start min-[520px]:justify-between min-[520px]:gap-4"
                 >
                   <div className="min-w-0">
-                    <p className="truncate font-medium">{lead.name}</p>
-                    <p className="truncate text-xs text-mute">
+                    <p className="font-medium leading-snug break-words">{lead.name}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-mute break-words">
                       {formatDate(lead.createdAt, locale)} · {lead.email}
                     </p>
                   </div>

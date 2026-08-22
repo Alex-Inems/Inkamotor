@@ -26,7 +26,8 @@ export function googleHttps(options: {
         path: options.path,
         method,
         headers,
-        family: 4,
+        ...(process.platform === "win32" ? { family: 4 } : {}),
+        timeout: 20000,
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -46,6 +47,9 @@ export function googleHttps(options: {
         });
       },
     );
+    req.on("timeout", () => {
+      req.destroy(new Error("Google request timed out"));
+    });
     req.on("error", (err) => {
       reject(
         new Error(

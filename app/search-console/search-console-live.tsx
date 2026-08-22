@@ -99,8 +99,10 @@ export default function SearchConsoleLivePage() {
     const controller = new AbortController();
     setTrendsLoading(true);
     setTrendsError(false);
-    const q = compareTerms.map((term) => encodeURIComponent(term)).join(",");
-    fetch(`/api/search-console/trends${q ? `?q=${q}` : ""}`, {
+    const params = new URLSearchParams();
+    if (compareTerms.length) params.set("q", compareTerms.join(","));
+    const qs = params.toString();
+    fetch(`/api/search-console/trends${qs ? `?${qs}` : ""}`, {
       signal: controller.signal,
     })
       .then(async (res) => {
@@ -288,7 +290,7 @@ export default function SearchConsoleLivePage() {
           </div>
 
           <Panel title={t("pages.searchConsole.vsTypicalTitle")}>
-            <div className="space-y-4 px-4 py-4 sm:px-5">
+            <div className="space-y-4">
               <p className="text-sm leading-relaxed text-ink">
                 {t("pages.searchConsole.vsTypicalBody", {
                   rank: snapshot.position.toFixed(1),
@@ -461,7 +463,7 @@ export default function SearchConsoleLivePage() {
       ) : null}
 
       <Panel title={t("pages.searchConsole.trendsTitle")}>
-        <div className="space-y-4 px-4 py-4 sm:px-5">
+        <div className="space-y-4">
           <p className="text-sm text-mute">{t("pages.searchConsole.trendsNote")}</p>
           <div className="flex flex-wrap items-center gap-2">
             {trends?.terms[0] ? (
@@ -684,7 +686,7 @@ function SimpleList({
       ) : (
         <ol className="divide-y divide-line">
           {rows.map((row, i) => (
-            <li key={row.key} className="px-4 py-3 sm:px-5">
+            <li key={row.key} className="py-3 first:pt-0 last:pb-0">
               <div className="flex items-center gap-3">
                 <span className="w-5 shrink-0 text-right font-display text-sm text-mute">
                   {i + 1}

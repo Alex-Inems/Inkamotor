@@ -52,7 +52,7 @@ export function LineChart({
 
   if (points.length === 0) {
     return (
-      <div className="border border-line bg-panel p-4 sm:p-5">
+      <div className="border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mute">
           {title}
         </p>
@@ -62,13 +62,13 @@ export function LineChart({
   }
 
   return (
-    <div className="border border-line bg-panel p-4 sm:p-5">
+    <div className="border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
       <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mute">
             {title}
           </p>
-          <p className="mt-1 font-display text-xl font-bold">
+          <p className="mt-1 font-display text-xl font-bold leading-tight break-words">
             {formatA(latest.a)}
             {bLabel && latest.b != null ? (
               <span className="ml-2 text-sm font-medium text-mute">
@@ -154,7 +154,7 @@ export function BarChart({
   const max = Math.max(...points.map((p) => p.value), 1);
 
   return (
-    <div className="border border-line bg-panel p-4 sm:p-5">
+    <div className="border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mute">
         {title}
       </p>
@@ -196,7 +196,7 @@ export function DonutChart({
   let offset = 0;
 
   return (
-    <div className="border border-line bg-panel p-4 sm:p-5">
+    <div className="border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mute">
         {title}
       </p>
@@ -243,13 +243,13 @@ export function DonutChart({
         </svg>
         <ul className="w-full space-y-2 text-sm">
           {segments.map((seg) => (
-            <li key={seg.label} className="flex items-center justify-between gap-3">
-              <span className="inline-flex items-center gap-2">
+            <li key={seg.label} className="flex items-start justify-between gap-3">
+              <span className="inline-flex min-w-0 items-start gap-2 leading-snug">
                 <span
-                  className="h-2.5 w-2.5 shrink-0"
+                  className="mt-1.5 h-2.5 w-2.5 shrink-0"
                   style={{ background: seg.color }}
                 />
-                {seg.label}
+                <span className="break-words">{seg.label}</span>
               </span>
               <span className="font-semibold">
                 {typeof seg.value === "number" && seg.value <= 100
@@ -305,7 +305,7 @@ export function GroupedBarChart({
   }
 
   return (
-    <div className="border border-line bg-panel p-4 sm:p-5">
+    <div className="border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mute">
           {title}
@@ -402,7 +402,7 @@ export function ConversionFunnel({
   ];
 
   return (
-    <div className="border border-line bg-panel p-4 sm:p-5">
+    <div className="border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
       <p className="text-xs font-semibold uppercase tracking-[0.14em] text-mute">
         {title}
       </p>

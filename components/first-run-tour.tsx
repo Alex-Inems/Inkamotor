@@ -23,7 +23,6 @@ const ACCENT: Record<TourStepId, string> = {
   bookings: "#9f2627",
   invoices: "#d0ad74",
   newsletter: "#65814f",
-  setup: "#e1736c",
   done: "#ecbb5a",
 };
 

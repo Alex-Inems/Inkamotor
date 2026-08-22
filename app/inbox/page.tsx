@@ -475,7 +475,7 @@ export default function InboxPage() {
                     ? t("pages.inbox.unreadChats", { n: tab.count })
                     : undefined
               }
-              className={`flex min-w-0 items-center justify-center gap-1 px-1 py-2.5 text-[11px] font-semibold sm:text-xs ${
+              className={`flex min-w-0 items-center justify-center gap-0.5 px-0.5 py-2.5 text-[10px] font-semibold min-[400px]:gap-1 min-[400px]:px-1 min-[400px]:text-[11px] sm:text-xs ${
                 filter === tab.id
                   ? "border-b-2 border-gold text-ink"
                   : "border-b-2 border-transparent text-mute hover:text-ink"

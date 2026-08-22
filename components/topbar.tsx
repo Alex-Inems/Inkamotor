@@ -61,7 +61,10 @@ export function Topbar({
           >
             <MenuIcon />
           </button>
-          <InkamotoLogo className="h-6 w-auto lg:hidden" />
+          <InkamotoLogo className="hidden h-6 w-auto min-[380px]:block lg:hidden" />
+          <p className="min-w-0 truncate text-sm font-semibold text-ink lg:hidden">
+            {title ?? currentWorkspace.name}
+          </p>
           <div className="hidden min-w-0 lg:block">
             <p className="truncate text-sm font-semibold text-ink">
               {title ?? currentWorkspace.name}
@@ -76,11 +79,11 @@ export function Topbar({
           <div>
             <LanguageSwitcher />
           </div>
-          <div className="relative hidden md:block">
+          <div className="relative hidden xl:block">
             <input
               type="search"
               placeholder={t("topbar.search")}
-              className="w-44 border border-line bg-ash py-2 pl-3 pr-3 text-sm outline-none transition-colors placeholder:text-mute/70 focus:border-gold md:w-56 lg:w-72"
+              className="w-56 border border-line bg-ash py-2 pl-3 pr-3 text-sm outline-none transition-colors placeholder:text-mute/70 focus:border-gold 2xl:w-72"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   pushToast(t("topbar.searchReady"));
@@ -161,7 +164,7 @@ export function Topbar({
                 user={currentUser}
                 className="h-8 w-8 shrink-0 text-xs"
               />
-              <span className="hidden text-left sm:block">
+              <span className="hidden text-left md:block">
                 <span className="block text-sm font-semibold leading-tight text-ink">
                   {currentUser.name}
                 </span>
@@ -323,7 +326,7 @@ function ChevronIcon() {
       viewBox="0 0 12 12"
       fill="none"
       aria-hidden
-      className="hidden text-mute sm:block"
+      className="hidden text-mute md:block"
     >
       <path
         d="M3 4.5 6 7.5 9 4.5"

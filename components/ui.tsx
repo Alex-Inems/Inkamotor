@@ -10,7 +10,7 @@ export function PageHeader({
   return (
     <div className="mb-5 flex flex-col gap-3 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="font-display text-[1.75rem] leading-none tracking-wide break-words text-ink sm:text-4xl">
+        <h1 className="font-display text-[1.6rem] leading-none tracking-wide break-words text-ink sm:text-3xl lg:text-4xl">
           {title}
         </h1>
         {description ? (
@@ -38,14 +38,18 @@ export function KpiCard({
   hint?: React.ReactNode;
 }) {
   return (
-    <div className="border border-line bg-panel p-4 sm:p-5">
-      <p className="text-xs font-medium uppercase tracking-[0.14em] text-mute">
+    <div className="h-full border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
+      <p className="text-[0.7rem] font-medium uppercase leading-snug tracking-[0.14em] text-mute">
         {label}
       </p>
-      <p className="mt-2 font-display text-2xl tracking-wide break-all sm:text-3xl sm:break-normal">
+      <p className="mt-2.5 font-display text-[1.45rem] leading-tight tracking-wide break-words sm:text-2xl lg:text-3xl">
         {value}
       </p>
-      {hint ? <div className="mt-1 text-xs text-mute">{hint}</div> : null}
+      {hint ? (
+        <div className="mt-2 text-xs leading-relaxed text-mute break-words">
+          {hint}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -67,7 +71,7 @@ export function StatusBadge({
 
   return (
     <span
-      className={`inline-flex px-2 py-0.5 text-xs font-semibold capitalize ${tones[tone]}`}
+      className={`inline-flex max-w-full px-2 py-0.5 text-xs font-semibold capitalize leading-snug ${tones[tone]}`}
     >
       {children}
     </span>
@@ -86,18 +90,22 @@ export function Panel({
   return (
     <section className="border border-line bg-panel">
       {title ? (
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-          <h2 className="min-w-0 truncate font-display text-base tracking-wide sm:text-lg">
+        <div className="flex flex-col gap-2 border-b border-line px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-6">
+          <h2 className="min-w-0 font-display text-base leading-snug tracking-wide break-words sm:text-lg">
             {title}
           </h2>
           {action ? <div className="shrink-0">{action}</div> : null}
         </div>
       ) : null}
-      {children}
+      <div className="px-5 py-4 sm:px-6 sm:py-5">{children}</div>
     </section>
   );
 }
 
 export function EmptyHint({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-8 text-center text-sm text-mute">{children}</p>;
+  return (
+    <p className="px-1 py-6 text-center text-sm leading-relaxed text-mute">
+      {children}
+    </p>
+  );
 }

@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { googleHttps } from "@/lib/ads/google-http";
 import { isLocale, type Locale } from "@/lib/i18n/config";
 import { getSupabase } from "@/lib/supabase/server";
 
@@ -67,15 +68,25 @@ async function translateGoogle(text: string, target: Locale): Promise<string> {
   const parts = chunkText(text);
   const translated: string[] = [];
   for (const part of parts) {
-    const url = new URL("https://translate.googleapis.com/translate_a/single");
-    url.searchParams.set("client", "gtx");
-    url.searchParams.set("sl", "auto");
-    url.searchParams.set("tl", target);
-    url.searchParams.set("dt", "t");
-    url.searchParams.set("q", part);
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`translate ${res.status}`);
-    const data = (await res.json()) as unknown;
+    const query = new URLSearchParams({
+      client: "gtx",
+      sl: "auto",
+      tl: target,
+      dt: "t",
+      q: part,
+    });
+    const { status, text: body } = await googleHttps({
+      hostname: "translate.googleapis.com",
+      path: `/translate_a/single?${query}`,
+      headers: { Accept: "application/json" },
+    });
+    if (status >= 400) throw new Error(`translate ${status}`);
+    let data: unknown;
+    try {
+      data = JSON.parse(body);
+    } catch {
+      throw new Error("translate parse");
+    }
     if (!Array.isArray(data) || !Array.isArray(data[0])) {
       throw new Error("translate parse");
     }
@@ -91,24 +102,27 @@ async function translateGoogle(text: string, target: Locale): Promise<string> {
 async function translateDeepL(text: string, target: Locale): Promise<string> {
   const key = process.env.DEEPL_API_KEY?.trim();
   if (!key) throw new Error("no deepl");
-  const endpoint = key.endsWith(":fx")
-    ? "https://api-free.deepl.com/v2/translate"
-    : "https://api.deepl.com/v2/translate";
   const body = new URLSearchParams();
   for (const part of chunkText(text, 4000)) body.append("text", part);
   body.set("target_lang", target.toUpperCase());
-  const res = await fetch(endpoint, {
+  const host = key.endsWith(":fx") ? "api-free.deepl.com" : "api.deepl.com";
+  const { status, text: raw } = await googleHttps({
+    hostname: host,
+    path: "/v2/translate",
     method: "POST",
     headers: {
       Authorization: `DeepL-Auth-Key ${key}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
-    body,
+    body: body.toString(),
   });
-  if (!res.ok) throw new Error(`deepl ${res.status}`);
-  const json = (await res.json()) as {
-    translations?: { text?: string }[];
-  };
+  if (status >= 400) throw new Error(`deepl ${status}`);
+  let json: { translations?: { text?: string }[] };
+  try {
+    json = JSON.parse(raw) as { translations?: { text?: string }[] };
+  } catch {
+    throw new Error("deepl parse");
+  }
   return (json.translations ?? []).map((row) => row.text ?? "").join("");
 }
 
