@@ -9,6 +9,7 @@ import { ToastStack } from "./toast-stack";
 import { FirstRunTour } from "./first-run-tour";
 import { CrmProvider } from "@/lib/crm-store";
 import { LocaleProvider, useT } from "@/lib/i18n";
+import { InboxNotificationsProvider } from "@/lib/inbox-notifications";
 import { SessionUserProvider } from "@/lib/session-user";
 import type { SessionUser } from "@/lib/session";
 
@@ -42,7 +43,9 @@ export function CrmShell({
     <LocaleProvider>
       <SessionUserProvider user={user}>
         <CrmProvider>
-          <CrmShellInner>{children}</CrmShellInner>
+          <InboxNotificationsProvider>
+            <CrmShellInner>{children}</CrmShellInner>
+          </InboxNotificationsProvider>
         </CrmProvider>
       </SessionUserProvider>
     </LocaleProvider>

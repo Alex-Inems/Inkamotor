@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { InkamotoLogo } from "@/components/brand";
 import { UserAvatar } from "@/components/user-avatar";
-import { LanguageSwitcher, useLocale } from "@/lib/i18n";
+import { LanguageSwitcher, localeMeta, useLocale, type Locale } from "@/lib/i18n";
 import { useCrm } from "@/lib/crm-store";
+import { useInboxNotifications } from "@/lib/inbox-notifications";
 import { useSessionUser } from "@/lib/session-user";
-import {
-  currentWorkspace,
-  formatLastLogin,
-  notifications as seedNotifications,
-} from "@/lib/session";
+import { currentWorkspace, formatLastLogin } from "@/lib/session";
 import { startTour } from "@/lib/onboarding";
 
 export function Topbar({
@@ -27,11 +25,9 @@ export function Topbar({
   const currentUser = useSessionUser();
   const [userOpen, setUserOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState(seedNotifications);
   const userRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
-
-  const unread = notifications.filter((n) => n.unread).length;
+  const { unread, items: notifications, dismissAll } = useInboxNotifications();
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -102,49 +98,102 @@ export function Topbar({
                 setNotifOpen((v) => !v);
                 setUserOpen(false);
               }}
-              className="relative flex h-11 w-11 items-center justify-center border border-transparent text-mute transition-colors hover:border-line hover:bg-ash hover:text-ink"
+              className={`relative flex h-11 w-11 items-center justify-center border transition-colors ${
+                notifOpen
+                  ? "border-line bg-ash text-ink"
+                  : unread > 0
+                    ? "border-transparent text-gold hover:border-line hover:bg-ash"
+                    : "border-transparent text-mute hover:border-line hover:bg-ash hover:text-ink"
+              }`}
             >
               <BellIcon />
               {unread > 0 ? (
-                <span className="absolute right-1.5 top-1.5 h-2 w-2 bg-pink" />
+                <span className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center bg-pink px-1 text-[10px] font-bold leading-none text-white">
+                  {unread > 9 ? "9+" : unread}
+                </span>
               ) : null}
             </button>
 
             {notifOpen ? (
-              <div className="absolute right-0 top-full z-40 mt-2 w-[min(calc(100vw-1.5rem),22rem)] border border-line bg-panel shadow-xl">
-                <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                  <p className="text-sm font-semibold">{t("topbar.notifications")}</p>
-                  <button
-                    type="button"
-                    className="text-xs font-semibold uppercase tracking-[0.08em] text-sand hover:text-gold"
-                    onClick={() =>
-                      setNotifications((prev) =>
-                        prev.map((n) => ({ ...n, unread: false })),
-                      )
-                    }
-                  >
-                    {t("topbar.markAllRead")}
-                  </button>
-                </div>
-                <ul className="max-h-80 overflow-y-auto">
-                  {notifications.map((n) => (
-                    <li
-                      key={n.id}
-                      className={`border-b border-line px-4 py-3 last:border-b-0 ${
-                        n.unread ? "bg-accent-soft" : ""
-                      }`}
+              <div className="absolute right-0 top-full z-40 mt-2 w-[min(calc(100vw-1.5rem),24rem)] border border-line bg-panel shadow-xl">
+                <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3.5">
+                  <div className="min-w-0">
+                    <p className="font-display text-lg tracking-wide text-ink">
+                      {t("topbar.notifications")}
+                    </p>
+                    <p className="mt-0.5 text-xs text-mute">
+                      {unread > 0
+                        ? t("overview.inboxHint")
+                        : t("topbar.emptyNotificationsHint")}
+                    </p>
+                  </div>
+                  {notifications.length > 0 ? (
+                    <button
+                      type="button"
+                      className="shrink-0 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-sand hover:text-gold"
+                      onClick={dismissAll}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="text-sm font-medium text-ink">{n.title}</p>
-                        {n.unread ? (
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 bg-gold" />
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 text-xs text-mute">{n.body}</p>
-                      <p className="mt-1 text-[11px] text-mute">{n.time}</p>
-                    </li>
-                  ))}
-                </ul>
+                      {t("topbar.markAllRead")}
+                    </button>
+                  ) : null}
+                </div>
+                {notifications.length === 0 ? (
+                  <div className="flex flex-col items-center px-6 py-10 text-center">
+                    <span className="flex h-11 w-11 items-center justify-center border border-line bg-ash text-sand">
+                      <InboxGlyph />
+                    </span>
+                    <p className="mt-3 text-sm font-semibold text-ink">
+                      {t("topbar.emptyNotifications")}
+                    </p>
+                    <p className="mt-1 max-w-[16rem] text-xs leading-relaxed text-mute">
+                      {t("topbar.emptyNotificationsHint")}
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="max-h-[min(24rem,60vh)] overflow-y-auto">
+                    {notifications.map((n) => {
+                      const name = n.fromName || n.fromEmail;
+                      return (
+                        <li key={n.id} className="border-b border-line last:border-b-0">
+                          <Link
+                            href={`/inbox?chat=${encodeURIComponent(n.fromEmail)}`}
+                            onClick={() => setNotifOpen(false)}
+                            className="flex gap-3 px-4 py-3.5 transition-colors hover:bg-ash"
+                          >
+                            <SenderMark name={name} email={n.fromEmail} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline justify-between gap-3">
+                                <p className="truncate text-sm font-semibold text-ink">
+                                  {name}
+                                </p>
+                                <p className="shrink-0 text-[11px] text-gold">
+                                  {formatNotifTime(n.receivedAt, locale)}
+                                </p>
+                              </div>
+                              <p className="mt-0.5 truncate text-sm text-ink/90">
+                                {n.subject || t("pages.inbox.messages")}
+                              </p>
+                              {n.preview ? (
+                                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-mute">
+                                  {n.preview}
+                                </p>
+                              ) : null}
+                            </div>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+                <div className="border-t border-line p-3">
+                  <Link
+                    href="/inbox"
+                    onClick={() => setNotifOpen(false)}
+                    className="flex min-h-10 items-center justify-center bg-accent text-xs font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-accent-deep"
+                  >
+                    {t("topbar.openInbox")}
+                  </Link>
+                </div>
               </div>
             ) : null}
           </div>
@@ -265,6 +314,58 @@ export function Topbar({
       </div>
     </header>
   );
+}
+
+const SENDER_HUES = ["#31595d", "#624e8a", "#9f2627", "#65814f", "#c45d57", "#244246"];
+
+function senderHue(email: string) {
+  let hash = 0;
+  for (const ch of email) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return SENDER_HUES[hash % SENDER_HUES.length]!;
+}
+
+function senderInitials(name: string, email: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+  }
+  if (parts[0] && parts[0].length >= 2) return parts[0].slice(0, 2).toUpperCase();
+  return email.slice(0, 2).toUpperCase();
+}
+
+function SenderMark({ name, email }: { name: string; email: string }) {
+  return (
+    <span
+      className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center text-[11px] font-bold text-white"
+      style={{ background: senderHue(email) }}
+      aria-hidden
+    >
+      {senderInitials(name, email)}
+    </span>
+  );
+}
+
+function InboxGlyph() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M2 4.5h12v8H2z" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2 6.5 8 10l6-3.5" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function formatNotifTime(iso: string, locale: Locale) {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const now = Date.now();
+  const diff = Math.max(0, now - at.getTime());
+  if (diff < 60_000) return "now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`;
+  return new Intl.DateTimeFormat(localeMeta[locale].bcp47, {
+    day: "numeric",
+    month: "short",
+  }).format(at);
 }
 
 function MenuItem({

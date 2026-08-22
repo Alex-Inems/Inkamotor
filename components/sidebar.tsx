@@ -6,6 +6,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { currentWorkspace } from "@/lib/session";
 import { useSessionUser } from "@/lib/session-user";
 import { useT } from "@/lib/i18n";
+import { useInboxNotifications } from "@/lib/inbox-notifications";
 
 const nav = [
   { href: "/", key: "nav.overview", icon: OverviewIcon, tour: "overview" },
@@ -28,6 +29,7 @@ export function Sidebar({
 }) {
   const t = useT();
   const currentUser = useSessionUser();
+  const { unread } = useInboxNotifications();
   const visibleNav = nav;
 
   return (
@@ -83,30 +85,54 @@ export function Sidebar({
               }`}
             >
               <Icon active={active} />
-              {t(item.key)}
+              <span className="min-w-0 flex-1 truncate">{t(item.key)}</span>
+              {item.href === "/inbox" && unread > 0 ? (
+                <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center bg-pink px-1.5 text-[10px] font-bold leading-none text-white">
+                  {unread > 9 ? "9+" : unread}
+                </span>
+              ) : null}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto border-t border-line px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <div className="flex items-center gap-3">
-          <UserAvatar
-            user={currentUser}
-            className="h-9 w-9 shrink-0 text-xs"
-          />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-ink">
-              {currentUser.name}
-            </p>
-            <p className="truncate text-xs text-mute">
-              {t("common.admin")} · {t("common.online")}
-            </p>
+      <div className="mt-auto border-t border-line px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="border border-line bg-panel px-3 py-3">
+          <div className="flex items-start gap-3">
+            <div className="relative shrink-0">
+              <UserAvatar
+                user={currentUser}
+                className="h-10 w-10 text-xs"
+              />
+              <span
+                className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-green ring-2 ring-panel"
+                title={t("common.online")}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold leading-tight text-ink">
+                {currentUser.name}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] leading-snug text-mute">
+                {currentUser.email}
+              </p>
+              <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sand">
+                {t("common.admin")}
+              </p>
+            </div>
           </div>
-          <span
-            className="ml-auto h-2 w-2 shrink-0 bg-green"
-            title={t("common.online")}
-          />
+          <button
+            type="button"
+            className="mt-3 w-full border border-line px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-mute transition-colors hover:border-pink hover:bg-wine/15 hover:text-pink"
+            onClick={() => {
+              void (async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                window.location.href = "/login";
+              })();
+            }}
+          >
+            {t("topbar.signOut")}
+          </button>
         </div>
       </div>
     </aside>

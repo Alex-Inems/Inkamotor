@@ -52,6 +52,35 @@ export async function listMailMessages(limit = 150): Promise<MailMessage[]> {
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
 }
 
+export async function listUnreadInbox(limit = 12): Promise<{
+  unread: number;
+  messages: MailMessage[];
+}> {
+  const supabase = getSupabase();
+  const unreadQuery = supabase
+    .from("mail_messages")
+    .select("id", { count: "exact", head: true })
+    .eq("is_read", false)
+    .eq("folder", "INBOX");
+  const listQuery = supabase
+    .from("mail_messages")
+    .select(
+      "id, message_id, from_name, from_email, to_email, subject, preview, body_text, received_at, is_read",
+    )
+    .eq("is_read", false)
+    .eq("folder", "INBOX")
+    .order("received_at", { ascending: false })
+    .limit(limit);
+
+  const [countRes, listRes] = await Promise.all([unreadQuery, listQuery]);
+  if (countRes.error) throw new Error(countRes.error.message);
+  if (listRes.error) throw new Error(listRes.error.message);
+  return {
+    unread: countRes.count ?? 0,
+    messages: (listRes.data ?? []).map((row) => mapRow(row as Record<string, unknown>)),
+  };
+}
+
 async function findSentMailbox(client: ImapFlow): Promise<string | null> {
   try {
     const boxes = await client.list();
