@@ -8,12 +8,14 @@ export function Modal({
   title,
   onClose,
   children,
+  footer,
   wide,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   wide?: boolean;
 }) {
   const t = useT();
@@ -44,25 +46,35 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className={`relative z-10 max-h-[100svh] w-full overflow-y-auto border border-line bg-panel shadow-xl sm:max-h-[92svh] ${
-          wide ? "sm:max-w-2xl" : "sm:max-w-lg"
-        }`}
+        className={`relative z-10 flex max-h-[100svh] w-full flex-col overflow-hidden border border-line bg-panel shadow-xl sm:max-h-[92svh] ${
+          wide ? "sm:max-w-3xl" : "sm:max-w-lg"
+        } rounded-t-xl sm:rounded-none`}
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-line bg-panel px-4 py-3 sm:px-5">
-          <h2 id="modal-title" className="font-display text-xl tracking-wide">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-panel px-4 py-3 sm:px-5">
+          <h2
+            id="modal-title"
+            className="min-w-0 flex-1 truncate font-display text-lg tracking-wide sm:text-xl"
+          >
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            className="px-2 py-1 text-sm font-medium text-mute hover:text-ink"
+            className="shrink-0 px-2 py-1 text-sm font-medium text-mute hover:text-ink"
           >
             {t("common.close")}
           </button>
         </div>
-        <div className="px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
           {children}
         </div>
+        {footer ? (
+          <div className="shrink-0 border-t border-line bg-panel px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5">
+            {footer}
+          </div>
+        ) : (
+          <div className="h-[env(safe-area-inset-bottom)]" />
+        )}
       </div>
     </div>
   );

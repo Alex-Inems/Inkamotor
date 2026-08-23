@@ -34,6 +34,10 @@ yarn-error.log*
 .env*
 !.env.example
 
+# contact export (personal data — live copy is in Supabase)
+/data/
+~$*
+
 # vercel
 .vercel
 

@@ -200,6 +200,44 @@ export async function addContactToList(input: {
   }
 }
 
+/** Import many contacts onto the subscriber list (Brevo batches of up to 150). */
+export async function importContactsToList(
+  contacts: { email: string; name?: string | null }[],
+) {
+  const listId = subscriberListId();
+  if (listId === null) {
+    throw new Error("Set BREVO_LIST_ID before adding subscribers.");
+  }
+
+  const unique = new Map<string, { email: string; name?: string | null }>();
+  for (const contact of contacts) {
+    const email = contact.email.trim().toLowerCase();
+    if (!email.includes("@")) continue;
+    unique.set(email, { email, name: contact.name });
+  }
+  const rows = [...unique.values()];
+  const size = 150;
+  for (let i = 0; i < rows.length; i += size) {
+    const chunk = rows.slice(i, i + size).map((contact) => {
+      const [first, ...rest] = (contact.name ?? "").trim().split(/\s+/);
+      const attributes: Record<string, string> = { SOURCE: "import" };
+      if (first && !first.includes("@")) attributes.FIRSTNAME = first;
+      if (rest.length) attributes.LASTNAME = rest.join(" ");
+      return { email: contact.email, attributes };
+    });
+    await brevo("/contacts/import", {
+      method: "POST",
+      body: JSON.stringify({
+        jsonBody: chunk,
+        listIds: [listId],
+        updateExistingContacts: true,
+        emptyContactsAttributes: false,
+      }),
+    });
+  }
+  return rows.length;
+}
+
 export async function listBrevoCampaigns(limit = 50) {
   const data = await brevo<{ campaigns?: BrevoCampaign[] }>(
     `/emailCampaigns?limit=${limit}&sort=desc&excludeHtmlContent=true&statistics=globalStats`,

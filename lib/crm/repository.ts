@@ -1,3 +1,4 @@
+import { resolveLeadCompany } from "@/lib/crm/contact-details";
 import { getSupabase } from "@/lib/supabase/server";
 import type { CrmMutation, CrmSnapshot } from "@/lib/crm/types";
 import {
@@ -18,6 +19,48 @@ import {
 } from "@/lib/demo-data";
 
 export type { CrmMutation, CrmSnapshot } from "@/lib/crm/types";
+
+const PAGE = 1000;
+
+async function selectLeadsSlim(sb: ReturnType<typeof getSupabase>) {
+  const page = 1000;
+  const rows: Record<string, unknown>[] = [];
+  const cols =
+    "id, name, email, phone, company, source, status, value, currency, owner, created_at, last_contact";
+  for (let from = 0; ; from += page) {
+    const { data, error } = await sb
+      .from("leads")
+      .select(cols)
+      .order("created_at", { ascending: false })
+      .range(from, from + page - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as Record<string, unknown>[];
+    rows.push(...batch);
+    if (batch.length < page) break;
+  }
+  return rows.map((row) => ({ ...row, notes: "" }));
+}
+
+async function selectAll(
+  sb: ReturnType<typeof getSupabase>,
+  table: string,
+  column: string,
+  ascending: boolean,
+) {
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await sb
+      .from(table)
+      .select("*")
+      .order(column, { ascending })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    const batch = (data ?? []) as Record<string, unknown>[];
+    rows.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return rows;
+}
 
 function emptySnapshot(): CrmSnapshot {
   return {
@@ -48,8 +91,8 @@ function mapInquiry(row: Record<string, unknown>): SiteInquiry {
   };
 }
 
-function mapLead(row: Record<string, unknown>): Lead {
-  return {
+export function mapLead(row: Record<string, unknown>): Lead {
+  const lead: Lead = {
     id: String(row.id),
     name: String(row.name),
     email: String(row.email),
@@ -64,6 +107,7 @@ function mapLead(row: Record<string, unknown>): Lead {
     lastContact: String(row.last_contact).slice(0, 10),
     notes: String(row.notes ?? ""),
   };
+  return { ...lead, company: resolveLeadCompany(lead) };
 }
 
 function mapFollowUp(row: Record<string, unknown>): FollowUp {
@@ -118,32 +162,18 @@ function mapInvoice(row: Record<string, unknown>): Invoice {
 }
 
 export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
-  try {
-    const { syncLeadsFromInbox } = await import("@/lib/crm/inbox-leads");
-    await syncLeadsFromInbox();
-  } catch {
-    /* Inbox may be empty or mail tables missing — still load the rest. */
-  }
-
   const sb = getSupabase();
-  const [inquiries, leads, followUps, sales, invoices] = await Promise.all([
-    sb.from("site_inquiries").select("*").order("created_at", { ascending: false }),
-    sb.from("leads").select("*").order("created_at", { ascending: false }),
-    sb.from("follow_ups").select("*").order("due_at", { ascending: true }),
-    sb.from("sales").select("*").order("created_at", { ascending: false }),
-    sb.from("invoices").select("*").order("issue_date", { ascending: false }),
-  ]);
-
-  const err =
-    inquiries.error ||
-    leads.error ||
-    followUps.error ||
-    sales.error ||
-    invoices.error;
-  if (err) throw new Error(err.message);
+  const [inquiryRows, leadRows, followUpRows, saleRows, invoiceRows] =
+    await Promise.all([
+      selectAll(sb, "site_inquiries", "created_at", false),
+      selectLeadsSlim(sb),
+      selectAll(sb, "follow_ups", "due_at", true),
+      selectAll(sb, "sales", "created_at", false),
+      selectAll(sb, "invoices", "issue_date", false),
+    ]);
 
   const today = todayIso();
-  const overdueIds = (invoices.data ?? [])
+  const overdueIds = invoiceRows
     .filter(
       (row) =>
         String((row as { status?: string }).status) === "sent" &&
@@ -159,17 +189,17 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
 
   return {
     ...emptySnapshot(),
-    siteInquiries: (inquiries.data ?? [])
-      .map((r) => mapInquiry(r as Record<string, unknown>))
+    siteInquiries: inquiryRows
+      .map((r) => mapInquiry(r))
       .filter((i) => !/^inq_\d+$/.test(i.id)),
-    leads: (leads.data ?? [])
-      .map((r) => mapLead(r as Record<string, unknown>))
+    leads: leadRows
+      .map((r) => mapLead(r))
       .filter((l) => !/^ld_10\d{2}$/.test(l.id)),
-    followUps: (followUps.data ?? [])
-      .map((r) => mapFollowUp(r as Record<string, unknown>))
+    followUps: followUpRows
+      .map((r) => mapFollowUp(r))
       .filter((f) => !/^fu_\d+$/.test(f.id)),
-    sales: (sales.data ?? []).map((r) => mapSale(r as Record<string, unknown>)),
-    invoices: (invoices.data ?? []).map((r) => {
+    sales: saleRows.map((r) => mapSale(r)),
+    invoices: invoiceRows.map((r) => {
       const mapped = mapInvoice(r as Record<string, unknown>);
       if (overdueIds.includes(mapped.id) && mapped.status === "sent") {
         return { ...mapped, status: "overdue" as const };

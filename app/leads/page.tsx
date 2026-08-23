@@ -1,466 +1,630 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { btnPrimary, btnSecondary, inputClass } from "@/components/modal";
+import { ContactForm, ContactFormActions } from "@/components/contact-form";
+import { btnPrimary, btnSecondary, inputClass, Modal } from "@/components/modal";
+import { EmptyHint, PageHeader, Panel, StatusBadge } from "@/components/ui";
+import {
+  contactWriteFromLead,
+  emptyContactWrite,
+  tagList,
+  type ContactDetails,
+  type ContactWrite,
+} from "@/lib/crm/contact-details";
 import { useCrm } from "@/lib/crm-store";
 import { type Lead, type LeadStatus } from "@/lib/demo-data";
 import { formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
-import {
-  groupMailRooms,
-  type MailItem,
-  type MailRoom,
-  type ReplyItem,
-} from "@/lib/mail/rooms";
+import { leadTone } from "@/lib/status";
 
-const STAGES: LeadStatus[] = [
-  "new",
-  "contacted",
-  "qualified",
-  "won",
-  "lost",
-];
+const STAGES: LeadStatus[] = ["new", "contacted", "qualified", "won", "lost"];
+const PAGE_SIZE = 75;
+const FORM_ID = "lead-contact-form";
 
-const AVATAR = [
-  "bg-purple/70",
-  "bg-green/60",
-  "bg-gold/70",
-  "bg-wine/60",
-  "bg-accent/70",
-];
-
-function stageTitle(id: LeadStatus, t: (path: string) => string) {
-  return t(`stages.${id}`);
-}
-
-function toneFor(email: string) {
-  let hash = 0;
-  for (let i = 0; i < email.length; i += 1) {
-    hash = (hash * 31 + email.charCodeAt(i)) % 9973;
-  }
-  return AVATAR[hash % AVATAR.length];
-}
-
-function initials(name: string, email: string) {
-  const base = (name || email.split("@")[0] || "?").trim();
-  const parts = base.split(/[\s._-]+/).filter(Boolean);
-  const letters =
-    parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : base.slice(0, 2);
-  return letters.toUpperCase();
-}
-
-function lastMessageFor(lead: Lead, roomsByEmail: Map<string, MailRoom>) {
-  const room = roomsByEmail.get(lead.email.toLowerCase());
-  if (room?.lastText) return room.lastText;
-  return lead.notes;
-}
-
-function lastBodyFor(lead: Lead, roomsByEmail: Map<string, MailRoom>) {
-  const room = roomsByEmail.get(lead.email.toLowerCase());
-  const last = room?.messages[room.messages.length - 1];
-  if (last?.clean.text) return last.clean.text;
-  if (last?.clean.fields.length) {
-    return last.clean.fields.map((f) => `${f.label}: ${f.value}`).join("\n");
-  }
-  return lastMessageFor(lead, roomsByEmail);
-}
-
-function stageClass(status: LeadStatus) {
-  switch (status) {
-    case "new":
-      return "text-cream";
-    case "contacted":
-      return "text-chat-out-text";
-    case "qualified":
-      return "text-gold";
-    case "won":
-      return "text-sand";
-    default:
-      return "text-pink";
-  }
-}
+type SortKey = "completeness" | "name" | "email" | "updated";
+type LeadRow = { lead: Lead; details: ContactDetails; score?: number };
 
 export default function LeadsPage() {
-  const { leads, sales, updateLeadStatus, addSale, ready } = useCrm();
+  const { sales, addSale, pushToast } = useCrm();
   const { t, locale } = useLocale();
   const [query, setQuery] = useState("");
+  const [draft, setDraft] = useState("");
   const [stage, setStage] = useState<LeadStatus | "all">("all");
+  const [country, setCountry] = useState("all");
+  const [kind, setKind] = useState<"all" | "person" | "company">("all");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "completeness",
+    dir: "desc",
+  });
+  const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [mail, setMail] = useState<MailItem[]>([]);
-  const [replies, setReplies] = useState<ReplyItem[]>([]);
-  const [ownAddresses, setOwnAddresses] = useState<(string | null)[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState<ContactWrite>(emptyContactWrite);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [rows, setRows] = useState<LeadRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-    const q = `locale=${encodeURIComponent(locale)}`;
-    void fetch(`/api/inbox/status`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json: { namecheap?: { user?: string }; brevo?: { sender?: string | null } } | null) => {
-        if (cancelled || !json) return;
-        setOwnAddresses([json.namecheap?.user ?? null, json.brevo?.sender ?? null]);
-      })
-      .catch(() => {
-        /* inbox may be unconfigured */
-      });
-    void fetch(`/api/inbox/mail?${q}`)
-      .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((json: { messages?: MailItem[] }) => {
-        if (!cancelled) setMail(json.messages ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setMail([]);
-      });
-    void fetch(`/api/inbox/replies?${q}`)
-      .then((r) => (r.ok ? r.json() : { replies: [] }))
-      .then((json: { replies?: ReplyItem[] }) => {
-        if (!cancelled) setReplies(json.replies ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setReplies([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [locale]);
+    const timer = window.setTimeout(() => {
+      setQuery(draft.trim());
+      setPage(0);
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [draft]);
 
-  const roomsByEmail = useMemo(() => {
-    const rooms = groupMailRooms({
-      mail,
-      replies,
-      ownAddresses,
-      youPrefix: t("pages.inbox.youPrefix"),
-      emptyPreview: t("pages.inbox.noMessage"),
+  const load = useCallback(async () => {
+    const params = new URLSearchParams({
+      q: query,
+      stage,
+      country,
+      kind,
+      sort: sort.key,
+      dir: sort.dir,
+      page: String(page),
+      limit: String(PAGE_SIZE),
     });
-    return new Map(rooms.map((room) => [room.email.toLowerCase(), room]));
-  }, [mail, replies, ownAddresses, t]);
-
-  const counts = useMemo(() => {
-    const map = Object.fromEntries(STAGES.map((id) => [id, 0])) as Record<
-      LeadStatus,
-      number
-    >;
-    for (const lead of leads) map[lead.status] += 1;
-    return map;
-  }, [leads]);
-
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return leads
-      .filter((lead) => {
-        if (stage !== "all" && lead.status !== stage) return false;
-        if (!q) return true;
-        return `${lead.name} ${lead.email} ${lead.phone} ${lead.notes} ${lastMessageFor(lead, roomsByEmail)}`
-          .toLowerCase()
-          .includes(q);
-      })
-      .sort((a, b) => b.lastContact.localeCompare(a.lastContact));
-  }, [leads, query, stage, roomsByEmail]);
-
-  const selected =
-    visible.find((l) => l.id === selectedId) ??
-    leads.find((l) => l.id === selectedId) ??
-    null;
-
-  useEffect(() => {
-    if (!ready) return;
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+    const res = await fetch(`/api/leads?${params}`);
+    const json = (await res.json()) as {
+      rows?: LeadRow[];
+      total?: number;
+      countries?: string[];
+    };
+    if (!res.ok) {
+      setRows([]);
+      setTotal(0);
+      setLoading(false);
       return;
     }
-    if (selectedId || visible.length === 0) return;
-    setSelectedId(visible[0].id);
-  }, [ready, selectedId, visible]);
+    setRows(json.rows ?? []);
+    setTotal(json.total ?? 0);
+    if (json.countries?.length) setCountries(json.countries);
+    setLoading(false);
+  }, [country, kind, page, query, sort.dir, sort.key, stage]);
 
-  const selectedRoom = selected
-    ? roomsByEmail.get(selected.email.toLowerCase())
-    : undefined;
-  const selectedBody = selected
-    ? lastBodyFor(selected, roomsByEmail)
-    : "";
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const selected = useMemo(
+    () => rows.find((row) => row.lead.id === selectedId) ?? null,
+    [rows, selectedId],
+  );
+
+  useEffect(() => {
+    if (adding) {
+      setForm(emptyContactWrite());
+      setFormError("");
+      return;
+    }
+    if (selected) {
+      setForm(contactWriteFromLead(selected.lead, selected.details));
+      setFormError("");
+    }
+  }, [adding, selected]);
 
   const booked = selected
     ? sales.some(
         (s) =>
-          s.leadId === selected.id ||
-          s.email.toLowerCase() === selected.email.toLowerCase(),
+          s.leadId === selected.lead.id ||
+          (selected.lead.email &&
+            s.email.toLowerCase() === selected.lead.email.toLowerCase()),
       )
     : false;
 
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  function closeEditor() {
+    setAdding(false);
+    setSelectedId(null);
+    setFormError("");
+  }
+
+  async function saveContact() {
+    if (!form.name.trim()) {
+      setFormError(t("pages.leads.nameRequired"));
+      return;
+    }
+    setSaving(true);
+    setFormError("");
+    const res = await fetch("/api/leads", {
+      method: adding ? "POST" : "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(adding ? form : { ...form, id: selectedId }),
+    });
+    const json = (await res.json()) as {
+      error?: string;
+      row?: LeadRow;
+    };
+    setSaving(false);
+    if (!res.ok) {
+      setFormError(json.error || t("toast.saveFailed"));
+      return;
+    }
+    pushToast(
+      adding
+        ? t("toast.leadAdded", { name: form.name.trim() })
+        : t("toast.leadSaved"),
+    );
+    const savedId = json.row?.lead.id;
+    setAdding(false);
+    if (savedId) setSelectedId(savedId);
+    await load();
+  }
+
+  function toggleSort(key: Exclude<SortKey, "completeness">) {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "updated" ? "desc" : "asc" },
+    );
+    setPage(0);
+  }
+
   return (
-    <div className="-mx-3 flex min-h-[calc(100svh-7rem)] flex-col border-y border-line bg-panel sm:-mx-6 sm:min-h-[calc(100svh-8rem)] lg:-mx-8">
-      <div className="flex min-h-0 flex-1">
-        <aside
-          className={`min-w-0 flex-col border-r border-line ${
-            selected ? "hidden md:flex md:w-80 lg:w-96" : "flex w-full md:w-80 lg:w-96"
-          }`}
+    <div>
+      <PageHeader
+        title={t("pages.leads.title")}
+        description={t("pages.leads.tableDescription", { n: total })}
+        action={
+          <button
+            type="button"
+            className={btnPrimary}
+            onClick={() => {
+              setSelectedId(null);
+              setAdding(true);
+            }}
+          >
+            {t("pages.leads.addLead")}
+          </button>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <input
+          className={`${inputClass} col-span-2 lg:col-span-1`}
+          placeholder={t("pages.leads.searchTable")}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <select
+          className={inputClass}
+          value={stage}
+          onChange={(e) => {
+            setStage(e.target.value as LeadStatus | "all");
+            setPage(0);
+          }}
         >
-          <div className="flex items-center justify-between gap-2 px-4 pt-4">
-            <h1 className="font-display text-lg tracking-wide">{t("pages.leads.title")}</h1>
-            <Link
-              href="/inbox"
-              className="text-xs font-semibold text-sand hover:text-gold"
-            >
-              {t("pages.leads.fullInbox")}
-            </Link>
-          </div>
-
-          <div className="px-4 pt-3">
-            <input
-              className={`${inputClass} rounded-full sm:rounded-none`}
-              placeholder={t("pages.leads.search")}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-3 border-b border-line sm:grid-cols-6">
-            <FilterTab
-              label={t("common.all")}
-              count={leads.length}
-              active={stage === "all"}
-              onClick={() => setStage("all")}
-            />
-            {STAGES.map((id) => (
-              <FilterTab
-                key={id}
-                label={t(`stages.${id}`)}
-                count={counts[id]}
-                active={stage === id}
-                onClick={() => setStage(id)}
-              />
-            ))}
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {!ready ? (
-              <p className="px-4 py-8 text-center text-sm text-mute">{t("common.loading")}</p>
-            ) : visible.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-mute">
-                {leads.length === 0
-                  ? t("pages.leads.noLeads")
-                  : t("pages.leads.nothingMatches")}
-              </p>
-            ) : (
-              visible.map((lead) => (
-                <button
-                  key={lead.id}
-                  type="button"
-                  onClick={() => setSelectedId(lead.id)}
-                  className={`flex w-full items-center gap-3 px-3 py-3 text-left transition-colors ${
-                    lead.id === selectedId ? "bg-accent-soft" : "hover:bg-ash/50"
-                  }`}
-                >
-                  <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${toneFor(lead.email)}`}
-                  >
-                    {initials(lead.name, lead.email)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline justify-between gap-2">
-                      <span className="truncate text-sm font-semibold">
-                        {lead.name}
-                      </span>
-                      <span className="shrink-0 text-[11px] text-mute">
-                        {formatDate(lead.lastContact)}
-                      </span>
-                    </span>
-                    <span className="mt-0.5 flex items-center justify-between gap-2">
-                      <span className="truncate text-xs text-mute">
-                        {lastMessageFor(lead, roomsByEmail) || lead.email}
-                      </span>
-                      <span
-                        className={`shrink-0 text-[11px] font-semibold ${stageClass(lead.status)}`}
-                      >
-                        {stageTitle(lead.status, t)}
-                      </span>
-                    </span>
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </aside>
-
-        <section
-          className={`min-w-0 flex-1 flex-col bg-canvas ${
-            selected ? "flex" : "hidden md:flex"
-          }`}
+          <option value="all">{t("common.allStatuses")}</option>
+          {STAGES.map((id) => (
+            <option key={id} value={id}>
+              {t(`stages.${id}`)}
+            </option>
+          ))}
+        </select>
+        <select
+          className={inputClass}
+          value={country}
+          onChange={(e) => {
+            setCountry(e.target.value);
+            setPage(0);
+          }}
         >
-          {!selected ? (
-            <div className="flex flex-1 items-center justify-center px-6">
-              <p className="text-sm text-mute">{t("pages.leads.selectPerson")}</p>
-            </div>
+          <option value="all">{t("pages.leads.allCountries")}</option>
+          {countries.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+        <select
+          className={`${inputClass} col-span-2 lg:col-span-1`}
+          value={kind}
+          onChange={(e) => {
+            setKind(e.target.value as "all" | "person" | "company");
+            setPage(0);
+          }}
+        >
+          <option value="all">{t("pages.leads.allKinds")}</option>
+          <option value="person">{t("pages.leads.person")}</option>
+          <option value="company">{t("pages.leads.company")}</option>
+        </select>
+        <select
+          className={`${inputClass} col-span-2 lg:hidden`}
+          value={`${sort.key}:${sort.dir}`}
+          onChange={(e) => {
+            const [key, dir] = e.target.value.split(":") as [SortKey, "asc" | "desc"];
+            setSort({ key, dir });
+            setPage(0);
+          }}
+          aria-label={t("pages.leads.sortBy")}
+        >
+          <option value="completeness:desc">{t("pages.leads.sortCompleteness")}</option>
+          <option value="name:asc">{t("common.name")} A–Z</option>
+          <option value="name:desc">{t("common.name")} Z–A</option>
+          <option value="email:asc">{t("common.email")} A–Z</option>
+          <option value="email:desc">{t("common.email")} Z–A</option>
+          <option value="updated:desc">{t("pages.leads.updated")}</option>
+        </select>
+      </div>
+
+      <div className="mt-4">
+        <Panel
+          title={t("pages.leads.count", {
+            shown: rows.length,
+            total,
+          })}
+        >
+          {loading && rows.length === 0 ? (
+            <EmptyHint>{t("common.loading")}</EmptyHint>
+          ) : rows.length === 0 ? (
+            <EmptyHint>
+              {total === 0 && !query
+                ? t("pages.leads.noLeads")
+                : t("pages.leads.nothingMatches")}
+            </EmptyHint>
           ) : (
             <>
-              <header className="flex items-center gap-3 border-b border-line bg-panel px-3 py-3 sm:px-5">
-                <button
-                  type="button"
-                  aria-label={t("common.back")}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center text-mute hover:text-ink md:hidden"
-                  onClick={() => setSelectedId(null)}
-                >
-                  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
-                    <path
-                      d="M11 4 6 9l5 5"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-                <span
-                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white ${toneFor(selected.email)}`}
-                >
-                  {initials(selected.name, selected.email)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold">{selected.name}</p>
-                  <p className={`text-xs font-semibold ${stageClass(selected.status)}`}>
-                    {stageTitle(selected.status, t)}
-                  </p>
-                </div>
-              </header>
-
-              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
-                <dl className="max-w-lg space-y-3 text-sm">
-                  <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
-                      {t("common.email")}
-                    </dt>
-                    <dd className="mt-1">
-                      <a
-                        href={`mailto:${selected.email}`}
-                        className="text-sand hover:text-gold"
+              <div className="space-y-3 lg:hidden">
+                {rows.map((row) => (
+                  <ContactCard
+                    key={row.lead.id}
+                    lead={row.lead}
+                    details={row.details}
+                    onOpen={() => setSelectedId(row.lead.id)}
+                  />
+                ))}
+              </div>
+              <div className="table-wrap -mx-5 hidden sm:-mx-6 lg:block">
+                <table className="data-table data-table-contacts">
+                  <thead>
+                    <tr>
+                      <SortHead
+                        label={t("common.name")}
+                        active={sort.key === "name"}
+                        dir={sort.dir}
+                        onClick={() => toggleSort("name")}
+                      />
+                      <SortHead
+                        label={t("common.email")}
+                        active={sort.key === "email"}
+                        dir={sort.dir}
+                        onClick={() => toggleSort("email")}
+                      />
+                      <th>{t("common.phone")}</th>
+                      <th>{t("common.company")}</th>
+                      <th>{t("pages.leads.city")}</th>
+                      <th>{t("pages.leads.country")}</th>
+                      <th>{t("pages.leads.tags")}</th>
+                      <th>{t("pages.leads.kind")}</th>
+                      <SortHead
+                        label={t("pages.leads.updated")}
+                        active={sort.key === "updated"}
+                        dir={sort.dir}
+                        onClick={() => toggleSort("updated")}
+                      />
+                      <th>{t("pages.leads.nextActivity")}</th>
+                      <th>{t("pages.leads.stage")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ lead, details }) => (
+                      <tr
+                        key={lead.id}
+                        className="cursor-pointer"
+                        onClick={() => setSelectedId(lead.id)}
                       >
-                        {selected.email}
-                      </a>
-                    </dd>
-                  </div>
-                  {selected.phone ? (
-                    <div>
-                      <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
-                        {t("common.phone")}
-                      </dt>
-                      <dd className="mt-1">
-                        <a href={`tel:${selected.phone}`} className="hover:text-gold">
-                          {selected.phone}
-                        </a>
-                      </dd>
-                    </div>
-                  ) : null}
-                  <div>
-                    <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
-                      {t("pages.leads.lastContact")}
-                    </dt>
-                    <dd className="mt-1">{formatDate(selected.lastContact)}</dd>
-                  </div>
-                </dl>
-
-                {selectedBody || selectedRoom?.lastSubject ? (
-                  <div className="mt-6 max-w-lg">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
-                      {t("pages.leads.lastMessage")}
-                    </p>
-                    {selectedRoom?.lastSubject ? (
-                      <p className="mt-2 text-sm font-medium">
-                        {selectedRoom.lastSubject}
-                      </p>
-                    ) : null}
-                    {selectedBody ? (
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-mute">
-                        {selectedBody}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                <div className="mt-8 max-w-lg">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
-                    {t("pages.leads.stage")}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {STAGES.map((id) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => void updateLeadStatus(selected.id, id)}
-                        className={`px-3 py-2 text-xs font-semibold transition-colors ${
-                          selected.status === id
-                            ? "bg-accent text-white"
-                            : "border border-line text-mute hover:text-ink"
-                        }`}
-                      >
-                        {t(`stages.${id}`)}
-                      </button>
+                        <td className="font-medium">{lead.name || "—"}</td>
+                        <td>
+                          {lead.email ? (
+                            <a
+                              href={`mailto:${lead.email}`}
+                              className="text-sand hover:text-gold"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {lead.email}
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap">
+                          {lead.phone ? (
+                            <a
+                              href={`tel:${lead.phone}`}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {lead.phone}
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>{lead.company || "—"}</td>
+                        <td>{details.city || "—"}</td>
+                        <td>{details.country || "—"}</td>
+                        <td>
+                          {details.tags ? (
+                            <span className="flex flex-wrap gap-1">
+                              {tagList(details.tags).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sand"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>
+                          {details.isCompany
+                            ? t("pages.leads.company")
+                            : t("pages.leads.person")}
+                        </td>
+                        <td className="whitespace-nowrap text-mute">
+                          {formatDate(
+                            (details.updated || lead.lastContact).slice(0, 10),
+                            locale,
+                          )}
+                        </td>
+                        <td className="max-w-[14rem]">
+                          <span className="line-clamp-2">
+                            {details.nextActivity || details.activityStatus || "—"}
+                          </span>
+                        </td>
+                        <td>
+                          <StatusBadge compact tone={leadTone(lead.status)}>
+                            {t(`stagesShort.${lead.status}`)}
+                          </StatusBadge>
+                        </td>
+                      </tr>
                     ))}
-                  </div>
-                </div>
-
-                <div className="mt-8 flex flex-wrap gap-2">
-                  <Link
-                    href={`/inbox?chat=${encodeURIComponent(selected.email)}`}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 text-sm text-mute sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <p>
+                  {t("pages.leads.pageOf", {
+                    from: total === 0 ? 0 : page * PAGE_SIZE + 1,
+                    to: Math.min(total, page * PAGE_SIZE + rows.length),
+                    total,
+                  })}
+                </p>
+                <div className="grid grid-cols-2 gap-2 sm:flex">
+                  <button
+                    type="button"
                     className={btnSecondary}
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
                   >
-                    {t("pages.leads.openChat")}
-                  </Link>
+                    {t("common.back")}
+                  </button>
+                  <button
+                    type="button"
+                    className={btnSecondary}
+                    disabled={page >= pageCount - 1}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    {t("pages.leads.nextPage")}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </Panel>
+      </div>
+
+      <Modal
+        open={adding || Boolean(selected)}
+        title={
+          adding
+            ? t("pages.leads.newContact")
+            : selected?.lead.name || t("pages.leads.editContact")
+        }
+        onClose={closeEditor}
+        wide
+        footer={
+          <ContactFormActions
+            formId={FORM_ID}
+            saving={saving}
+            error={formError}
+            onCancel={closeEditor}
+            extraActions={
+              selected && !adding ? (
+                <>
+                  {selected.lead.email ? (
+                    <Link
+                      href={`/inbox?chat=${encodeURIComponent(selected.lead.email)}`}
+                      className={btnSecondary}
+                    >
+                      {t("pages.leads.openChat")}
+                    </Link>
+                  ) : null}
                   {!booked ? (
                     <button
                       type="button"
-                      className={btnPrimary}
+                      className={btnSecondary}
                       onClick={() =>
                         void addSale({
-                          customer: selected.name,
-                          email: selected.email,
-                          product: selected.notes.slice(0, 80) || t("pages.leads.tourBooking"),
-                          amount: selected.value || 0,
+                          customer: selected.lead.name,
+                          email: selected.lead.email,
+                          product:
+                            selected.lead.notes.slice(0, 80) ||
+                            t("pages.leads.tourBooking"),
+                          amount: selected.lead.value || 0,
                           source: "lead",
                           inquiryId: null,
-                          leadId: selected.id,
-                          notes: selected.notes,
+                          leadId: selected.lead.id,
+                          notes: selected.lead.notes,
                         })
                       }
                     >
                       {t("pages.leads.createSale")}
                     </button>
                   ) : null}
-                </div>
-              </div>
-            </>
-          )}
-        </section>
-      </div>
+                </>
+              ) : null
+            }
+          />
+        }
+      >
+        <ContactForm
+          formId={FORM_ID}
+          value={form}
+          onChange={setForm}
+          onSubmit={() => void saveContact()}
+        />
+      </Modal>
     </div>
   );
 }
 
-function FilterTab({
+function SortHead({
   label,
-  count,
   active,
+  dir,
   onClick,
 }: {
   label: string;
-  count: number;
   active: boolean;
+  dir: "asc" | "desc";
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`min-w-0 px-1 py-2.5 text-[10px] font-semibold leading-tight sm:text-[11px] ${
-        active
-          ? "border-b-2 border-gold text-ink"
-          : "border-b-2 border-transparent text-mute hover:text-ink"
-      }`}
-    >
-      <span className="block truncate">{label}</span>
-      {count > 0 ? (
-        <span className="mt-0.5 block text-[10px] text-mute">{count}</span>
-      ) : (
-        <span className="mt-0.5 block h-3" />
-      )}
-    </button>
+    <th>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`uppercase tracking-[0.12em] ${active ? "text-gold" : "text-mute"}`}
+      >
+        {label}
+        {active ? (dir === "asc" ? " ↑" : " ↓") : ""}
+      </button>
+    </th>
   );
 }
+
+function ContactCard({
+  lead,
+  details,
+  onOpen,
+}: {
+  lead: Lead;
+  details: ContactDetails;
+  onOpen: () => void;
+}) {
+  const { t, locale } = useLocale();
+  const tags = tagList(details.tags);
+
+  return (
+    <article>
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full border border-line bg-canvas px-3.5 py-3 text-left transition-colors active:bg-ash"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium leading-snug break-words">{lead.name || "—"}</p>
+            {lead.company && lead.company !== lead.name ? (
+              <p className="mt-0.5 text-sm text-mute break-words">{lead.company}</p>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <StatusBadge compact tone={leadTone(lead.status)}>
+              {t(`stagesShort.${lead.status}`)}
+            </StatusBadge>
+            <span className="text-lg leading-none text-mute" aria-hidden>
+              ›
+            </span>
+          </div>
+        </div>
+
+        <dl className="mt-3 grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+          <CardField label={t("common.email")} value={lead.email} />
+          <CardField label={t("common.phone")} value={lead.phone} />
+          <CardField label={t("pages.leads.city")} value={details.city} />
+          <CardField label={t("pages.leads.country")} value={details.country} />
+          <CardField
+            label={t("pages.leads.kind")}
+            value={details.isCompany ? t("pages.leads.company") : t("pages.leads.person")}
+          />
+          <CardField
+            label={t("pages.leads.updated")}
+            value={formatDate((details.updated || lead.lastContact).slice(0, 10), locale)}
+          />
+          <CardField
+            label={t("pages.leads.nextActivity")}
+            value={details.nextActivity || details.activityStatus}
+            wide
+          />
+        </dl>
+        {tags.length ? (
+          <div className="mt-2.5 flex flex-wrap gap-1">
+            {tags.slice(0, 6).map((tag) => (
+              <span
+                key={tag}
+                className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sand"
+              >
+                {tag}
+              </span>
+            ))}
+            {tags.length > 6 ? (
+              <span className="px-1.5 py-0.5 text-[10px] font-semibold text-mute">
+                +{tags.length - 6}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </button>
+      {(lead.email || lead.phone) && (
+        <div className="flex border-x border-b border-line">
+          {lead.phone ? (
+            <a
+              href={`tel:${lead.phone}`}
+              className="flex min-h-11 flex-1 items-center justify-center border-r border-line text-xs font-semibold uppercase tracking-[0.08em] text-sand"
+            >
+              {t("common.phone")}
+            </a>
+          ) : null}
+          {lead.email ? (
+            <a
+              href={`mailto:${lead.email}`}
+              className="flex min-h-11 flex-1 items-center justify-center text-xs font-semibold uppercase tracking-[0.08em] text-sand"
+            >
+              {t("common.email")}
+            </a>
+          ) : null}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function CardField({
+  label,
+  value,
+  wide,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
+  const text = value.trim();
+  if (!text) return null;
+  return (
+    <div className={wide ? "sm:col-span-2" : undefined}>
+      <dt className="text-[10px] font-semibold uppercase tracking-[0.1em] text-mute">
+        {label}
+      </dt>
+      <dd className="mt-0.5 break-words text-sm leading-snug">{text}</dd>
+    </div>
+  );
+}
+

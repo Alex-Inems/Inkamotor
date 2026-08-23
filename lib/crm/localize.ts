@@ -13,7 +13,6 @@ export async function localizeCrmSnapshot(
     return i;
   };
 
-  const leadNotes = data.leads.map((l) => push(l.notes));
   const inquirySubjects = data.siteInquiries.map((i) => push(i.subject));
   const inquiryMessages = data.siteInquiries.map((i) => push(i.message));
   const followTitles = data.followUps.map((f) => push(f.title));
@@ -28,10 +27,6 @@ export async function localizeCrmSnapshot(
     const at = (i: number, fallback: string) => values[i] || fallback;
     return {
       ...data,
-      leads: data.leads.map((lead, i) => ({
-        ...lead,
-        notes: at(leadNotes[i], lead.notes),
-      })),
       siteInquiries: data.siteInquiries.map((row, i) => ({
         ...row,
         subject: at(inquirySubjects[i], row.subject),
