@@ -7,6 +7,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { LanguageSwitcher, localeMeta, useLocale, type Locale } from "@/lib/i18n";
 import { useCrm } from "@/lib/crm-store";
 import { useInboxNotifications } from "@/lib/inbox-notifications";
+import { useWorkspaceNotices } from "@/lib/workspace-notices";
 import { useSessionUser } from "@/lib/session-user";
 import { currentWorkspace, formatLastLogin } from "@/lib/session";
 import { startTour } from "@/lib/onboarding";
@@ -28,6 +29,9 @@ export function Topbar({
   const userRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const { unread, items: notifications, dismissAll } = useInboxNotifications();
+  const { items: workspaceNotices, dismissAll: dismissWorkspace } =
+    useWorkspaceNotices();
+  const bellCount = unread + workspaceNotices.length;
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -101,15 +105,15 @@ export function Topbar({
               className={`relative flex h-11 w-11 items-center justify-center border transition-colors ${
                 notifOpen
                   ? "border-line bg-ash text-ink"
-                  : unread > 0
+                  : bellCount > 0
                     ? "border-transparent text-gold hover:border-line hover:bg-ash"
                     : "border-transparent text-mute hover:border-line hover:bg-ash hover:text-ink"
               }`}
             >
               <BellIcon />
-              {unread > 0 ? (
+              {bellCount > 0 ? (
                 <span className="absolute -right-0.5 -top-0.5 flex h-[1.125rem] min-w-[1.125rem] items-center justify-center bg-pink px-1 text-[10px] font-bold leading-none text-white">
-                  {unread > 9 ? "9+" : unread}
+                  {bellCount > 9 ? "9+" : bellCount}
                 </span>
               ) : null}
             </button>
@@ -122,22 +126,23 @@ export function Topbar({
                       {t("topbar.notifications")}
                     </p>
                     <p className="mt-0.5 text-xs text-mute">
-                      {unread > 0
-                        ? t("overview.inboxHint")
-                        : t("topbar.emptyNotificationsHint")}
+                      {t("topbar.emptyNotificationsHint")}
                     </p>
                   </div>
-                  {notifications.length > 0 ? (
+                  {notifications.length + workspaceNotices.length > 0 ? (
                     <button
                       type="button"
                       className="shrink-0 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-sand hover:text-gold"
-                      onClick={dismissAll}
+                      onClick={() => {
+                        dismissAll();
+                        dismissWorkspace();
+                      }}
                     >
                       {t("topbar.markAllRead")}
                     </button>
                   ) : null}
                 </div>
-                {notifications.length === 0 ? (
+                {notifications.length + workspaceNotices.length === 0 ? (
                   <div className="flex flex-col items-center px-6 py-10 text-center">
                     <span className="flex h-11 w-11 items-center justify-center border border-line bg-ash text-sand">
                       <InboxGlyph />
@@ -151,47 +156,118 @@ export function Topbar({
                   </div>
                 ) : (
                   <ul className="max-h-[min(24rem,60vh)] overflow-y-auto">
-                    {notifications.map((n) => {
-                      const name = n.fromName || n.fromEmail;
-                      return (
-                        <li key={n.id} className="border-b border-line last:border-b-0">
-                          <Link
-                            href={`/inbox?chat=${encodeURIComponent(n.fromEmail)}`}
-                            onClick={() => setNotifOpen(false)}
-                            className="flex gap-3 px-4 py-3.5 transition-colors hover:bg-ash"
+                    {[
+                      ...workspaceNotices.map((n) => ({
+                        type: "workspace" as const,
+                        at: n.at,
+                        notice: n,
+                      })),
+                      ...notifications.map((n) => ({
+                        type: "inbox" as const,
+                        at: n.receivedAt,
+                        item: n,
+                      })),
+                    ]
+                      .sort(
+                        (a, b) =>
+                          new Date(b.at).getTime() - new Date(a.at).getTime(),
+                      )
+                      .map((row) =>
+                        row.type === "workspace" ? (
+                          <li
+                            key={row.notice.id}
+                            className="border-b border-line last:border-b-0"
                           >
-                            <SenderMark name={name} email={n.fromEmail} />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-baseline justify-between gap-3">
-                                <p className="truncate text-sm font-semibold text-ink">
-                                  {name}
+                            <Link
+                              href={row.notice.href}
+                              onClick={() => setNotifOpen(false)}
+                              className="flex gap-3 px-4 py-3.5 transition-colors hover:bg-ash"
+                            >
+                              <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-ash text-[10px] font-bold uppercase tracking-wide text-gold">
+                                NL
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
+                                    {t("topbar.newsletterSend")}
+                                  </p>
+                                  <p className="shrink-0 text-[11px] text-gold">
+                                    {formatNotifTime(row.notice.at, locale)}
+                                  </p>
+                                </div>
+                                <p className="mt-0.5 truncate text-sm font-semibold text-ink">
+                                  {row.notice.title}
                                 </p>
-                                <p className="shrink-0 text-[11px] text-gold">
-                                  {formatNotifTime(n.receivedAt, locale)}
-                                </p>
+                                {row.notice.body ? (
+                                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-mute">
+                                    {row.notice.body}
+                                  </p>
+                                ) : null}
                               </div>
-                              <p className="mt-0.5 truncate text-sm text-ink/90">
-                                {n.subject || t("pages.inbox.messages")}
-                              </p>
-                              {n.preview ? (
-                                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-mute">
-                                  {n.preview}
+                            </Link>
+                          </li>
+                        ) : (
+                          <li
+                            key={row.item.id}
+                            className="border-b border-line last:border-b-0"
+                          >
+                            <Link
+                              href={`/inbox?chat=${encodeURIComponent(row.item.fromEmail)}`}
+                              onClick={() => setNotifOpen(false)}
+                              className="flex gap-3 px-4 py-3.5 transition-colors hover:bg-ash"
+                            >
+                              <SenderMark
+                                name={
+                                  row.item.fromName || row.item.fromEmail
+                                }
+                                email={row.item.fromEmail}
+                              />
+                              <div className="min-w-0 flex-1">
+                                {row.item.kind === "form" ? (
+                                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
+                                    {t("topbar.websiteForm")}
+                                  </p>
+                                ) : null}
+                                <div className="flex items-baseline justify-between gap-3">
+                                  <p className="truncate text-sm font-semibold text-ink">
+                                    {row.item.fromName || row.item.fromEmail}
+                                  </p>
+                                  <p className="shrink-0 text-[11px] text-gold">
+                                    {formatNotifTime(
+                                      row.item.receivedAt,
+                                      locale,
+                                    )}
+                                  </p>
+                                </div>
+                                <p className="mt-0.5 truncate text-sm text-ink/90">
+                                  {row.item.subject || t("pages.inbox.messages")}
                                 </p>
-                              ) : null}
-                            </div>
-                          </Link>
-                        </li>
-                      );
-                    })}
+                                {row.item.preview ? (
+                                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-mute">
+                                    {row.item.preview}
+                                  </p>
+                                ) : null}
+                              </div>
+                            </Link>
+                          </li>
+                        ),
+                      )}
                   </ul>
                 )}
-                <div className="border-t border-line p-3">
+                <div className="grid grid-cols-2 gap-2 border-t border-line p-3">
                   <Link
                     href="/inbox"
                     onClick={() => setNotifOpen(false)}
                     className="flex min-h-10 items-center justify-center bg-accent text-xs font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-accent-deep"
                   >
                     {t("topbar.openInbox")}
+                  </Link>
+                  <Link
+                    href="/newsletter"
+                    onClick={() => setNotifOpen(false)}
+                    className="flex min-h-10 items-center justify-center border border-line bg-panel text-xs font-semibold uppercase tracking-[0.08em] text-ink transition-colors hover:bg-ash"
+                  >
+                    {t("topbar.openNewsletter")}
                   </Link>
                 </div>
               </div>

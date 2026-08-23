@@ -505,31 +505,37 @@ export async function sendNewsletterSmtp(input: {
   const unique = [
     ...new Set(input.emails.map((e) => e.trim().toLowerCase()).filter(Boolean)),
   ];
-  if (unique.length === 0) return;
-  const size = 50;
-  for (let i = 0; i < unique.length; i += size) {
-    const slice = unique.slice(i, i + size);
-    const versions = await Promise.all(
-      slice.map(async (email) => ({
-        to: [{ email }],
-        htmlContent: input.htmlContent.replace(
-          /\{\{\s*unsubscribe\s*\}\}/gi,
-          await unsubscribeLink(input.origin, email),
-        ),
-      })),
+  let sent = 0;
+  const failed: string[] = [];
+  let lastError = "";
+  for (const email of unique) {
+    const html = input.htmlContent.replace(
+      /\{\{\s*unsubscribe\s*\}\}/gi,
+      await unsubscribeLink(input.origin, email),
     );
-    await brevo("/smtp/email", {
-      method: "POST",
-      body: JSON.stringify({
-        sender: sender(),
-        to: versions[0]!.to,
+    try {
+      await sendTransactionalEmail({
+        toEmail: email,
         subject: input.subject,
-        htmlContent: input.htmlContent,
+        htmlContent: html,
         textContent: input.textContent,
         tags: ["newsletter"],
-        messageVersions: versions,
-      }),
-    });
+      });
+      sent += 1;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Send failed";
+      failed.push(email);
+    }
+  }
+  if (sent === 0) {
+    throw new Error(
+      lastError || "The newsletter did not go out. Check the sender address in Brevo.",
+    );
+  }
+  if (failed.length > 0) {
+    throw new Error(
+      `Sent to ${sent} people, but ${failed.length} did not go out. ${lastError}`,
+    );
   }
 }
 
@@ -608,6 +614,7 @@ export async function sendTransactionalEmail(input: {
   subject: string;
   htmlContent: string;
   textContent?: string;
+  tags?: string[];
 }) {
   await brevo("/smtp/email", {
     method: "POST",
@@ -617,6 +624,7 @@ export async function sendTransactionalEmail(input: {
       subject: input.subject,
       htmlContent: input.htmlContent,
       textContent: input.textContent,
+      tags: input.tags,
     }),
   });
 }
@@ -652,4 +660,68 @@ export function mapBrevoCampaign(c: BrevoCampaign) {
     sentAt: c.sentDate ?? null,
     preview: c.previewText || "",
   };
+}
+
+type SmtpEvent = {
+  email?: string;
+  event?: string;
+  date?: string;
+  subject?: string;
+  tag?: string;
+  tags?: string[];
+};
+
+export async function listNewsletterOutbox() {
+  const data = await brevo<{ events?: SmtpEvent[] }>(
+    "/smtp/statistics/events?limit=50&sort=desc",
+  );
+  const groups = new Map<
+    string,
+    { subject: string; date: string; emails: Set<string>; opens: number }
+  >();
+  for (const row of data.events ?? []) {
+    const subject = (row.subject ?? "").trim();
+    if (!subject || /^re:/i.test(subject) || /^invoice\b/i.test(subject)) {
+      continue;
+    }
+    const tags = [
+      row.tag,
+      ...(Array.isArray(row.tags) ? row.tags : []),
+    ]
+      .filter(Boolean)
+      .map((tag) => String(tag).toLowerCase());
+    const newsletter =
+      tags.includes("newsletter") ||
+      !/^re:/i.test(subject);
+    if (!newsletter) continue;
+    if (row.event !== "delivered" && row.event !== "opened" && row.event !== "requests") {
+      continue;
+    }
+    const minute = (row.date ?? "").slice(0, 16);
+    const key = `${subject.toLowerCase()}|${minute}`;
+    const group = groups.get(key) ?? {
+      subject,
+      date: row.date ?? minute,
+      emails: new Set<string>(),
+      opens: 0,
+    };
+    if (row.email) group.emails.add(row.email.toLowerCase());
+    if (row.event === "opened") group.opens += 1;
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group, index) => ({
+    id: `out-${group.date}-${index}`,
+    brevoId: "",
+    name: group.subject,
+    subject: group.subject,
+    status: "sent" as const,
+    audience: "Selected people",
+    recipients: group.emails.size,
+    opens: group.opens,
+    clicks: 0,
+    unsubscribes: 0,
+    scheduledAt: null as string | null,
+    sentAt: group.date,
+    preview: "",
+  }));
 }

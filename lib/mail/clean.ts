@@ -205,6 +205,10 @@ function parseFields(input: string): FormField[] {
     .filter((f) => f.label && f.value);
 }
 
+export function isWebsiteFormMail(subject?: string | null, body?: string | null) {
+  return looksLikeForm(body ?? "", subject ?? undefined);
+}
+
 function looksLikeForm(raw: string, subject?: string) {
   if (FORM_PREAMBLE.test(raw)) return true;
   // Replies keep the form subject ("Re: New form submission…") — that is not
@@ -212,7 +216,9 @@ function looksLikeForm(raw: string, subject?: string) {
   if (
     subject &&
     !/^re\s*:/i.test(subject.trim()) &&
-    /new form submission|nouvelle soumission/i.test(subject)
+    /new form submission|nouvelle soumission|nuevo formulario|formulario/i.test(
+      subject,
+    )
   ) {
     return true;
   }

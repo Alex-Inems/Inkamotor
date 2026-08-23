@@ -1,5 +1,6 @@
 import { jsonError } from "@/lib/api";
 import { localeFromRequest } from "@/lib/i18n/request-locale";
+import { isWebsiteFormMail } from "@/lib/mail/clean";
 import { listUnreadInbox } from "@/lib/mail/imap";
 import { translateTexts } from "@/lib/mail/translate";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export type InboxNotification = {
   id: string;
+  kind: "mail" | "form";
   fromName: string | null;
   fromEmail: string;
   subject: string;
@@ -37,14 +39,20 @@ export async function GET(req: Request) {
       }
     }
 
-    const items: InboxNotification[] = messages.map((m, i) => ({
-      id: m.id,
-      fromName: m.fromName,
-      fromEmail: m.fromEmail,
-      subject: subjects[i] ?? m.subject,
-      preview: previews[i] ?? m.preview,
-      receivedAt: m.receivedAt,
-    }));
+    const items: InboxNotification[] = messages.map((m, i) => {
+      const subject = subjects[i] ?? m.subject;
+      return {
+        id: m.id,
+        kind: isWebsiteFormMail(m.subject, m.bodyText || m.preview)
+          ? "form"
+          : "mail",
+        fromName: m.fromName,
+        fromEmail: m.fromEmail,
+        subject,
+        preview: previews[i] ?? m.preview,
+        receivedAt: m.receivedAt,
+      };
+    });
 
     return Response.json({ unread, items });
   } catch (err) {

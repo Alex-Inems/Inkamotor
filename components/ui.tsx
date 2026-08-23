@@ -115,3 +115,54 @@ export function EmptyHint({ children }: { children: React.ReactNode }) {
     </p>
   );
 }
+
+export function FormNotice({
+  tone,
+  title,
+  children,
+  onDismiss,
+}: {
+  tone: "success" | "error" | "info";
+  title?: string;
+  children?: React.ReactNode;
+  onDismiss?: () => void;
+}) {
+  const styles = {
+    success: "border-green/40 bg-green/10",
+    error: "border-wine/40 bg-wine/10",
+    info: "border-gold/35 bg-gold/10",
+  };
+  const titleColor = {
+    success: "text-sand",
+    error: "text-pink",
+    info: "text-gold",
+  };
+
+  return (
+    <div
+      role={tone === "error" ? "alert" : "status"}
+      aria-live={tone === "error" ? "assertive" : "polite"}
+      className={`border px-4 py-3 text-sm leading-relaxed ${styles[tone]}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {title ? (
+            <p className={`font-semibold ${titleColor[tone]}`}>{title}</p>
+          ) : null}
+          {children ? (
+            <div className={`text-ink/90 ${title ? "mt-1" : ""}`}>{children}</div>
+          ) : null}
+        </div>
+        {onDismiss ? (
+          <button
+            type="button"
+            className="shrink-0 text-xs font-semibold text-mute hover:text-ink"
+            onClick={onDismiss}
+          >
+            ×
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}

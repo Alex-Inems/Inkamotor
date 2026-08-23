@@ -1,5 +1,4 @@
 import { jsonError } from "@/lib/api";
-import { blockedSubscriberEmails } from "@/lib/crm/subscribers";
 import {
   missingBrevoEnv,
   sendCampaignWaves,
@@ -81,19 +80,10 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, mode: "transactional" });
     }
 
-    const requested = cleanEmails(body.emails);
-    if (requested.length === 0) {
-      return jsonError(400, {
-        error: "Select at least one recipient.",
-        code: "send_failed",
-      });
-    }
-
-    const blocked = await blockedSubscriberEmails();
-    const emails = requested.filter((email) => !blocked.has(email));
+    const emails = cleanEmails(body.emails);
     if (emails.length === 0) {
       return jsonError(400, {
-        error: "Those addresses are unsubscribed, or none were valid.",
+        error: "Select at least one recipient.",
         code: "send_failed",
       });
     }

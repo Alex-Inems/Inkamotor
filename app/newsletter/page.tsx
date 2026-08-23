@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   btnGhost,
   btnPrimary,
@@ -9,7 +9,7 @@ import {
   inputClass,
   Modal,
 } from "@/components/modal";
-import { EmptyHint, KpiCard, PageHeader, Panel, StatusBadge } from "@/components/ui";
+import { EmptyHint, FormNotice, KpiCard, PageHeader, Panel, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
@@ -20,6 +20,7 @@ import {
   isMultiDaySend,
   waveCount,
 } from "@/lib/newsletter/waves";
+import { pushWorkspaceNotice } from "@/lib/workspace-notices";
 
 type LiveCampaign = {
   id: string;
@@ -55,6 +56,8 @@ type Template = {
 };
 
 type ApiError = { error: string; missing?: string[] };
+
+type FormFlash = { tone: "success" | "error" | "info"; title: string; body?: string };
 
 function openRate(c: LiveCampaign) {
   if (!c.recipients) return 0;
@@ -98,12 +101,18 @@ export default function NewsletterPage() {
   const [when, setWhen] = useState<"now" | "later">("now");
   const [scheduleAt, setScheduleAt] = useState("");
   const [busyEmail, setBusyEmail] = useState<string | null>(null);
+  const [composerNotice, setComposerNotice] = useState<FormFlash | null>(null);
+  const [subscriberNotice, setSubscriberNotice] = useState<FormFlash | null>(null);
+  const [pageNotice, setPageNotice] = useState<FormFlash | null>(null);
+  const [sendDone, setSendDone] = useState(false);
   const [form, setForm] = useState({
     name: "",
     subject: "",
     preview: "",
     html: "",
   });
+  const composerNoticeRef = useRef<HTMLDivElement>(null);
+  const subscriberNoticeRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/newsletter");
@@ -156,6 +165,17 @@ export default function NewsletterPage() {
   }, [load, loadSubscribers, loadTemplates]);
 
   useEffect(() => {
+    if (!openAdd) return;
+    composerNoticeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [openAdd, sending, composerNotice, sendDone]);
+
+  useEffect(() => {
+    if (subscriberNotice) {
+      subscriberNoticeRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [subscriberNotice]);
+
+  useEffect(() => {
     if (openAdd && subscribers.length === 0) void loadSubscribers();
   }, [openAdd, loadSubscribers, subscribers.length]);
 
@@ -182,12 +202,32 @@ export default function NewsletterPage() {
     setOpenAdd(false);
     setRecipientQuery("");
     setSelectedEmails([]);
+    setComposerNotice(null);
+    setSendDone(false);
+  }
+
+  function resetComposerForAnother() {
+    setSendDone(false);
+    setComposerNotice(null);
+    setSelectedEmails([]);
+    setRecipientQuery("");
+    setForm({ name: "", subject: "", preview: "", html: "" });
+    setWhen("now");
+    setScheduleAt("");
+    setTemplateId("");
+    setEditorKey(`blank-${Date.now()}`);
   }
 
   async function addSubscriber(e: React.FormEvent) {
     e.preventDefault();
     const email = newSubscriber.email.trim();
-    if (!email) return;
+    if (!email) {
+      setSubscriberNotice({
+        tone: "error",
+        title: t("pages.newsletter.needEmail"),
+      });
+      return;
+    }
     setAddingSubscriber(true);
     try {
       const res = await fetch("/api/newsletter/subscribers", {
@@ -197,10 +237,14 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        pushToast((json as ApiError).error || t("pages.newsletter.addFailed"));
+        const message = (json as ApiError).error || t("pages.newsletter.addFailed");
+        setSubscriberNotice({ tone: "error", title: message });
+        pushToast({ message, tone: "error" });
         return;
       }
-      pushToast(t("pages.newsletter.addedToList", { email }));
+      const ok = t("pages.newsletter.addedToList", { email });
+      setSubscriberNotice({ tone: "success", title: ok });
+      pushToast({ message: ok, tone: "success" });
       setNewSubscriber({ email: "", name: "" });
       await loadSubscribers();
     } finally {
@@ -218,14 +262,16 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (!res.ok) {
-        pushToast((json as ApiError).error || t("pages.newsletter.updateFailed"));
+        const message = (json as ApiError).error || t("pages.newsletter.updateFailed");
+        setSubscriberNotice({ tone: "error", title: message });
+        pushToast({ message, tone: "error" });
         return;
       }
-      pushToast(
-        blocked
-          ? t("pages.newsletter.unsubscribedOk", { email })
-          : t("pages.newsletter.resubscribedOk", { email }),
-      );
+      const ok = blocked
+        ? t("pages.newsletter.unsubscribedOk", { email })
+        : t("pages.newsletter.resubscribedOk", { email });
+      setSubscriberNotice({ tone: "success", title: ok });
+      pushToast({ message: ok, tone: "success" });
       await loadSubscribers();
     } finally {
       setBusyEmail(null);
@@ -247,7 +293,14 @@ export default function NewsletterPage() {
 
   async function saveTemplate() {
     if (!form.subject.trim() || !form.html.trim()) {
-      pushToast(t("pages.newsletter.templateNeedBody"));
+      setComposerNotice({
+        tone: "error",
+        title: t("pages.newsletter.templateNeedBody"),
+      });
+      pushToast({
+        message: t("pages.newsletter.templateNeedBody"),
+        tone: "error",
+      });
       return;
     }
     const res = await fetch("/api/newsletter/templates", {
@@ -262,10 +315,19 @@ export default function NewsletterPage() {
     });
     const json = await res.json();
     if (!res.ok) {
-      pushToast((json as ApiError).error || t("pages.newsletter.templateSaveFailed"));
+      const message = (json as ApiError).error || t("pages.newsletter.templateSaveFailed");
+      setComposerNotice({ tone: "error", title: message });
+      pushToast({ message, tone: "error" });
       return;
     }
-    pushToast(t("pages.newsletter.templateSaved"));
+    setComposerNotice({
+      tone: "success",
+      title: t("pages.newsletter.templateSaved"),
+    });
+    pushToast({
+      message: t("pages.newsletter.templateSaved"),
+      tone: "success",
+    });
     await loadTemplates();
   }
 
@@ -275,7 +337,11 @@ export default function NewsletterPage() {
     });
     const json = await del.json();
     if (!del.ok) {
-      pushToast((json as ApiError).error || t("pages.newsletter.templateDeleteFailed"));
+      pushToast({
+        message:
+          (json as ApiError).error || t("pages.newsletter.templateDeleteFailed"),
+        tone: "error",
+      });
       return;
     }
     if (templateId === id) setTemplateId("");
@@ -302,15 +368,35 @@ export default function NewsletterPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.subject.trim()) return;
+    if (sendDone) {
+      closeComposer();
+      return;
+    }
+    if (!form.subject.trim()) {
+      setComposerNotice({
+        tone: "error",
+        title: t("pages.newsletter.needSubject"),
+      });
+      return;
+    }
     if (selectedEmails.length === 0) {
-      pushToast(t("pages.newsletter.needRecipient"));
+      setComposerNotice({
+        tone: "error",
+        title: t("pages.newsletter.needRecipient"),
+      });
       return;
     }
     if (when === "later" && !scheduleAt) {
-      pushToast(t("pages.newsletter.needSchedule"));
+      setComposerNotice({
+        tone: "error",
+        title: t("pages.newsletter.needSchedule"),
+      });
       return;
     }
+    setComposerNotice({
+      tone: "info",
+      title: t("pages.newsletter.sendingInForm", { n: selectedEmails.length }),
+    });
     setSending(true);
     try {
       const html =
@@ -330,24 +416,43 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (!res.ok) {
+        const message = (json as ApiError).error || t("pages.newsletter.sendFailed");
         setError(json as ApiError);
-        pushToast((json as ApiError).error || t("pages.newsletter.sendFailed"));
+        setComposerNotice({ tone: "error", title: message });
+        pushToast({ message, tone: "error" });
         return;
       }
       const days = Number((json as { days?: number }).days ?? 1);
-      pushToast(
-        days > 1
-          ? t("pages.newsletter.campaignQueuedDays", { days })
-          : (json as { scheduled?: boolean }).scheduled
-            ? t("pages.newsletter.campaignScheduled")
-            : t("pages.newsletter.campaignSent"),
+      const n = Number(
+        (json as { recipients?: number }).recipients ?? selectedEmails.length,
       );
-      closeComposer();
-      setForm({ name: "", subject: "", preview: "", html: "" });
-      setWhen("now");
-      setScheduleAt("");
-      setTemplateId("");
-      setEditorKey(`blank-${Date.now()}`);
+      const scheduled = Boolean((json as { scheduled?: boolean }).scheduled);
+      const title =
+        days > 1
+          ? t("pages.newsletter.queuedInForm", { days })
+          : scheduled
+            ? t("pages.newsletter.scheduledInForm")
+            : t("pages.newsletter.sentInForm", { n });
+      const notice: FormFlash = {
+        tone: "success",
+        title,
+        body: t("pages.newsletter.promotionsHint"),
+      };
+      setComposerNotice(notice);
+      setPageNotice(notice);
+      setSendDone(true);
+      pushWorkspaceNotice({
+        kind: "newsletter",
+        title,
+        body: t("pages.newsletter.promotionsHint"),
+        href: "/newsletter",
+      });
+      pushToast({
+        message: title,
+        detail: t("pages.newsletter.promotionsHint"),
+        tone: "success",
+      });
+      setTab("campaigns");
       await load();
     } finally {
       setSending(false);
@@ -386,6 +491,22 @@ export default function NewsletterPage() {
           ) : null}
         </div>
       ) : null}
+
+      {pageNotice ? (
+        <div className="mb-4">
+          <FormNotice
+            tone={pageNotice.tone}
+            title={pageNotice.title}
+            onDismiss={() => setPageNotice(null)}
+          >
+            {pageNotice.body}
+          </FormNotice>
+        </div>
+      ) : (
+        <div className="mb-4">
+          <FormNotice tone="info">{t("pages.newsletter.promotionsBanner")}</FormNotice>
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
@@ -429,6 +550,17 @@ export default function NewsletterPage() {
 
       {tab === "subscribers" ? (
         <div className="space-y-4">
+          {subscriberNotice ? (
+            <div ref={subscriberNoticeRef}>
+              <FormNotice
+                tone={subscriberNotice.tone}
+                title={subscriberNotice.title}
+                onDismiss={() => setSubscriberNotice(null)}
+              >
+                {subscriberNotice.body}
+              </FormNotice>
+            </div>
+          ) : null}
           <Panel title={t("pages.newsletter.addSubscriber")}>
             <form className="grid gap-3 sm:grid-cols-[2fr_2fr_auto]" onSubmit={addSubscriber}>
               <input
@@ -606,6 +738,30 @@ export default function NewsletterPage() {
 
       <Modal open={openAdd} title={t("pages.newsletter.sendTitle")} onClose={closeComposer} wide>
         <form className="grid gap-3" onSubmit={submit}>
+          <div ref={composerNoticeRef}>
+            {composerNotice ? (
+              <FormNotice tone={composerNotice.tone} title={composerNotice.title}>
+                {composerNotice.body}
+              </FormNotice>
+            ) : (
+              <FormNotice tone="info">{t("pages.newsletter.promotionsHint")}</FormNotice>
+            )}
+          </div>
+          {sendDone ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="submit" className={btnPrimary}>
+                {t("common.close")}
+              </button>
+              <button
+                type="button"
+                className={btnSecondary}
+                onClick={resetComposerForAnother}
+              >
+                {t("pages.newsletter.sendAnother")}
+              </button>
+            </div>
+          ) : (
+            <>
           <Field label={t("pages.newsletter.template")}>
             <div className="flex flex-wrap gap-2">
               <select
@@ -645,7 +801,6 @@ export default function NewsletterPage() {
           </Field>
           <Field label={t("common.subject")}>
             <input
-              required
               className={inputClass}
               value={form.subject}
               onChange={(e) => setForm({ ...form, subject: e.target.value })}
@@ -814,6 +969,8 @@ export default function NewsletterPage() {
               {t("common.cancel")}
             </button>
           </div>
+            </>
+          )}
         </form>
       </Modal>
 

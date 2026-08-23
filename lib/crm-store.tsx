@@ -26,7 +26,23 @@ import {
   type SaleStatus,
 } from "@/lib/demo-data";
 
-type Toast = { id: number; message: string };
+export type ToastTone = "default" | "success" | "error" | "info";
+
+export type ToastInput =
+  | string
+  | {
+      message: string;
+      detail?: string;
+      tone?: ToastTone;
+      ms?: number;
+    };
+
+type Toast = {
+  id: number;
+  message: string;
+  detail?: string;
+  tone: ToastTone;
+};
 
 type NewLeadInput = {
   name: string;
@@ -105,7 +121,7 @@ type CrmStore = CrmSnapshot & {
   updateSaleStatus: (id: string, status: SaleStatus) => Promise<void>;
   resetDemo: () => void;
   refreshCrm: () => Promise<void>;
-  pushToast: (message: string) => void;
+  pushToast: (input: ToastInput) => void;
   dismissToast: (id: number) => void;
 };
 
@@ -130,13 +146,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const toastSeq = useRef(0);
 
-  const pushToast = useCallback((message: string) => {
+  const pushToast = useCallback((input: ToastInput) => {
     // Ref counter avoids duplicate keys from Strict Mode double-invoking setState updaters.
     const id = ++toastSeq.current;
-      setToasts((prev) => [...prev, { id, message }]);
-      window.setTimeout(() => {
-        setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3200);
+    const payload = typeof input === "string" ? { message: input } : input;
+    const tone = payload.tone ?? "default";
+    const ms =
+      payload.ms ??
+      (tone === "success" ? 9000 : tone === "error" ? 7000 : 3200);
+    setToasts((prev) =>
+      [
+        ...prev,
+        {
+          id,
+          message: payload.message,
+          detail: payload.detail,
+          tone,
+        },
+      ].slice(-3),
+    );
+    window.setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, ms);
   }, []);
 
   const dismissToast = useCallback((id: number) => {

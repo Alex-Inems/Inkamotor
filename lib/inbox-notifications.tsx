@@ -16,6 +16,7 @@ import { useLocale } from "@/lib/i18n";
 
 export type InboxNotification = {
   id: string;
+  kind?: "mail" | "form";
   fromName: string | null;
   fromEmail: string;
   subject: string;
@@ -87,10 +88,15 @@ export function InboxNotificationsProvider({ children }: { children: ReactNode }
       if (fresh.length > 0 && ready.current) {
         const first = fresh[0]!;
         const name = first.fromName || first.fromEmail;
+        const formCount = fresh.filter((item) => item.kind === "form").length;
         pushToast(
           fresh.length === 1
-            ? t("topbar.newMessage", { name })
-            : t("topbar.newMessages", { n: fresh.length }),
+            ? first.kind === "form"
+              ? t("topbar.newForm", { name })
+              : t("topbar.newMessage", { name })
+            : formCount === fresh.length
+              ? t("topbar.newMessages", { n: fresh.length })
+              : t("topbar.newMessages", { n: fresh.length }),
         );
       }
       for (const id of nextIds) seenIds.current.add(id);
