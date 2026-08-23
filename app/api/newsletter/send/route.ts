@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api";
+import { allowedSubscriberEmails } from "@/lib/crm/subscribers";
 import {
-  listBrevoContacts,
   missingBrevoEnv,
   sendCampaignWaves,
   sendTransactionalEmail,
@@ -89,12 +89,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const { contacts } = await listBrevoContacts();
-    const allowed = new Set(
-      contacts
-        .filter((c) => !c.emailBlacklisted)
-        .map((c) => c.email.trim().toLowerCase()),
-    );
+    const allowed = await allowedSubscriberEmails();
     const emails = requested.filter((email) => allowed.has(email));
     if (emails.length === 0) {
       return jsonError(400, {

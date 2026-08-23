@@ -1,40 +1,31 @@
 import { jsonError } from "@/lib/api";
 import {
-  addContactToList,
-  listBrevoContacts,
-  mapBrevoContact,
-  missingBrevoEnv,
-  setContactBlacklisted,
-  subscriberListId,
-} from "@/lib/brevo";
+  allowedSubscriberEmails,
+  listDbSubscribers,
+  setDbSubscriberBlocked,
+  upsertDbSubscriber,
+} from "@/lib/crm/subscribers";
 import { autoSubscribeEnabled } from "@/lib/mail/auto-subscribe";
+import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET() {
-  const missing = missingBrevoEnv();
+  const missing = missingSupabaseEnv();
   if (missing.length > 0) {
     return jsonError(503, {
-      error: "Email sending isn’t configured yet.",
+      error: "Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to load subscribers.",
       code: "missing_credentials",
       missing,
     });
   }
 
-  if (subscriberListId() === null) {
-    return jsonError(503, {
-      error: "Set BREVO_LIST_ID to load the subscriber list.",
-      code: "missing_credentials",
-      missing: ["BREVO_LIST_ID"],
-    });
-  }
-
   try {
-    const { contacts, total } = await listBrevoContacts();
+    const subscribers = await listDbSubscribers();
     return Response.json({
-      subscribers: contacts.map(mapBrevoContact),
-      total,
+      subscribers,
+      total: subscribers.length,
       autoSubscribe: autoSubscribeEnabled(),
     });
   } catch (err) {
@@ -45,10 +36,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const missing = missingBrevoEnv();
+  const missing = missingSupabaseEnv();
   if (missing.length > 0) {
     return jsonError(503, {
-      error: "Email sending isn’t configured yet.",
+      error: "Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to add subscribers.",
       code: "missing_credentials",
       missing,
     });
@@ -67,7 +58,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await addContactToList({ email, name: body.name, source: "manual" });
+    await upsertDbSubscriber({ email, name: body.name, source: "manual" });
     return Response.json({ ok: true });
   } catch (err) {
     const message =
@@ -77,10 +68,10 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const missing = missingBrevoEnv();
+  const missing = missingSupabaseEnv();
   if (missing.length > 0) {
     return jsonError(503, {
-      error: "Email sending isn’t configured yet.",
+      error: "Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to update subscribers.",
       code: "missing_credentials",
       missing,
     });
@@ -102,7 +93,7 @@ export async function PATCH(request: Request) {
   }
 
   try {
-    await setContactBlacklisted(email, body.blocked);
+    await setDbSubscriberBlocked(email, body.blocked);
     return Response.json({ ok: true, email, blocked: body.blocked });
   } catch (err) {
     const message =

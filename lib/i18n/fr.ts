@@ -666,8 +666,7 @@ export const fr: Messages = {
       nameOptional: "Nom (facultatif)",
       autoOn:
         "Toute personne qui vous écrit, ou envoie le formulaire du site, est ajoutée automatiquement.",
-      autoOff:
-        "L’ajout automatique est désactivé — configurez la liste pour l’activer.",
+      autoOff: "L’ajout automatique est désactivé.",
       subscriberCount: "{n} abonnés",
       noSubscribers:
         "Pas encore d’abonnés. Ils apparaissent ici dès qu’on vous écrit ou que vous les ajoutez ci-dessus.",
@@ -738,6 +737,8 @@ export const fr: Messages = {
       addedToList: "{email} ajouté à la liste",
       addFailed: "Impossible d’ajouter l’abonné",
       loadFailed: "Impossible de charger les abonnés",
+      brevoBusy:
+        "La liste e-mail est occupée. Attendez une minute, puis appuyez sur Actualiser.",
     },
     setup: {
       title: "Config live",

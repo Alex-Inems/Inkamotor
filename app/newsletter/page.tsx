@@ -121,7 +121,12 @@ export default function NewsletterPage() {
     const res = await fetch("/api/newsletter/subscribers");
     const json = await res.json();
     if (!res.ok) {
-      setSubscriberError((json as ApiError).error || t("pages.newsletter.loadFailed"));
+      const raw = (json as ApiError).error || "";
+      setSubscriberError(
+        /429|busy|too many/i.test(raw)
+          ? t("pages.newsletter.brevoBusy")
+          : raw || t("pages.newsletter.loadFailed"),
+      );
       setSubscribers([]);
       setSubscriberTotal(0);
       return;
@@ -151,8 +156,8 @@ export default function NewsletterPage() {
   }, [load, loadSubscribers, loadTemplates]);
 
   useEffect(() => {
-    if (openAdd) void loadSubscribers();
-  }, [openAdd, loadSubscribers]);
+    if (openAdd && subscribers.length === 0) void loadSubscribers();
+  }, [openAdd, loadSubscribers, subscribers.length]);
 
   const sendable = useMemo(
     () => subscribers.filter((s) => !s.blocked),

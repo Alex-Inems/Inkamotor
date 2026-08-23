@@ -33,9 +33,23 @@ export function missingBrevoEnv(): string[] {
   return missingEnv(BREVO_KEYS);
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryAfterMs(header: string | string[] | undefined, attempt: number) {
+  const raw = Array.isArray(header) ? header[0] : header;
+  const seconds = raw ? Number(raw) : NaN;
+  if (Number.isFinite(seconds) && seconds > 0) {
+    return Math.min(15_000, Math.max(400, seconds * 1000));
+  }
+  return Math.min(8_000, 600 * 2 ** attempt);
+}
+
 function brevo<T>(
   path: string,
   init?: { method?: string; body?: string },
+  attempt = 0,
 ): Promise<T> {
   const method = init?.method ?? "GET";
   const body = init?.body;
@@ -60,8 +74,21 @@ function brevo<T>(
         res.on("end", () => {
           const text = Buffer.concat(chunks).toString("utf8");
           const status = res.statusCode ?? 0;
+          if (status === 429 && attempt < 5) {
+            const wait = retryAfterMs(res.headers["retry-after"], attempt);
+            sleep(wait)
+              .then(() => brevo<T>(path, init, attempt + 1))
+              .then(resolve, reject);
+            return;
+          }
           if (status >= 400) {
-            reject(new Error(`Brevo ${status}: ${text.slice(0, 400)}`));
+            reject(
+              new Error(
+                status === 429
+                  ? "Brevo is busy. Wait a minute and try again."
+                  : `Brevo ${status}: ${text.slice(0, 400)}`,
+              ),
+            );
             return;
           }
           if (status === 204 || !text.trim()) {
@@ -94,6 +121,11 @@ function brevo<T>(
     if (body) req.write(body);
     req.end();
   });
+}
+
+export function isBrevoBusyError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b429\b|too many requests|brevo is busy/i.test(message);
 }
 
 export function sender() {
@@ -150,12 +182,45 @@ export function mapBrevoContact(c: BrevoContact): Subscriber {
   };
 }
 
-const CONTACT_PAGE = 50;
+const CONTACT_PAGE = 500;
+const CONTACT_TTL_MS = 3 * 60 * 1000;
+
+type ContactCache = {
+  listId: number;
+  at: number;
+  contacts: BrevoContact[];
+  total: number;
+};
+
+let contactCache: ContactCache | null = null;
+let contactInflight: Promise<{ contacts: BrevoContact[]; total: number }> | null =
+  null;
+
+export function invalidateBrevoContactCache() {
+  contactCache = null;
+}
 
 async function fetchContactPage(listId: number, offset: number) {
   return brevo<{ contacts?: BrevoContact[]; count?: number }>(
     `/contacts/lists/${listId}/contacts?limit=${CONTACT_PAGE}&offset=${offset}&sort=desc`,
   );
+}
+
+async function loadAllContacts(listId: number) {
+  const first = await fetchContactPage(listId, 0);
+  const contacts = [...(first.contacts ?? [])];
+  const reported = first.count ?? contacts.length;
+  for (
+    let offset = CONTACT_PAGE;
+    offset < reported && offset <= 20_000;
+    offset += CONTACT_PAGE
+  ) {
+    const page = await fetchContactPage(listId, offset);
+    contacts.push(...(page.contacts ?? []));
+  }
+  const total = reported || contacts.length;
+  contactCache = { listId, at: Date.now(), contacts, total };
+  return { contacts, total };
 }
 
 export async function listBrevoContacts() {
@@ -165,36 +230,18 @@ export async function listBrevoContacts() {
       "Set BREVO_LIST_ID to see subscribers (Brevo → Contacts → Lists → list id).",
     );
   }
-  const first = await fetchContactPage(listId, 0);
-  const contacts = [...(first.contacts ?? [])];
-  const reported = first.count ?? 0;
-  if (reported > CONTACT_PAGE) {
-    const offsets: number[] = [];
-    for (let offset = CONTACT_PAGE; offset < reported; offset += CONTACT_PAGE) {
-      offsets.push(offset);
-    }
-    const pool = 5;
-    for (let i = 0; i < offsets.length; i += pool) {
-      const pages = await Promise.all(
-        offsets.slice(i, i + pool).map((offset) => fetchContactPage(listId, offset)),
-      );
-      for (const page of pages) contacts.push(...(page.contacts ?? []));
-    }
-  } else {
-    let offset = CONTACT_PAGE;
-    while (contacts.length === offset) {
-      if (offset > 20_000) break;
-      const next = await fetchContactPage(listId, offset);
-      const batch = next.contacts ?? [];
-      contacts.push(...batch);
-      if (batch.length < CONTACT_PAGE) break;
-      offset += CONTACT_PAGE;
-    }
+  if (
+    contactCache &&
+    contactCache.listId === listId &&
+    Date.now() - contactCache.at < CONTACT_TTL_MS
+  ) {
+    return { contacts: contactCache.contacts, total: contactCache.total };
   }
-  return {
-    contacts,
-    total: reported || contacts.length,
-  };
+  if (contactInflight) return contactInflight;
+  contactInflight = loadAllContacts(listId).finally(() => {
+    contactInflight = null;
+  });
+  return contactInflight;
 }
 
 /**
@@ -235,6 +282,7 @@ export async function addContactToList(input: {
       body: JSON.stringify(base),
     });
   }
+  invalidateBrevoContactCache();
 }
 
 /** Import many contacts onto the subscriber list (Brevo batches of up to 150). */
@@ -272,6 +320,7 @@ export async function importContactsToList(
       }),
     });
   }
+  invalidateBrevoContactCache();
   return rows.length;
 }
 
@@ -333,6 +382,7 @@ export async function setContactBlacklisted(email: string, blocked: boolean) {
     method: "PUT",
     body: JSON.stringify({ emailBlacklisted: blocked }),
   });
+  invalidateBrevoContactCache();
 }
 
 export async function createAndSendCampaign(input: {

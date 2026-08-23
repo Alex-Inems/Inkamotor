@@ -666,8 +666,7 @@ export const es: Messages = {
       nameOptional: "Nombre (opcional)",
       autoOn:
         "Quien te escriba, o envíe el formulario web, se añade a esta lista automáticamente.",
-      autoOff:
-        "El alta automática está desactivada — configura la lista para activarla.",
+      autoOff: "El alta automática está desactivada.",
       subscriberCount: "{n} suscriptores",
       noSubscribers:
         "Aún no hay suscriptores. Aparecen aquí cuando alguien te escribe o los añades arriba.",
@@ -737,6 +736,8 @@ export const es: Messages = {
       addedToList: "{email} añadido a la lista",
       addFailed: "No se pudo añadir el suscriptor",
       loadFailed: "No se pudieron cargar los suscriptores",
+      brevoBusy:
+        "La lista de email está ocupada. Espera un minuto y pulsa Actualizar.",
     },
     setup: {
       title: "Configuración en vivo",

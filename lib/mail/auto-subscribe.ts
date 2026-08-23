@@ -1,6 +1,7 @@
-import { addContactToList, missingBrevoEnv, subscriberListId } from "@/lib/brevo";
+import { upsertDbSubscriber } from "@/lib/crm/subscribers";
 import { isBulkMail } from "@/lib/mail/clean";
 import { isSystemSender } from "@/lib/mail/extract";
+import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 /** Automated / system senders that should never join the newsletter list. */
 const BLOCKED_LOCAL_PARTS = [
@@ -61,7 +62,7 @@ function isSubscribable(email: string) {
 export function autoSubscribeEnabled() {
   const flag = process.env.NEWSLETTER_AUTO_SUBSCRIBE?.trim().toLowerCase();
   if (flag === "false" || flag === "0" || flag === "off") return false;
-  return missingBrevoEnv().length === 0 && subscriberListId() !== null;
+  return missingSupabaseEnv().length === 0;
 }
 
 /**
@@ -84,7 +85,7 @@ export async function autoSubscribe(
   let added = 0;
   for (const [email, name] of seen) {
     try {
-      await addContactToList({ email, name, source });
+      await upsertDbSubscriber({ email, name, source });
       added += 1;
     } catch {
       /* keep going — one bad contact shouldn't stop the rest */

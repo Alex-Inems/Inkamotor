@@ -662,7 +662,7 @@ export const en = {
       nameOptional: "Name (optional)",
       autoOn:
         "Anyone who emails you, or submits the website form, is added to this list automatically.",
-      autoOff: "Automatic adding is off — set up the subscriber list to enable it.",
+      autoOff: "Automatic adding is off.",
       subscriberCount: "{n} subscribers",
       noSubscribers:
         "No subscribers yet. They appear here once someone emailed you or you add them above.",
@@ -732,6 +732,8 @@ export const en = {
       addedToList: "{email} added to the list",
       addFailed: "Could not add subscriber",
       loadFailed: "Could not load subscribers",
+      brevoBusy:
+        "The email list is busy. Wait a minute, then tap Refresh.",
     },
     setup: {
       title: "Live setup",
