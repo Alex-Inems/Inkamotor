@@ -349,6 +349,65 @@ export async function listBrevoCampaigns() {
   return campaigns;
 }
 
+export async function deleteBrevoCampaign(id: string) {
+  const campaignId = id.trim();
+  if (!/^\d+$/.test(campaignId)) {
+    throw new Error("This send is only a log entry and cannot be deleted in Brevo.");
+  }
+
+  try {
+    await brevo(`/emailCampaigns/${campaignId}`, { method: "DELETE" });
+    return;
+  } catch (err) {
+    if (!isScheduledDeleteBlock(err)) throw err;
+  }
+
+  for (const status of ["cancel", "suspended", "draft"] as const) {
+    try {
+      await setBrevoCampaignStatus(campaignId, status);
+      await brevo(`/emailCampaigns/${campaignId}`, { method: "DELETE" });
+      return;
+    } catch (err) {
+      if (isMissingCampaign(err)) return;
+      if (isScheduledDeleteBlock(err) || isStatusChangeRejected(err)) continue;
+      throw err;
+    }
+  }
+
+  try {
+    await setBrevoCampaignStatus(campaignId, "archive");
+  } catch (err) {
+    if (!isMissingCampaign(err)) throw err;
+  }
+}
+
+function isScheduledDeleteBlock(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  return /403|permission_denied|can not be deleted|cannot be deleted/i.test(
+    message,
+  );
+}
+
+function isStatusChangeRejected(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b400\b|\b403\b|invalid|not allowed|cannot/i.test(message);
+}
+
+function isMissingCampaign(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b404\b|does not exist|not found/i.test(message);
+}
+
+async function setBrevoCampaignStatus(
+  id: string,
+  status: "cancel" | "suspended" | "draft" | "archive",
+) {
+  await brevo(`/emailCampaigns/${id}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
+  });
+}
+
 async function subscriberFolderId() {
   const id = subscriberListId();
   if (id == null) return 1;
@@ -635,14 +694,14 @@ export function mapBrevoCampaign(c: BrevoCampaign) {
   const delivered = stats?.delivered || list?.delivered || 0;
   const raw = (c.status || "draft").toLowerCase().replace(/[_-]/g, "");
   const status =
-    c.sentDate || delivered > 0 || raw === "sent"
-      ? "sent"
-      : raw.includes("queue") || raw.includes("process") || raw.includes("review")
-        ? "sending"
-        : raw.includes("schedule")
-          ? "scheduled"
-          : raw.includes("archive") || raw.includes("suspend") || raw.includes("cancel")
-            ? "archived"
+    raw.includes("archive") || raw.includes("suspend") || raw.includes("cancel")
+      ? "archived"
+      : c.sentDate || delivered > 0 || raw === "sent"
+        ? "sent"
+        : raw.includes("queue") || raw.includes("process") || raw.includes("review")
+          ? "sending"
+          : raw.includes("schedule")
+            ? "scheduled"
             : "draft";
 
   return {

@@ -20,10 +20,12 @@ import {
   isMultiDaySend,
   waveCount,
 } from "@/lib/newsletter/waves";
+import { hideCampaignId, hiddenCampaignIds } from "@/lib/newsletter/hidden-campaigns";
 import { pushWorkspaceNotice } from "@/lib/workspace-notices";
 
 type LiveCampaign = {
   id: string;
+  brevoId?: string;
   name: string;
   subject: string;
   status: string;
@@ -104,6 +106,9 @@ export default function NewsletterPage() {
   const [composerNotice, setComposerNotice] = useState<FormFlash | null>(null);
   const [subscriberNotice, setSubscriberNotice] = useState<FormFlash | null>(null);
   const [pageNotice, setPageNotice] = useState<FormFlash | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<LiveCampaign | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState<FormFlash | null>(null);
   const [sendDone, setSendDone] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -123,7 +128,12 @@ export default function NewsletterPage() {
       return;
     }
     setError(null);
-    setCampaigns((json as { campaigns: LiveCampaign[] }).campaigns ?? []);
+    const hidden = hiddenCampaignIds();
+    setCampaigns(
+      ((json as { campaigns: LiveCampaign[] }).campaigns ?? []).filter(
+        (c) => !hidden.has(c.id) && !(c.brevoId && hidden.has(c.brevoId)),
+      ),
+    );
   }, []);
 
   const loadSubscribers = useCallback(async () => {
@@ -459,6 +469,49 @@ export default function NewsletterPage() {
     }
   }
 
+  function campaignApiId(c: LiveCampaign) {
+    return c.brevoId && /^\d+$/.test(c.brevoId) ? c.brevoId : c.id;
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    setDeleteNotice(null);
+    try {
+      const res = await fetch(
+        `/api/newsletter?id=${encodeURIComponent(campaignApiId(pendingDelete))}`,
+        { method: "DELETE" },
+      );
+      const json = (await res.json()) as ApiError & { ok?: boolean };
+      if (!res.ok) {
+        const message = json.error || t("pages.newsletter.deleteFailed");
+        setDeleteNotice({ tone: "error", title: message });
+        pushToast({ message, tone: "error" });
+        return;
+      }
+      hideCampaignId(pendingDelete.id);
+      if (pendingDelete.brevoId) hideCampaignId(pendingDelete.brevoId);
+      setCampaigns((prev) =>
+        prev.filter(
+          (c) =>
+            c.id !== pendingDelete.id &&
+            c.brevoId !== pendingDelete.id &&
+            c.id !== pendingDelete.brevoId,
+        ),
+      );
+      setSelected((current) =>
+        current?.id === pendingDelete.id ? null : current,
+      );
+      setPendingDelete(null);
+      setPageNotice({
+        tone: "success",
+        title: t("pages.newsletter.deletedOk"),
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -716,14 +769,27 @@ export default function NewsletterPage() {
                             ? formatDate(c.scheduledAt.slice(0, 10), locale)
                             : t("common.dash")}
                       </td>
-                      <td>
-                        <button
-                          type="button"
-                          className={btnGhost}
-                          onClick={() => setSelected(c)}
-                        >
-                          {t("common.open")}
-                        </button>
+                      <td className="whitespace-nowrap">
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <button
+                            type="button"
+                            className={btnGhost}
+                            onClick={() => setSelected(c)}
+                          >
+                            {t("common.open")}
+                          </button>
+                          <button
+                            type="button"
+                            className={`${btnGhost} text-pink`}
+                            onClick={() => {
+                              setSelected(null);
+                              setDeleteNotice(null);
+                              setPendingDelete(c);
+                            }}
+                          >
+                            {t("pages.newsletter.deleteCampaign")}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1004,6 +1070,62 @@ export default function NewsletterPage() {
             {selected.preview ? (
               <p className="text-mute">{selected.preview}</p>
             ) : null}
+            <div className="pt-2">
+              <button
+                type="button"
+                className={`${btnGhost} text-pink`}
+                onClick={() => {
+                  setDeleteNotice(null);
+                  setPendingDelete(selected);
+                  setSelected(null);
+                }}
+              >
+                {t("pages.newsletter.deleteCampaign")}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={!!pendingDelete}
+        title={t("pages.newsletter.deleteTitle")}
+        onClose={() => {
+          if (!deleting) setPendingDelete(null);
+        }}
+      >
+        {pendingDelete ? (
+          <div className="space-y-3">
+            {deleteNotice ? (
+              <FormNotice tone={deleteNotice.tone} title={deleteNotice.title} />
+            ) : (
+              <FormNotice tone="info" title={pendingDelete.name}>
+                {t("pages.newsletter.deleteConfirm")}
+                {pendingDelete.status === "scheduled"
+                  ? ` ${t("pages.newsletter.deleteConfirmScheduled")}`
+                  : ""}
+              </FormNotice>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={`${btnPrimary} bg-wine hover:bg-wine/90`}
+                disabled={deleting}
+                onClick={() => void confirmDelete()}
+              >
+                {deleting
+                  ? t("common.deleting")
+                  : t("pages.newsletter.deleteCampaign")}
+              </button>
+              <button
+                type="button"
+                className={btnSecondary}
+                disabled={deleting}
+                onClick={() => setPendingDelete(null)}
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
           </div>
         ) : null}
       </Modal>
