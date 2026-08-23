@@ -33,6 +33,13 @@ export const metadata: Metadata = {
   title: "Inkamoto CRM — inkamototours.com",
   description:
     "CRM for Inkamoto Tours — leads, ads, invoices, analytics, and newsletters.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+      { url: "/icon.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon.png" }],
+  },
 };
 
 export const viewport: Viewport = {
