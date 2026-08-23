@@ -22,6 +22,7 @@ export async function proxy(request: NextRequest) {
   const isGoogleOAuthCallback = pathname === "/api/google/oauth/callback";
   const isGoogleLoginStart = pathname === "/api/auth/google/start";
   const isGoogleLoginCallback = pathname === "/api/auth/google/callback";
+  const isNewsletterUnsubscribe = pathname === "/api/newsletter/unsubscribe";
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const authed = await verifySessionToken(token);
@@ -31,7 +32,8 @@ export async function proxy(request: NextRequest) {
     isLogoutApi ||
     isGoogleOAuthCallback ||
     isGoogleLoginStart ||
-    isGoogleLoginCallback
+    isGoogleLoginCallback ||
+    isNewsletterUnsubscribe
   ) {
     return NextResponse.next();
   }

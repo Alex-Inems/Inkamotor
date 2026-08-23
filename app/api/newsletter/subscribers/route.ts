@@ -1,6 +1,5 @@
 import { jsonError } from "@/lib/api";
 import {
-  allowedSubscriberEmails,
   listDbSubscribers,
   setDbSubscriberBlocked,
   upsertDbSubscriber,

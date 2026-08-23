@@ -1,5 +1,5 @@
 import { jsonError } from "@/lib/api";
-import { allowedSubscriberEmails } from "@/lib/crm/subscribers";
+import { blockedSubscriberEmails } from "@/lib/crm/subscribers";
 import {
   missingBrevoEnv,
   sendCampaignWaves,
@@ -89,11 +89,11 @@ export async function POST(request: Request) {
       });
     }
 
-    const allowed = await allowedSubscriberEmails();
-    const emails = requested.filter((email) => allowed.has(email));
+    const blocked = await blockedSubscriberEmails();
+    const emails = requested.filter((email) => !blocked.has(email));
     if (emails.length === 0) {
       return jsonError(400, {
-        error: "None of those addresses are on the subscriber list.",
+        error: "Those addresses are unsubscribed, or none were valid.",
         code: "send_failed",
       });
     }
@@ -104,6 +104,7 @@ export async function POST(request: Request) {
       htmlContent: html,
       previewText: body.previewText,
       emails,
+      origin: new URL(request.url).origin,
       firstAtLocal: body.scheduledAt?.trim() || undefined,
     });
     return Response.json({

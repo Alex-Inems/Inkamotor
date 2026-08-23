@@ -33,18 +33,18 @@ async function fetchLeadPeople(): Promise<Subscriber[]> {
     .from("leads")
     .select("id", { count: "exact", head: true });
   if (countError) throw new Error(countError.message);
+  if (!count) return [];
 
-  const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
-  const batches = await Promise.all(
-    Array.from({ length: pages }, async (_, i) => {
-      const { data, error } = await sb
-        .from("leads")
-        .select("id, name, email, source, created_at")
-        .range(i * PAGE, i * PAGE + PAGE - 1);
-      if (error) throw new Error(error.message);
-      return data ?? [];
-    }),
-  );
+  const pages = Math.ceil(count / PAGE);
+  const batches = [];
+  for (let i = 0; i < pages; i++) {
+    const { data, error } = await sb
+      .from("leads")
+      .select("id, name, email, source, created_at")
+      .range(i * PAGE, i * PAGE + PAGE - 1);
+    if (error) throw new Error(error.message);
+    batches.push(data ?? []);
+  }
 
   const unique = new Map<string, Subscriber>();
   for (const row of batches.flat()) {
@@ -73,55 +73,54 @@ async function fetchTableRows(): Promise<Row[] | "missing"> {
     if (isMissingTable(countError.message)) return "missing";
     throw new Error(countError.message);
   }
+  if (!count) return [];
 
-  const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
-  const batches = await Promise.all(
-    Array.from({ length: pages }, async (_, i) => {
-      const { data, error } = await sb
-        .from("newsletter_subscribers")
-        .select("email, name, source, blocked, added_at")
-        .order("added_at", { ascending: false })
-        .range(i * PAGE, i * PAGE + PAGE - 1);
-      if (error) throw new Error(error.message);
-      return (data ?? []) as Row[];
-    }),
-  );
+  const pages = Math.ceil(count / PAGE);
+  const batches: Row[][] = [];
+  for (let i = 0; i < pages; i++) {
+    const { data, error } = await sb
+      .from("newsletter_subscribers")
+      .select("email, name, source, blocked, added_at")
+      .order("added_at", { ascending: false })
+      .range(i * PAGE, i * PAGE + PAGE - 1);
+    if (error) throw new Error(error.message);
+    batches.push((data ?? []) as Row[]);
+  }
   return batches.flat();
 }
 
-async function backfillFromLeads() {
-  const people = await fetchLeadPeople();
-  if (people.length === 0) return;
-  const sb = getSupabase();
-  const chunk = 200;
-  for (let i = 0; i < people.length; i += chunk) {
-    const batch = people.slice(i, i + chunk).map((person) => ({
-      email: person.email,
-      name: person.name,
-      source: person.source || "import",
-      blocked: false,
-      added_at: person.addedAt || new Date().toISOString(),
-    }));
-    const { error } = await sb
-      .from("newsletter_subscribers")
-      .upsert(batch, { onConflict: "email" });
-    if (error) throw new Error(error.message);
+function mergePeople(fromLeads: Subscriber[], table: Row[]): Subscriber[] {
+  const byEmail = new Map(fromLeads.map((person) => [person.email, person]));
+  for (const row of table) {
+    const mapped = mapRow(row);
+    const existing = byEmail.get(mapped.email);
+    if (existing) {
+      byEmail.set(mapped.email, {
+        ...existing,
+        blocked: mapped.blocked,
+        name: mapped.name || existing.name,
+        source: mapped.source || existing.source,
+        addedAt: mapped.addedAt || existing.addedAt,
+      });
+    } else {
+      byEmail.set(mapped.email, mapped);
+    }
   }
+  return [...byEmail.values()];
 }
 
 export async function listDbSubscribers(): Promise<Subscriber[]> {
   if (missingSupabaseEnv().length) {
     throw new Error("Supabase is not configured");
   }
-  const rows = await fetchTableRows();
-  if (rows === "missing") return fetchLeadPeople();
-  if (rows.length === 0) {
-    await backfillFromLeads();
-    const filled = await fetchTableRows();
-    if (filled === "missing") return fetchLeadPeople();
-    return filled.map(mapRow);
+  const people = await fetchLeadPeople();
+  try {
+    const table = await fetchTableRows();
+    if (table === "missing") return people;
+    return mergePeople(people, table);
+  } catch {
+    return people;
   }
-  return rows.map(mapRow);
 }
 
 export async function upsertDbSubscriber(input: {
@@ -197,9 +196,17 @@ export async function setDbSubscriberBlocked(email: string, blocked: boolean) {
   if (insertErr) throw new Error(insertErr.message);
 }
 
-export async function allowedSubscriberEmails(): Promise<Set<string>> {
-  const rows = await listDbSubscribers();
-  return new Set(
-    rows.filter((row) => !row.blocked).map((row) => row.email.toLowerCase()),
-  );
+export async function blockedSubscriberEmails(): Promise<Set<string>> {
+  try {
+    const table = await fetchTableRows();
+    if (table === "missing") return new Set();
+    return new Set(
+      table
+        .filter((row) => row.blocked)
+        .map((row) => row.email.trim().toLowerCase())
+        .filter(Boolean),
+    );
+  } catch {
+    return new Set();
+  }
 }
