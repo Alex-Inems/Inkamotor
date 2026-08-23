@@ -6,7 +6,9 @@ export { fr } from "./fr";
 export {
   defaultLocale,
   interpolate,
+  localeFromCookieValue,
   localeMeta,
+  localeStorageKey,
   locales,
   type Locale,
 } from "./config";

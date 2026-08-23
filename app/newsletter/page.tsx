@@ -14,6 +14,12 @@ import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
 import { HtmlEditor } from "@/components/html-editor";
+import {
+  DAILY_NEWSLETTER_CAP,
+  hasScheduledWaves,
+  isMultiDaySend,
+  waveCount,
+} from "@/lib/newsletter/waves";
 
 type LiveCampaign = {
   id: string;
@@ -280,6 +286,10 @@ export default function NewsletterPage() {
   }, [campaigns, query]);
 
   const sent = campaigns.filter((c) => c.status === "sent");
+  const pendingWaves = hasScheduledWaves(campaigns);
+  const selectedCount = selectedEmails.length;
+  const daysNeeded = waveCount(selectedCount);
+  const multiDay = isMultiDaySend(selectedCount);
   const avgOpen =
     sent.length === 0
       ? 0
@@ -319,10 +329,13 @@ export default function NewsletterPage() {
         pushToast((json as ApiError).error || t("pages.newsletter.sendFailed"));
         return;
       }
+      const days = Number((json as { days?: number }).days ?? 1);
       pushToast(
-        (json as { scheduled?: boolean }).scheduled
-          ? t("pages.newsletter.campaignScheduled")
-          : t("pages.newsletter.campaignSent"),
+        days > 1
+          ? t("pages.newsletter.campaignQueuedDays", { days })
+          : (json as { scheduled?: boolean }).scheduled
+            ? t("pages.newsletter.campaignScheduled")
+            : t("pages.newsletter.campaignSent"),
       );
       closeComposer();
       setForm({ name: "", subject: "", preview: "", html: "" });
@@ -445,7 +458,7 @@ export default function NewsletterPage() {
             </p>
           </Panel>
 
-          <Panel title={t("pages.newsletter.subscriberCount", { n: subscribers.length })}>
+          <Panel title={t("pages.newsletter.subscriberCount", { n: subscriberTotal || subscribers.length })}>
             {subscriberError ? (
               <EmptyHint>{subscriberError}</EmptyHint>
             ) : subscribers.length === 0 ? (
@@ -691,6 +704,11 @@ export default function NewsletterPage() {
               </p>
             </div>
             <p className="text-xs text-mute">{t("pages.newsletter.pickRecipients")}</p>
+            {pendingWaves && multiDay ? (
+              <p className="border border-wine/40 bg-wine/10 px-3 py-2.5 text-sm leading-relaxed text-pink">
+                {t("pages.newsletter.wavesInProgress")}
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -749,12 +767,24 @@ export default function NewsletterPage() {
               </ul>
             )}
           </div>
-          <p className="text-xs text-mute">
-            {when === "later"
-              ? t("pages.newsletter.sendsLater")
-              : t("pages.newsletter.sendsNow")}
-          </p>
-          <div className="flex flex-wrap gap-2">
+          {multiDay ? (
+            <div className="border border-accent/50 bg-accent-soft px-3 py-3 text-sm leading-relaxed">
+              {t("pages.newsletter.multiDayNotice", {
+                n: selectedCount,
+                days: daysNeeded,
+                cap: DAILY_NEWSLETTER_CAP,
+              })}
+            </div>
+          ) : selectedCount > 0 ? (
+            <p className="text-xs text-mute">{t("pages.newsletter.sendsAtPickTime")}</p>
+          ) : (
+            <p className="text-xs text-mute">
+              {when === "later"
+                ? t("pages.newsletter.sendsLater")
+                : t("pages.newsletter.sendsNow")}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="submit"
               className={btnPrimary}
@@ -766,6 +796,11 @@ export default function NewsletterPage() {
                   ? t("pages.newsletter.scheduleSend")
                   : t("pages.newsletter.sendNow")}
             </button>
+            {multiDay ? (
+              <span className="text-xs text-mute">
+                {t("pages.newsletter.sendOverDays", { days: daysNeeded })}
+              </span>
+            ) : null}
             <button
               type="button"
               className={btnSecondary}

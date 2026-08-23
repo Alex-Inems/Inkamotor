@@ -651,7 +651,7 @@ export const es: Messages = {
     newsletter: {
       title: "Newsletter",
       description:
-        "Crear, programar y medir campañas de email de Inkamoto Tours.",
+        "Puedes escribir a 250 personas al día. Así queda margen el mismo día para facturas y respuestas a los viajeros. Un envío más grande sale en varios días. Cada persona recibe el mensaje una sola vez.",
       newCampaign: "Nueva campaña",
       refresh: "Actualizar",
       autoFromEmail: "Añadidos automáticos por email",
@@ -722,6 +722,13 @@ export const es: Messages = {
       noSendable: "Aún no hay suscriptores a quienes enviar.",
       needRecipient: "Selecciona al menos una persona.",
       sendsNow: "Se envía ahora a las personas que elegiste.",
+      sendsAtPickTime: "Se envía a la hora que elijas, a las personas seleccionadas.",
+      multiDayNotice:
+        "Has seleccionado {n} personas. Puedes enviar 250 emails de newsletter al día, así que este envío saldrá en {days} días. El primer grupo sale a la hora que elijas. El resto, los días siguientes a la misma hora. Cada persona recibe el mensaje una sola vez. Las facturas y las respuestas a viajeros siguen funcionando.",
+      sendOverDays: "Enviar en {days} días",
+      campaignQueuedDays: "Esta newsletter saldrá en {days} días.",
+      wavesInProgress:
+        "Otra newsletter ya está programada en varios días. Un envío grande nuevo se solaparía.",
       sendNow: "Enviar newsletter",
       campaign: "Campaña",
       statsLine: "Entregados {delivered} · Aperturas {opens} · Clics {clicks}",

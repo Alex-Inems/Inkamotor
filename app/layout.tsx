@@ -3,6 +3,11 @@ import { cookies } from "next/headers";
 import { Inria_Sans, Roboto, Staatliches } from "next/font/google";
 import { CrmShell } from "@/components/crm-shell";
 import { SESSION_COOKIE, readSessionToken } from "@/lib/auth";
+import {
+  localeFromCookieValue,
+  localeMeta,
+  localeStorageKey,
+} from "@/lib/i18n/config";
 import { userFromClaims } from "@/lib/session";
 import "./globals.css";
 
@@ -41,15 +46,18 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const jar = await cookies();
   const claims = await readSessionToken(jar.get(SESSION_COOKIE)?.value);
   const user = userFromClaims(claims);
+  const locale = localeFromCookieValue(jar.get(localeStorageKey)?.value);
 
   return (
     <html
-      lang="en"
+      lang={localeMeta[locale].bcp47}
       suppressHydrationWarning
       className={`${staatliches.variable} ${inriaSans.variable} ${roboto.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">
-        <CrmShell user={user}>{children}</CrmShell>
+        <CrmShell user={user} locale={locale}>
+          {children}
+        </CrmShell>
       </body>
     </html>
   );

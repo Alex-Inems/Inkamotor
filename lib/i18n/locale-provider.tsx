@@ -6,12 +6,13 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useSyncExternalStore,
+  useState,
 } from "react";
 import { en, type Messages } from "./en";
 import { es } from "./es";
 import { fr } from "./fr";
 import {
+  browserPreferredLocale,
   defaultLocale,
   detectLocale,
   interpolate,
@@ -34,19 +35,10 @@ type LocaleContextValue = {
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
-const localeListeners = new Set<() => void>();
-
-function subscribeLocale(onChange: () => void) {
-  localeListeners.add(onChange);
-  window.addEventListener("storage", onChange);
-  return () => {
-    localeListeners.delete(onChange);
-    window.removeEventListener("storage", onChange);
-  };
-}
-
-function emitLocaleChange() {
-  localeListeners.forEach((fn) => fn());
+function persistLocale(locale: Locale) {
+  window.localStorage.setItem(localeStorageKey, locale);
+  document.cookie = `${localeStorageKey}=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  document.documentElement.lang = localeMeta[locale].bcp47;
 }
 
 function lookup(messages: Messages, path: string): string {
@@ -59,22 +51,39 @@ function lookup(messages: Messages, path: string): string {
   return typeof value === "string" ? value : path;
 }
 
-export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const locale = useSyncExternalStore(
-    subscribeLocale,
-    detectLocale,
-    () => defaultLocale,
-  );
+export function LocaleProvider({
+  children,
+  initialLocale = defaultLocale,
+}: {
+  children: React.ReactNode;
+  initialLocale?: Locale;
+}) {
+  const [locale, setLocaleState] = useState<Locale>(initialLocale);
 
   useEffect(() => {
-    document.documentElement.lang = localeMeta[locale].bcp47;
-    document.cookie = `${localeStorageKey}=${locale}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    const stored = detectLocale();
+    if (stored !== initialLocale) {
+      setLocaleState(stored);
+      return;
+    }
+    if (stored !== defaultLocale) return;
+    const preferred = browserPreferredLocale();
+    if (preferred && preferred !== initialLocale) setLocaleState(preferred);
+  }, [initialLocale]);
+
+  useEffect(() => {
+    persistLocale(locale);
   }, [locale]);
 
+  useEffect(() => {
+    const onStorage = () => setLocaleState(detectLocale());
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const setLocale = useCallback((next: Locale) => {
-    window.localStorage.setItem(localeStorageKey, next);
-    document.cookie = `${localeStorageKey}=${next}; Path=/; Max-Age=31536000; SameSite=Lax`;
-    emitLocaleChange();
+    persistLocale(next);
+    setLocaleState(next);
   }, []);
 
   const value = useMemo<LocaleContextValue>(() => {

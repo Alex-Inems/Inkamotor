@@ -1,14 +1,15 @@
 import { jsonError } from "@/lib/api";
 import {
-  createAndSendCampaign,
   listBrevoContacts,
   missingBrevoEnv,
+  sendCampaignWaves,
   sendTransactionalEmail,
 } from "@/lib/brevo";
-import { toBrevoScheduledAt, wrapCampaignHtml } from "@/lib/newsletter/html";
+import { wrapCampaignHtml } from "@/lib/newsletter/html";
+import { DAILY_NEWSLETTER_CAP } from "@/lib/newsletter/waves";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type Body = {
   name?: string;
@@ -102,22 +103,24 @@ export async function POST(request: Request) {
       });
     }
 
-    const created = await createAndSendCampaign({
+    const created = await sendCampaignWaves({
       name: body.name?.trim() || subject,
       subject,
       htmlContent: html,
       previewText: body.previewText,
       emails,
-      scheduledAt: body.scheduledAt
-        ? toBrevoScheduledAt(body.scheduledAt)
-        : undefined,
+      firstAtLocal: body.scheduledAt?.trim() || undefined,
     });
     return Response.json({
       ok: true,
       mode: "campaign",
-      id: created.id,
+      ids: created.ids,
+      id: created.ids[0],
       scheduled: created.scheduled,
-      recipients: emails.length,
+      days: created.days,
+      waves: created.waves,
+      recipients: created.recipients,
+      dailyCap: DAILY_NEWSLETTER_CAP,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Send failed";

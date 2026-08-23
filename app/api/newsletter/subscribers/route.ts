@@ -10,6 +10,7 @@ import {
 import { autoSubscribeEnabled } from "@/lib/mail/auto-subscribe";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET() {
   const missing = missingBrevoEnv();

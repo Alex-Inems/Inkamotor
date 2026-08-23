@@ -8,7 +8,7 @@ import { Topbar } from "./topbar";
 import { ToastStack } from "./toast-stack";
 import { FirstRunTour } from "./first-run-tour";
 import { CrmProvider } from "@/lib/crm-store";
-import { LocaleProvider, useT } from "@/lib/i18n";
+import { LocaleProvider, useT, type Locale } from "@/lib/i18n";
 import { InboxNotificationsProvider } from "@/lib/inbox-notifications";
 import { SessionUserProvider } from "@/lib/session-user";
 import type { SessionUser } from "@/lib/session";
@@ -30,17 +30,19 @@ const pageKeys: Record<string, string> = {
 export function CrmShell({
   children,
   user,
+  locale,
 }: {
   children: React.ReactNode;
   user: SessionUser;
+  locale?: Locale;
 }) {
   const pathname = usePathname();
   if (pathname === "/login") {
-    return <LocaleProvider>{children}</LocaleProvider>;
+    return <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>;
   }
 
   return (
-    <LocaleProvider>
+    <LocaleProvider initialLocale={locale}>
       <SessionUserProvider user={user}>
         <CrmProvider>
           <InboxNotificationsProvider>

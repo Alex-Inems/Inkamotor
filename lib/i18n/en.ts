@@ -647,7 +647,7 @@ export const en = {
     newsletter: {
       title: "Newsletter",
       description:
-        "Create, schedule, and measure email campaigns for Inkamoto Tours.",
+        "You can email 250 people per day. That leaves room the same day for invoices and replies to riders. A larger send goes out over several days. Each person still gets the message once.",
       newCampaign: "New campaign",
       refresh: "Refresh",
       autoFromEmail: "Auto-added from email",
@@ -717,6 +717,13 @@ export const en = {
       noSendable: "No subscribers to send to yet.",
       needRecipient: "Select at least one person.",
       sendsNow: "Sends now to the people you selected.",
+      sendsAtPickTime: "Sends at the time you pick, to the people you selected.",
+      multiDayNotice:
+        "You selected {n} people. You can send 250 newsletter emails per day, so this will go out over {days} days. The first group sends at the time you pick. The rest send on the following days at the same time. Each person gets this once. Invoices and rider replies still work.",
+      sendOverDays: "Send over {days} days",
+      campaignQueuedDays: "This newsletter will go out over {days} days.",
+      wavesInProgress:
+        "Another newsletter is already scheduled over several days. A new large send will overlap with it.",
       sendNow: "Send newsletter",
       campaign: "Campaign",
       statsLine: "Delivered {delivered} · Opens {opens} · Clicks {clicks}",
