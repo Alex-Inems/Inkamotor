@@ -529,9 +529,9 @@ export default function NewsletterPage() {
             >
               {t("pages.newsletter.refresh")}
             </button>
-            <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
+          <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
               {t("pages.newsletter.newCampaign")}
-            </button>
+          </button>
           </div>
         }
       />
@@ -771,9 +771,9 @@ export default function NewsletterPage() {
                       </td>
                       <td className="whitespace-nowrap">
                         <div className="flex flex-wrap justify-end gap-1">
-                          <button
-                            type="button"
-                            className={btnGhost}
+                        <button
+                          type="button"
+                          className={btnGhost}
                             onClick={() => setSelected(c)}
                           >
                             {t("common.open")}
@@ -788,7 +788,7 @@ export default function NewsletterPage() {
                             }}
                           >
                             {t("pages.newsletter.deleteCampaign")}
-                          </button>
+                        </button>
                         </div>
                       </td>
                     </tr>
@@ -867,11 +867,11 @@ export default function NewsletterPage() {
           </Field>
           <Field label={t("common.subject")}>
             <input
-              className={inputClass}
-              value={form.subject}
-              onChange={(e) => setForm({ ...form, subject: e.target.value })}
-            />
-          </Field>
+                className={inputClass}
+                value={form.subject}
+                onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              />
+            </Field>
           <Field label={t("pages.newsletter.previewText")}>
             <input
               className={inputClass}
@@ -952,7 +952,7 @@ export default function NewsletterPage() {
               >
                 {t("pages.newsletter.selectNone")}
               </button>
-            </div>
+          </div>
             <input
               className={inputClass}
               placeholder={t("pages.newsletter.searchPeople")}
@@ -986,7 +986,7 @@ export default function NewsletterPage() {
                             </span>
                           ) : null}
                         </span>
-                      </label>
+          </label>
                     </li>
                   );
                 })}
@@ -1107,8 +1107,8 @@ export default function NewsletterPage() {
               </FormNotice>
             )}
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
+                  <button
+                    type="button"
                 className={`${btnPrimary} bg-wine hover:bg-wine/90`}
                 disabled={deleting}
                 onClick={() => void confirmDelete()}
@@ -1116,15 +1116,15 @@ export default function NewsletterPage() {
                 {deleting
                   ? t("common.deleting")
                   : t("pages.newsletter.deleteCampaign")}
-              </button>
-              <button
-                type="button"
-                className={btnSecondary}
+                  </button>
+                  <button
+                    type="button"
+                    className={btnSecondary}
                 disabled={deleting}
                 onClick={() => setPendingDelete(null)}
               >
                 {t("common.cancel")}
-              </button>
+                </button>
             </div>
           </div>
         ) : null}

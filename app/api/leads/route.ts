@@ -1,16 +1,17 @@
 import { jsonError } from "@/lib/api";
+import { clampPriority } from "@/lib/crm/contact-details";
 import {
   listLeadPage,
   parseContactWrite,
+  updateLeadPriorityFast,
   updateLeadStatusFast,
   writeLead,
 } from "@/lib/crm/lead-query";
+import { isValidStageId } from "@/lib/crm/pipeline";
 import type { LeadStatus } from "@/lib/demo-data";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-
-const STAGES = new Set(["new", "contacted", "qualified", "won", "lost"]);
 
 function supabaseMissing() {
   const missing = missingSupabaseEnv();
@@ -31,11 +32,12 @@ export async function GET(req: Request) {
   const sort = url.searchParams.get("sort") ?? "completeness";
   const dir = url.searchParams.get("dir") === "desc" ? "desc" : "asc";
   const kind = url.searchParams.get("kind") ?? "all";
+  const kanban = url.searchParams.get("kanban") === "1";
 
   try {
     const payload = await listLeadPage({
       q: url.searchParams.get("q") ?? "",
-      stage: STAGES.has(stage) ? (stage as LeadStatus) : "all",
+      stage: stage !== "all" && isValidStageId(stage) ? stage : "all",
       country: url.searchParams.get("country") ?? "all",
       kind: kind === "company" || kind === "person" ? kind : "all",
       sort:
@@ -44,7 +46,8 @@ export async function GET(req: Request) {
           : "completeness",
       dir,
       page: Number(url.searchParams.get("page") ?? 0) || 0,
-      limit: Number(url.searchParams.get("limit") ?? 75) || 75,
+      limit: Number(url.searchParams.get("limit") ?? (kanban ? 400 : 75)) || 75,
+      kanban,
     });
     return Response.json(payload);
   } catch (err) {
@@ -100,9 +103,25 @@ export async function PATCH(req: Request) {
     return jsonError(400, { error: "id is required", code: "db_error" });
   }
 
-  if (body.name == null && typeof body.status === "string" && STAGES.has(body.status)) {
+  if (
+    body.name == null &&
+    typeof body.status === "string" &&
+    isValidStageId(body.status)
+  ) {
     try {
       await updateLeadStatusFast(id, body.status as LeadStatus);
+      return Response.json({ ok: true });
+    } catch (err) {
+      return jsonError(502, {
+        error: err instanceof Error ? err.message : "Could not update lead",
+        code: "db_error",
+      });
+    }
+  }
+
+  if (body.name == null && body.priority != null && body.status == null) {
+    try {
+      await updateLeadPriorityFast(id, clampPriority(body.priority));
       return Response.json({ ok: true });
     } catch (err) {
       return jsonError(502, {

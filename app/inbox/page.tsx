@@ -431,16 +431,16 @@ export default function InboxPage() {
           {unreadTotal > 0 ? (
             <CountBadge count={unreadTotal} />
           ) : null}
-        </div>
+      </div>
 
         <div className="px-3 pt-2 sm:px-4 sm:pt-3">
-          <input
+        <input
             className="w-full rounded-full border border-line bg-ash px-3.5 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none sm:px-3"
             placeholder={t("pages.inbox.search")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
 
         <div className="grid grid-cols-4 border-b border-line">
           {(
@@ -461,9 +461,9 @@ export default function InboxPage() {
               },
             ] as const
           ).map((tab) => (
-            <button
+                        <button
               key={tab.id}
-              type="button"
+                          type="button"
               onClick={() => setFilter(tab.id)}
               title={
                 tab.id === "promos"
@@ -485,9 +485,9 @@ export default function InboxPage() {
               {tab.count > 0 ? (
                 <CountBadge count={tab.count} tone={tab.alert ? "gold" : "mute"} />
               ) : null}
-            </button>
-          ))}
-        </div>
+                        </button>
+                  ))}
+            </div>
 
         {conn && !conn.namecheap.ready ? (
           <p className="border-y border-line bg-gold/10 px-4 py-2 text-xs text-gold">
@@ -521,7 +521,7 @@ export default function InboxPage() {
               />
             ))
           )}
-        </div>
+      </div>
 
         <button
           type="button"
@@ -546,20 +546,20 @@ export default function InboxPage() {
         {!active ? (
           <div className="flex flex-1 items-center justify-center px-6">
             <p className="text-sm text-mute">{t("pages.inbox.selectConversation")}</p>
-          </div>
+              </div>
         ) : (
           <>
             <header className="wa-sender-bar flex shrink-0 items-center gap-0 px-1 py-1 sm:gap-1 sm:px-3 sm:py-2">
-              <button
-                type="button"
+                <button
+                  type="button"
                 aria-label={t("pages.inbox.backToMessages")}
                 className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream lg:hidden"
                 onClick={() => closeThread()}
               >
                 <BackIcon />
-              </button>
-              <button
-                type="button"
+                </button>
+                <button
+                  type="button"
                 onClick={() => setDetailsOpen(true)}
                 className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg py-1 pr-1 text-left sm:gap-3 sm:px-1.5 hover:bg-white/10"
               >
@@ -574,7 +574,7 @@ export default function InboxPage() {
                     {active.email}
                   </p>
                 </div>
-              </button>
+                </button>
               <button
                 type="button"
                 aria-label={starred.includes(active.email) ? t("pages.inbox.unstar") : t("pages.inbox.star")}
@@ -751,13 +751,13 @@ export default function InboxPage() {
               </div>
             </dl>
 
-            <button
-              type="button"
+                <button
+                  type="button"
               onClick={() => setShowOriginal((v) => !v)}
               className="w-full border border-line px-3 py-2 text-xs font-semibold text-mute transition-colors hover:bg-ash hover:text-ink"
             >
               {showOriginal ? t("pages.inbox.showTidied") : t("pages.inbox.showOriginal")}
-            </button>
+                </button>
 
             <div className="space-y-2 border-t border-line pt-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
@@ -1036,7 +1036,7 @@ function MessageBody({
             </pre>
           ) : null}
         </>
-      ) : null}
+        ) : null}
       {stampEl}
     </div>
   );

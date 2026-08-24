@@ -1,5 +1,8 @@
 import type { Lead, LeadStatus } from "@/lib/demo-data";
 
+/** Odoo CRM priority: 0 none → 3 very high (three stars). */
+export type LeadPriority = 0 | 1 | 2 | 3;
+
 export type ContactDetails = {
   isCompany: boolean;
   active: boolean;
@@ -13,6 +16,7 @@ export type ContactDetails = {
   nextActivity: string;
   upcomingActivity: string;
   properties: string;
+  priority: LeadPriority;
   extras: { label: string; value: string }[];
 };
 
@@ -49,7 +53,18 @@ const FIELD_MAP: Record<string, MappedField> = {
   "type d'activites a venir": "upcomingActivity",
   "définition de base des propriétés": "properties",
   "definition de base des proprietes": "properties",
+  priorité: "priority",
+  priorite: "priority",
+  priority: "priority",
 };
+
+export function clampPriority(value: unknown): LeadPriority {
+  const n = typeof value === "number" ? value : Number(String(value ?? "").trim());
+  if (n >= 3) return 3;
+  if (n >= 2) return 2;
+  if (n >= 1) return 1;
+  return 0;
+}
 
 function emptyDetails(): ContactDetails {
   return {
@@ -65,6 +80,7 @@ function emptyDetails(): ContactDetails {
     nextActivity: "",
     upcomingActivity: "",
     properties: "",
+    priority: 0,
     extras: [],
   };
 }
@@ -115,6 +131,10 @@ export function parseLeadDetails(lead: Lead): ContactDetails {
     const field = FIELD_MAP[key];
     if (field === "isCompany" || field === "active") {
       details[field] = truthy(value);
+      continue;
+    }
+    if (field === "priority") {
+      details.priority = clampPriority(value);
       continue;
     }
     if (field) {
@@ -200,13 +220,17 @@ export type ContactWrite = {
   nextActivity: string;
   upcomingActivity: string;
   properties: string;
+  priority: LeadPriority;
   extras: { label: string; value: string }[];
   notes: string;
   status: LeadStatus;
 };
 
 const NOTE_LABELS: Record<
-  Exclude<keyof ContactDetails, "isCompany" | "active" | "updated" | "extras">,
+  Exclude<
+    keyof ContactDetails,
+    "isCompany" | "active" | "updated" | "extras" | "priority"
+  >,
   string
 > = {
   city: "Ville",
@@ -248,6 +272,7 @@ export function serializeContactNotes(
     | "nextActivity"
     | "upcomingActivity"
     | "properties"
+    | "priority"
     | "extras"
     | "notes"
   >,
@@ -259,6 +284,8 @@ export function serializeContactNotes(
   lines.push(`Est une société: ${input.isCompany ? "TRUE" : "FALSE"}`);
   lines.push(`Actif: ${input.active ? "TRUE" : "FALSE"}`);
   if (updated.trim()) lines.push(`Mis à jour le: ${updated.trim()}`);
+  const priority = clampPriority(input.priority);
+  if (priority > 0) lines.push(`Priorité: ${priority}`);
 
   const values: [keyof typeof NOTE_LABELS, string][] = [
     ["city", input.city],
@@ -305,6 +332,7 @@ export function contactWriteFromLead(
     nextActivity: details.nextActivity,
     upcomingActivity: details.upcomingActivity,
     properties: details.properties,
+    priority: details.priority,
     extras: details.extras.map((row) => ({ ...row })),
     notes: leftoverNotes(lead.notes),
     status: lead.status,
@@ -328,6 +356,7 @@ export function emptyContactWrite(): ContactWrite {
     nextActivity: "",
     upcomingActivity: "",
     properties: "",
+    priority: 0,
     extras: [],
     notes: "",
     status: "new",

@@ -389,12 +389,12 @@ export default function SearchConsoleLivePage() {
               />
             </div>
             {tableRows.length === 0 ? (
-              <EmptyHint>{t("pages.searchConsole.empty")}</EmptyHint>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
+                <EmptyHint>{t("pages.searchConsole.empty")}</EmptyHint>
+              ) : (
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
                       <th>
                         {tab === "pages"
                           ? t("pages.searchConsole.page")
@@ -428,9 +428,9 @@ export default function SearchConsoleLivePage() {
                       >
                         {t("pages.searchConsole.position")}
                       </SortHead>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </tr>
+                    </thead>
+                    <tbody>
                     {tableRows.map((row) => (
                       <tr key={row.key}>
                         <td className="max-w-[22rem] font-medium">
@@ -447,18 +447,18 @@ export default function SearchConsoleLivePage() {
                           ) : (
                             row.label
                           )}
-                        </td>
-                        <td>{formatNumber(row.clicks, false, locale)}</td>
+                          </td>
+                          <td>{formatNumber(row.clicks, false, locale)}</td>
                         <td>{formatNumber(row.impressions, false, locale)}</td>
-                        <td>{ctrPercent(row.ctr)}</td>
-                        <td>{row.position.toFixed(1)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Panel>
+                          <td>{ctrPercent(row.ctr)}</td>
+                          <td>{row.position.toFixed(1)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
         </>
       ) : null}
 
@@ -536,8 +536,8 @@ export default function SearchConsoleLivePage() {
             </>
           ) : null}
         </div>
-      </Panel>
-    </div>
+            </Panel>
+          </div>
   );
 }
 
@@ -562,7 +562,7 @@ function MiniStat({
             className="mr-1.5 inline-block h-2 w-2 align-middle"
             style={{ background: color }}
           />
-        ) : null}
+      ) : null}
         {label}
       </p>
       <p className="mt-1 font-display text-xl text-ink">{value}</p>

@@ -8,8 +8,10 @@ export function leadTone(status: string) {
       return "warning" as const;
     case "won":
       return "success" as const;
-    default:
+    case "lost":
       return "danger" as const;
+    default:
+      return "neutral" as const;
   }
 }
 

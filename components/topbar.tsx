@@ -130,8 +130,8 @@ export function Topbar({
                     </p>
                   </div>
                   {notifications.length + workspaceNotices.length > 0 ? (
-                    <button
-                      type="button"
+                  <button
+                    type="button"
                       className="shrink-0 pt-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-sand hover:text-gold"
                       onClick={() => {
                         dismissAll();

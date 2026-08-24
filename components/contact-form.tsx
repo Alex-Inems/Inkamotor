@@ -1,23 +1,26 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { PriorityStars } from "@/components/priority-stars";
 import { btnPrimary, btnSecondary, Field, inputClass } from "@/components/modal";
 import type { ContactWrite } from "@/lib/crm/contact-details";
 import type { LeadStatus } from "@/lib/demo-data";
 import { useT } from "@/lib/i18n";
-
-const STAGES: LeadStatus[] = ["new", "contacted", "qualified", "won", "lost"];
 
 export function ContactForm({
   value,
   onChange,
   onSubmit,
   formId = "contact-form",
+  stages,
+  stageLabel,
 }: {
   value: ContactWrite;
   onChange: (next: ContactWrite) => void;
   onSubmit: () => void;
   formId?: string;
+  stages: { id: string; label: string }[];
+  stageLabel: (id: string) => string;
 }) {
   const t = useT();
 
@@ -31,6 +34,10 @@ export function ContactForm({
       extras: value.extras.map((row, i) => (i === index ? next : row)),
     });
   }
+
+  const stageOptions = stages.some((s) => s.id === value.status)
+    ? stages
+    : [{ id: value.status, label: stageLabel(value.status) }, ...stages];
 
   return (
     <form
@@ -119,9 +126,9 @@ export function ContactForm({
             value={value.status}
             onChange={(e) => set("status", e.target.value as LeadStatus)}
           >
-            {STAGES.map((id) => (
-              <option key={id} value={id}>
-                {t(`stages.${id}`)}
+            {stageOptions.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stageLabel(stage.id)}
               </option>
             ))}
           </select>
@@ -135,6 +142,15 @@ export function ContactForm({
             <option value="yes">{t("common.yes")}</option>
             <option value="no">{t("common.no")}</option>
           </select>
+        </Field>
+        <Field label={t("pages.leads.priority")}>
+          <div className="flex min-h-10 items-center px-1">
+            <PriorityStars
+              size="md"
+              value={value.priority}
+              onChange={(priority) => set("priority", priority)}
+            />
+          </div>
         </Field>
         <Field label={t("pages.leads.nextActivity")}>
           <input

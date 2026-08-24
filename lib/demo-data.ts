@@ -1,9 +1,13 @@
-export type LeadStatus =
-  | "new"
-  | "contacted"
-  | "qualified"
-  | "won"
-  | "lost";
+/** Pipeline stage id — core values or custom columns. */
+export type LeadStatus = string;
+
+export const CORE_LEAD_STATUSES = [
+  "new",
+  "contacted",
+  "qualified",
+  "won",
+  "lost",
+] as const;
 
 export type LeadSource =
   | "google"

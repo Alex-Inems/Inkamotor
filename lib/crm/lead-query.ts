@@ -1,12 +1,16 @@
 import {
+  clampPriority,
   completenessScore,
+  contactWriteFromLead,
   leadSearchText,
   parseLeadDetails,
   serializeContactNotes,
   withResolvedCompany,
   type ContactDetails,
   type ContactWrite,
+  type LeadPriority,
 } from "@/lib/crm/contact-details";
+import { isValidStageId } from "@/lib/crm/pipeline";
 import { mapLead } from "@/lib/crm/repository";
 import type { Lead, LeadStatus } from "@/lib/demo-data";
 import { getSupabase } from "@/lib/supabase/server";
@@ -26,6 +30,8 @@ export type LeadListQuery = {
   dir?: "asc" | "desc";
   page?: number;
   limit?: number;
+  /** Balanced sample per stage for the pipeline board */
+  kanban?: boolean;
 };
 
 type CachedLead = LeadTableRow & { haystack: string };
@@ -125,8 +131,12 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
   countries: string[];
   page: number;
   limit: number;
+  stageCounts?: Record<string, number>;
 }> {
-  const limit = Math.min(Math.max(input.limit ?? 75, 1), 100);
+  const kanban = Boolean(input.kanban);
+  const limit = kanban
+    ? Math.min(Math.max(input.limit ?? 400, 1), 800)
+    : Math.min(Math.max(input.limit ?? 75, 1), 100);
   const page = Math.max(input.page ?? 0, 0);
   const sort = input.sort ?? "completeness";
   const dir = input.dir === "desc" ? "desc" : "asc";
@@ -148,8 +158,30 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
 
   filtered.sort((a, b) => compareRows(a, b, sort, dir));
 
-  const start = page * limit;
-  const slice = filtered.slice(start, start + limit);
+  const stageCounts: Record<string, number> = {};
+  for (const row of filtered) {
+    const key = row.lead.status || "new";
+    stageCounts[key] = (stageCounts[key] ?? 0) + 1;
+  }
+
+  let slice: CachedLead[];
+  if (kanban) {
+    const perStage = Math.max(20, Math.floor(limit / 5));
+    const buckets = new Map<string, CachedLead[]>();
+    for (const row of filtered) {
+      const key = row.lead.status || "new";
+      const list = buckets.get(key) ?? [];
+      if (list.length < perStage) {
+        list.push(row);
+        buckets.set(key, list);
+      }
+    }
+    slice = [...buckets.values()].flat();
+  } else {
+    const start = page * limit;
+    slice = filtered.slice(start, start + limit);
+  }
+
   const countries = [
     ...new Set(
       all.map((row) => row.details.country).filter((name) => name.length > 0),
@@ -162,6 +194,7 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
     countries,
     page,
     limit,
+    stageCounts,
   };
 }
 
@@ -180,6 +213,25 @@ export async function updateLeadStatusFast(id: string, status: LeadStatus) {
       row.lead.id === id ? { ...row, lead: { ...row.lead, status } } : row,
     );
   }
+}
+
+export async function updateLeadPriorityFast(id: string, priority: LeadPriority) {
+  const prev = await existingLead(id);
+  if (!prev) throw new Error("Lead not found");
+  const details = parseLeadDetails(prev);
+  const input = { ...contactWriteFromLead(prev, details), priority };
+  const updated = new Date().toISOString().slice(0, 10);
+  const preamble = prev.notes.includes("Imported from Odoo contacts.")
+    ? "Imported from Odoo contacts."
+    : "";
+  const notes = serializeContactNotes(input, updated, preamble);
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("leads")
+    .update({ notes, last_contact: updated })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  putCatalog({ ...prev, notes, lastContact: updated });
 }
 
 function cachedFromLead(lead: Lead): CachedLead {
@@ -320,8 +372,8 @@ function asText(value: unknown) {
 export function parseContactWrite(body: unknown): ContactWrite | null {
   if (!body || typeof body !== "object") return null;
   const input = body as Record<string, unknown>;
-  const status = asText(input.status);
-  if (!["new", "contacted", "qualified", "won", "lost"].includes(status)) {
+  const status = asText(input.status).trim();
+  if (!isValidStageId(status)) {
     return null;
   }
   const extras = Array.isArray(input.extras)
@@ -349,6 +401,7 @@ export function parseContactWrite(body: unknown): ContactWrite | null {
     nextActivity: asText(input.nextActivity),
     upcomingActivity: asText(input.upcomingActivity),
     properties: asText(input.properties),
+    priority: clampPriority(input.priority),
     extras,
     notes: asText(input.notes),
     status: status as LeadStatus,
