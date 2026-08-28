@@ -6,8 +6,7 @@ export type TourStepId =
   | "overview"
   | "inbox"
   | "leads"
-  | "bookings"
-  | "invoices"
+  | "sales"
   | "newsletter"
   | "done";
 
@@ -44,16 +43,10 @@ export const tourSteps: TourStep[] = [
     bodyKey: "tour.leadsBody",
   },
   {
-    id: "bookings",
-    target: "bookings",
+    id: "sales",
+    target: "sales",
     titleKey: "tour.bookingsTitle",
     bodyKey: "tour.bookingsBody",
-  },
-  {
-    id: "invoices",
-    target: "invoices",
-    titleKey: "tour.invoicesTitle",
-    bodyKey: "tour.invoicesBody",
   },
   {
     id: "newsletter",

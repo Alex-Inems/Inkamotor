@@ -115,6 +115,24 @@ create table if not exists sales (
 
 create index if not exists sales_created_idx on sales (created_at desc);
 
+create table if not exists products (
+  id text primary key,
+  odoo_id integer not null unique,
+  name text not null,
+  reference text not null default '',
+  category text not null default '',
+  type text not null check (type in ('service', 'consu', 'product')),
+  sale_ok boolean not null default true,
+  active boolean not null default true,
+  list_price numeric not null default 0,
+  currency text not null default 'EUR' check (currency in ('USD', 'EUR')),
+  qty_on_hand numeric not null default 0,
+  variant_count integer not null default 1,
+  description text not null default ''
+);
+
+create index if not exists products_name_idx on products (name);
+
 create table if not exists invoices (
   id text primary key,
   number text not null unique,
@@ -159,6 +177,7 @@ alter table site_inquiries enable row level security;
 alter table leads enable row level security;
 alter table follow_ups enable row level security;
 alter table sales enable row level security;
+alter table products enable row level security;
 alter table invoices enable row level security;
 alter table newsletter_campaigns enable row level security;
 

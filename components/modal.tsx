@@ -106,5 +106,20 @@ export const btnSecondary =
 export const btnGhost =
   "inline-flex items-center justify-center px-2.5 py-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-sand transition-colors hover:bg-accent-soft disabled:opacity-50";
 
+export const btnCompact =
+  "inline-flex items-center justify-center border border-line bg-panel px-2.5 py-1 text-xs font-medium text-ink transition-colors hover:bg-ash disabled:opacity-50";
+
+export const btnCompactPrimary =
+  "inline-flex items-center justify-center bg-accent px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-accent-deep disabled:opacity-50";
+
+export const btnToolbar =
+  "inline-flex min-h-8 items-center justify-center rounded-sm border border-line bg-panel px-3 py-1.5 text-sm font-medium text-ink shadow-sm transition-colors hover:border-mute/40 hover:bg-ash disabled:opacity-50";
+
+export const btnToolbarPrimary =
+  "inline-flex min-h-8 items-center justify-center rounded-sm border border-accent bg-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:border-accent-deep hover:bg-accent-deep disabled:opacity-50";
+
 export const inputClass =
   "w-full border border-line bg-canvas px-3 py-2.5 text-sm text-ink outline-none transition-colors placeholder:text-mute/70 focus:border-gold";
+
+export const inputUnderlineClass =
+  "w-full rounded-none border-0 border-b border-line bg-transparent px-0 py-2 text-sm text-ink outline-none transition-colors placeholder:text-mute/70 focus:border-gold";

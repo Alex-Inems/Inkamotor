@@ -36,6 +36,7 @@ export type FollowUpStatus = "open" | "done" | "overdue";
 
 export type SaleStatus =
   | "pending"
+  | "sent"
   | "confirmed"
   | "fulfilled"
   | "cancelled";
@@ -67,6 +68,33 @@ export type FollowUp = {
   createdAt: string;
 };
 
+export type ProductType = "service" | "consu" | "product";
+
+export type Product = {
+  id: string;
+  odooId: number;
+  name: string;
+  reference: string;
+  category: string;
+  type: ProductType;
+  saleOk: boolean;
+  active: boolean;
+  listPrice: number;
+  currency: "EUR" | "USD";
+  qtyOnHand: number;
+  variantCount: number;
+  description: string;
+};
+
+export type SaleLineDisplayType = "product" | "section" | "note";
+
+export type SaleLine = {
+  description: string;
+  displayType: SaleLineDisplayType;
+  qty: number;
+  unitPrice: number;
+};
+
 export type Sale = {
   id: string;
   number: string;
@@ -74,7 +102,7 @@ export type Sale = {
   email: string;
   product: string;
   amount: number;
-  currency: "USD";
+  currency: "USD" | "EUR";
   status: SaleStatus;
   source: "website" | "lead" | "ads" | "newsletter";
   inquiryId: string | null;
@@ -82,6 +110,13 @@ export type Sale = {
   createdAt: string;
   closedAt: string | null;
   notes: string;
+  lines: SaleLine[];
+  quoteTemplateName: string;
+  paymentTerms: string;
+  validityDate: string | null;
+  termsHtml: string;
+  salesperson: string;
+  invoiceId: string | null;
 };
 
 export type Lead = {
@@ -137,6 +172,7 @@ export type Invoice = {
   lines: InvoiceLine[];
   notes: string;
   clientAddress?: string;
+  saleId?: string | null;
 };
 
 export type Newsletter = {
@@ -714,7 +750,7 @@ export const followUps: FollowUp[] = [
   },
 ];
 
-export const sales: Sale[] = [
+export const sales = [
   {
     id: "sale_01",
     number: "SL-2026-118",
@@ -924,6 +960,22 @@ export const sales: Sale[] = [
     notes: "Pending first outreach close — counted in pipeline not profit yet.",
   },
   {
+    id: "sale_15",
+    number: "SL-2026-120",
+    customer: "Lucas Martin",
+    email: "lucas.martin@gmail.com",
+    product: "Classic Peru motorcycle tour — 7 days",
+    amount: 3200,
+    currency: "USD",
+    status: "sent",
+    source: "website",
+    inquiryId: "inq_03",
+    leadId: "ld_1012",
+    createdAt: "2026-08-10",
+    closedAt: null,
+    notes: "Quotation sent — awaiting deposit confirmation.",
+  },
+  {
     id: "sale_14",
     number: "SL-2026-106",
     customer: "Northline Co.",
@@ -939,7 +991,7 @@ export const sales: Sale[] = [
     closedAt: "2026-08-06",
     notes: "Meta campaign assisted B2B order.",
   },
-];
+] as Sale[];
 
 export const googleCampaigns: AdCampaign[] = [];
 

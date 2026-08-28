@@ -1,3 +1,4 @@
+import { listAttachmentsByReplyIds } from "@/lib/mail/attachments";
 import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
 
 export type MailReply = {
@@ -9,6 +10,14 @@ export type MailReply = {
   relatedMailId: string | null;
   relatedInquiryId: string | null;
   sentAt: string;
+  attachments: MailReplyAttachment[];
+};
+
+export type MailReplyAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
 };
 
 const UUID_RE =
@@ -19,7 +28,10 @@ function asUuid(value?: string | null): string | null {
   return v && UUID_RE.test(v) ? v : null;
 }
 
-function mapRow(row: Record<string, unknown>): MailReply {
+function mapRow(
+  row: Record<string, unknown>,
+  attachments: MailReplyAttachment[] = [],
+): MailReply {
   return {
     id: String(row.id),
     toName: (row.to_name as string) || null,
@@ -29,6 +41,7 @@ function mapRow(row: Record<string, unknown>): MailReply {
     relatedMailId: (row.related_mail_id as string) || null,
     relatedInquiryId: (row.related_inquiry_id as string) || null,
     sentAt: String(row.sent_at),
+    attachments,
   };
 }
 
@@ -42,7 +55,17 @@ export async function listMailReplies(limit = 100): Promise<MailReply[]> {
     .order("sent_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  const attachmentMap = await listAttachmentsByReplyIds(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...row,
+    attachments: (attachmentMap.get(row.id) ?? []).map((file) => ({
+      id: file.id,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      byteSize: file.byteSize,
+    })),
+  }));
 }
 
 type SaveInput = {
@@ -144,6 +167,7 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
       relatedMailId,
       relatedInquiryId: input.relatedInquiryId ?? null,
       sentAt,
+      attachments: [],
     }
   );
 }

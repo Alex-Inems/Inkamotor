@@ -674,6 +674,7 @@ export async function sendTransactionalEmail(input: {
   htmlContent: string;
   textContent?: string;
   tags?: string[];
+  attachments?: { name: string; content: string }[];
 }) {
   await brevo("/smtp/email", {
     method: "POST",
@@ -684,6 +685,10 @@ export async function sendTransactionalEmail(input: {
       htmlContent: input.htmlContent,
       textContent: input.textContent,
       tags: input.tags,
+      attachment: input.attachments?.map((file) => ({
+        name: file.name,
+        content: file.content,
+      })),
     }),
   });
 }

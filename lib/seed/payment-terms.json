@@ -1,0 +1,9 @@
+[
+  { "id": 1, "name": "Paiement immédiat", "nameEn": "Immediate Payment", "nameEs": "Pago inmediato" },
+  { "id": 8, "name": "30% maintenant, le solde à 60 jours", "nameEn": "30% Now, Balance 60 Days", "nameEs": "30% ahora, saldo a 60 días" },
+  { "id": 4, "name": "30 jours", "nameEn": "30 Days", "nameEs": "30 días" },
+  { "id": 2, "name": "15 jours", "nameEn": "15 Days", "nameEs": "15 días" },
+  { "id": 3, "name": "21 jours", "nameEn": "21 Days", "nameEs": "21 días" },
+  { "id": 5, "name": "45 jours", "nameEn": "45 Days", "nameEs": "45 días" },
+  { "id": 11, "name": "Paiement immédiat solde, acompte 60 J avant", "nameEn": "Immediate balance, deposit 60 days before", "nameEs": "Saldo inmediato, depósito 60 días antes" }
+]

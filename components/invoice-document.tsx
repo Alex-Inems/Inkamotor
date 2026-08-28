@@ -3,7 +3,7 @@
 import { ColorStripe, InkamotoLogo } from "@/components/brand";
 import { invoiceCompany } from "@/lib/invoice-company";
 import { invoiceTotal, type Invoice } from "@/lib/demo-data";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatSalesMoney } from "@/lib/format";
 import { messagesFor, type Locale } from "@/lib/i18n";
 
 export function InvoiceDocument({
@@ -144,15 +144,10 @@ export function InvoiceDocument({
               <td className="px-3 py-2.5">{line.description}</td>
               <td className="px-3 py-2.5 text-right tabular-nums">{line.qty}</td>
               <td className="px-3 py-2.5 text-right tabular-nums">
-                {formatMoney(line.unitPrice, invoice.currency, false, locale)}
+                {formatSalesMoney(line.unitPrice, locale)}
               </td>
               <td className="px-3 py-2.5 text-right font-medium tabular-nums">
-                {formatMoney(
-                  line.qty * line.unitPrice,
-                  invoice.currency,
-                  false,
-                  locale,
-                )}
+                {formatSalesMoney(line.qty * line.unitPrice, locale)}
               </td>
             </tr>
           ))}
@@ -165,7 +160,7 @@ export function InvoiceDocument({
             {copy.total}
           </p>
           <p className="font-display text-3xl tracking-wide text-[#31595d]">
-            {formatMoney(total, invoice.currency, false, locale)}
+            {formatSalesMoney(total, locale)}
           </p>
         </div>
       </div>

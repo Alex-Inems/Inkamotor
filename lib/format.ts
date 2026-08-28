@@ -4,6 +4,8 @@ function tag(locale?: Locale) {
   return locale ? localeMeta[locale].bcp47 : "en-US";
 }
 
+export const SALES_CURRENCY = "EUR" as const;
+
 export function formatMoney(
   amount: number,
   currency: string = "USD",
@@ -14,7 +16,18 @@ export function formatMoney(
     style: "currency",
     currency,
     notation: compact ? "compact" : "standard",
+    minimumFractionDigits: compact ? undefined : 2,
     maximumFractionDigits: compact ? 1 : 2,
+  }).format(amount);
+}
+
+/** Full EUR amounts for sales, quotations, and orders (no compact notation). */
+export function formatSalesMoney(amount: number, locale?: Locale) {
+  return new Intl.NumberFormat(tag(locale), {
+    style: "currency",
+    currency: SALES_CURRENCY,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
 }
 

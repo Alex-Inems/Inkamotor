@@ -12,9 +12,8 @@ const nav = [
   { href: "/", key: "nav.overview", icon: OverviewIcon, tour: "overview" },
   { href: "/inbox", key: "nav.inbox", icon: InboxIcon, tour: "inbox" },
   { href: "/leads", key: "nav.leads", icon: LeadsIcon, tour: "leads" },
-  { href: "/bookings", key: "nav.sales", icon: SalesIcon, tour: "bookings" },
+  { href: "/sales", key: "nav.sales", icon: SalesIcon, tour: "sales" },
   { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
-  { href: "/invoices", key: "nav.invoices", icon: InvoiceIcon, tour: "invoices" },
   { href: "/newsletter", key: "nav.newsletter", icon: NewsletterIcon, tour: "newsletter" },
 ];
 

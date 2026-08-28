@@ -22,7 +22,10 @@ import {
   type LeadStatus,
   type Newsletter,
   type NewsletterStatus,
+  type Product,
+  type ProductType,
   type Sale,
+  type SaleLine,
   type SaleStatus,
 } from "@/lib/demo-data";
 
@@ -92,10 +95,30 @@ type NewSaleInput = {
   email: string;
   product: string;
   amount: number;
+  currency: Sale["currency"];
   source: Sale["source"];
   inquiryId: string | null;
   leadId: string | null;
   notes: string;
+  lines: SaleLine[];
+  quoteTemplateName: string;
+  paymentTerms: string;
+  validityDate: string | null;
+  termsHtml: string;
+  salesperson: string;
+  status?: SaleStatus;
+};
+
+type ProductInput = {
+  name: string;
+  reference: string;
+  category: string;
+  type: ProductType;
+  listPrice: number;
+  currency: Product["currency"];
+  qtyOnHand: number;
+  variantCount: number;
+  description: string;
 };
 
 type CrmStore = CrmSnapshot & {
@@ -117,8 +140,12 @@ type CrmStore = CrmSnapshot & {
   convertInquiryToLead: (id: string) => Promise<void>;
   addFollowUp: (input: NewFollowUpInput) => Promise<void>;
   updateFollowUpStatus: (id: string, status: FollowUpStatus) => Promise<void>;
-  addSale: (input: NewSaleInput) => Promise<void>;
+  addSale: (input: NewSaleInput) => Promise<Sale | null>;
+  sendSaleQuote: (saleId: string) => Promise<void>;
   updateSaleStatus: (id: string, status: SaleStatus) => Promise<void>;
+  addProduct: (input: ProductInput) => Promise<void>;
+  updateProduct: (id: string, input: ProductInput) => Promise<void>;
+  addInvoiceFromSale: (saleId: string) => Promise<string | null>;
   resetDemo: () => void;
   refreshCrm: () => Promise<void>;
   pushToast: (input: ToastInput) => void;
@@ -131,6 +158,7 @@ const empty: CrmSnapshot = {
   siteInquiries: [],
   followUps: [],
   sales: [],
+  products: [],
   googleCampaigns: [],
   metaCampaigns: [],
   newsletters: [],
@@ -325,9 +353,45 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addSale = useCallback(
     async (input: NewSaleInput) => {
-      await mutate({ op: "addSale", input }, t("toast.saleCreated"));
+      const snap = await mutate({ op: "addSale", input }, t("toast.saleCreated"));
+      const email = input.email.trim().toLowerCase();
+      const customer = input.customer.trim();
+      return (
+        [...snap.sales]
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .find(
+            (sale) =>
+              sale.email.toLowerCase() === email && sale.customer.trim() === customer,
+          ) ?? null
+      );
     },
     [mutate, t],
+  );
+
+  const sendSaleQuote = useCallback(
+    async (saleId: string) => {
+      const res = await fetch(`/api/sales/send-quote?locale=${locale}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ saleId }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        to?: string;
+        hint?: string;
+      };
+      if (!res.ok) {
+        pushToast(json.error || t("toast.quoteSendFailed"));
+        throw new Error(json.error || t("toast.quoteSendFailed"));
+      }
+      await refreshCrm();
+      pushToast({
+        message: t("toast.quoteSent", { email: json.to ?? "" }),
+        detail: json.hint,
+        tone: "success",
+      });
+    },
+    [locale, pushToast, refreshCrm, t],
   );
 
   const updateSaleStatus = useCallback(
@@ -336,6 +400,35 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         { op: "updateSaleStatus", id, status },
         t("toast.saleStatus", { status: t(`status.${status}`) }),
       );
+    },
+    [mutate, t],
+  );
+
+  const addProduct = useCallback(
+    async (input: ProductInput) => {
+      await mutate({ op: "addProduct", input }, t("toast.productCreated"));
+    },
+    [mutate, t],
+  );
+
+  const updateProduct = useCallback(
+    async (id: string, input: ProductInput) => {
+      await mutate(
+        { op: "updateProduct", id, input },
+        t("toast.productSaved"),
+      );
+    },
+    [mutate, t],
+  );
+
+  const addInvoiceFromSale = useCallback(
+    async (saleId: string) => {
+      const snap = await mutate(
+        { op: "addInvoiceFromSale", saleId },
+        t("toast.invoiceFromSale"),
+      );
+      const invoice = snap.invoices.find((inv) => inv.saleId === saleId);
+      return invoice?.id ?? snap.invoices.at(-1)?.id ?? null;
     },
     [mutate, t],
   );
@@ -362,7 +455,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addFollowUp,
       updateFollowUpStatus,
       addSale,
+      sendSaleQuote,
       updateSaleStatus,
+      addProduct,
+      updateProduct,
+      addInvoiceFromSale,
       resetDemo,
       refreshCrm,
       pushToast,
@@ -385,7 +482,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addFollowUp,
       updateFollowUpStatus,
       addSale,
+      sendSaleQuote,
       updateSaleStatus,
+      addProduct,
+      updateProduct,
+      addInvoiceFromSale,
       resetDemo,
       refreshCrm,
       pushToast,

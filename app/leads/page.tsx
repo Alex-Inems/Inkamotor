@@ -23,6 +23,7 @@ import {
   type PipelineStage,
 } from "@/lib/crm/pipeline";
 import { useCrm } from "@/lib/crm-store";
+import { quickSaleInput } from "@/lib/quotation-form-data";
 import { type Lead, type LeadStatus } from "@/lib/demo-data";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
@@ -966,18 +967,20 @@ export default function LeadsPage() {
                       type="button"
                       className={btnSecondary}
                       onClick={() =>
-                        void addSale({
-                          customer: selected.lead.name,
-                          email: selected.lead.email,
-                          product:
-                            selected.lead.notes.slice(0, 80) ||
-                            t("pages.leads.tourBooking"),
-                          amount: selected.lead.value || 0,
-                          source: "lead",
-                          inquiryId: null,
-                          leadId: selected.lead.id,
-                          notes: selected.lead.notes,
-                        })
+                        void addSale(
+                          quickSaleInput({
+                            customer: selected.lead.name,
+                            email: selected.lead.email,
+                            product:
+                              selected.lead.notes.slice(0, 80) ||
+                              t("pages.leads.tourBooking"),
+                            amount: selected.lead.value || 0,
+                            source: "lead",
+                            inquiryId: null,
+                            leadId: selected.lead.id,
+                            notes: selected.lead.notes,
+                          }),
+                        )
                       }
                     >
                       {t("pages.leads.createSale")}

@@ -20,8 +20,7 @@ const ACCENT: Record<TourStepId, string> = {
   overview: "#31595d",
   inbox: "#4a8a90",
   leads: "#624e8a",
-  bookings: "#9f2627",
-  invoices: "#d0ad74",
+  sales: "#9f2627",
   newsletter: "#65814f",
   done: "#ecbb5a",
 };
@@ -231,7 +230,7 @@ export function FirstRunTour({
               <li>{t("nav.inbox")}</li>
               <li>{t("nav.leads")}</li>
               <li>{t("nav.sales")}</li>
-              <li>{t("nav.invoices")}</li>
+              <li>{t("nav.newsletter")}</li>
             </ol>
           ) : null}
 

@@ -84,9 +84,11 @@ export function followUpTone(status: string) {
 export function saleTone(status: string) {
   switch (status) {
     case "pending":
-      return "warning" as const;
-    case "confirmed":
+      return "neutral" as const;
+    case "sent":
       return "info" as const;
+    case "confirmed":
+      return "warning" as const;
     case "fulfilled":
       return "success" as const;
     default:

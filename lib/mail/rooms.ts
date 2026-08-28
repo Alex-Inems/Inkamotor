@@ -25,6 +25,13 @@ export type MailItem = {
   isRead: boolean;
 };
 
+export type ReplyAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+};
+
 export type ReplyItem = {
   id: string;
   toName: string | null;
@@ -33,6 +40,7 @@ export type ReplyItem = {
   bodyText: string;
   relatedMailId: string | null;
   sentAt: string;
+  attachments: ReplyAttachment[];
 };
 
 export type RoomMessage = {
@@ -43,6 +51,7 @@ export type RoomMessage = {
   clean: CleanBody;
   raw: string;
   mailId?: string;
+  attachments?: ReplyAttachment[];
 };
 
 export type MailRoom = {
@@ -202,6 +211,7 @@ export function groupMailRooms(input: {
       subject: r.subject,
       clean: cleanBody(r.bodyText),
       raw: r.bodyText,
+      attachments: r.attachments?.length ? r.attachments : undefined,
     });
   }
 

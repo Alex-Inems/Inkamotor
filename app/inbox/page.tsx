@@ -8,7 +8,9 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
+import { MessageAttachments } from "@/components/inbox/message-attachments";
 import { useCrm } from "@/lib/crm-store";
+import { quickSaleInput } from "@/lib/quotation-form-data";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
 import { localeMeta, useLocale } from "@/lib/i18n";
 
@@ -32,6 +34,12 @@ type MailReply = {
   bodyText: string;
   relatedMailId: string | null;
   sentAt: string;
+  attachments?: {
+    id: string;
+    fileName: string;
+    mimeType: string;
+    byteSize: number;
+  }[];
 };
 
 type ApiError = { error: string; missing?: string[] };
@@ -275,7 +283,10 @@ export default function InboxPage() {
     () =>
       groupMailRooms({
         mail,
-        replies,
+        replies: replies.map((reply) => ({
+          ...reply,
+          attachments: reply.attachments ?? [],
+        })),
         ownAddresses,
         openedEmails: opened,
         youPrefix: t("pages.inbox.youPrefix"),
@@ -785,18 +796,20 @@ export default function InboxPage() {
               <DetailAction
                 label={t("pages.inbox.createSale")}
                 onClick={() =>
-                  void addSale({
-                    customer: activeName,
-                    email: active.email,
-                    product: active.lastSubject || t("pages.inbox.tourEnquiry"),
-                    amount: 0,
-                    source: "website",
-                    inquiryId: null,
-                    leadId: activeLead?.id ?? null,
+                  void addSale(
+                    quickSaleInput({
+                      customer: activeName,
+                      email: active.email,
+                      product: active.lastSubject || t("pages.inbox.tourEnquiry"),
+                      amount: 0,
+                      source: "website",
+                      inquiryId: null,
+                      leadId: activeLead?.id ?? null,
                     notes: t("pages.inbox.startedFrom", {
                       subject: active.lastSubject,
                     }),
-                  })
+                  }),
+                  )
                 }
               />
             </div>
@@ -1037,6 +1050,10 @@ function MessageBody({
           ) : null}
         </>
         ) : null}
+
+      {message.attachments?.length ? (
+        <MessageAttachments attachments={message.attachments} mine={mine} />
+      ) : null}
       {stampEl}
     </div>
   );

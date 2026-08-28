@@ -335,8 +335,8 @@ export default function OverviewPage() {
             <Link href="/newsletter" className="py-1.5 leading-relaxed text-sand hover:text-gold">
               {t("nav.newsletter")}
             </Link>
-            <Link href="/invoices" className="py-1.5 leading-relaxed text-sand hover:text-gold">
-              {t("nav.invoices")}
+            <Link href="/sales" className="py-1.5 leading-relaxed text-sand hover:text-gold">
+              {t("nav.sales")}
             </Link>
           </div>
         </Panel>

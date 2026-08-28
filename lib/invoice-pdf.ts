@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { invoiceCompany } from "@/lib/invoice-company";
 import { invoiceTotal, type Invoice } from "@/lib/demo-data";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatSalesMoney } from "@/lib/format";
 import { messagesFor, type Locale } from "@/lib/i18n";
 
 /** Brand tokens matching invoice preview / inkamototours.com */
@@ -74,8 +74,7 @@ export async function downloadInvoicePdf(
   const contentW = pageW - margin * 2;
 
   const copy = messagesFor(locale).invoiceDoc;
-  const money = (n: number) =>
-    formatMoney(n, invoice.currency, false, locale);
+  const money = (n: number) => formatSalesMoney(n, locale);
   const total = invoiceTotal(invoice);
   const logo = await logoDataUrl();
 
