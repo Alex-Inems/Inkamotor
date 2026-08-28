@@ -17,6 +17,7 @@ import {
   type AdStatus,
   type FollowUpStatus,
   type InquiryStatus,
+  type Invoice,
   type InvoiceStatus,
   type LeadSource,
   type LeadStatus,
@@ -141,11 +142,12 @@ type CrmStore = CrmSnapshot & {
   addFollowUp: (input: NewFollowUpInput) => Promise<void>;
   updateFollowUpStatus: (id: string, status: FollowUpStatus) => Promise<void>;
   addSale: (input: NewSaleInput) => Promise<Sale | null>;
-  sendSaleQuote: (saleId: string) => Promise<void>;
+  sendSaleQuote: (saleId: string, message?: string) => Promise<void>;
   updateSaleStatus: (id: string, status: SaleStatus) => Promise<void>;
+  deleteSale: (id: string) => Promise<void>;
   addProduct: (input: ProductInput) => Promise<void>;
   updateProduct: (id: string, input: ProductInput) => Promise<void>;
-  addInvoiceFromSale: (saleId: string) => Promise<string | null>;
+  addInvoiceFromSale: (saleId: string) => Promise<Invoice | null>;
   resetDemo: () => void;
   refreshCrm: () => Promise<void>;
   pushToast: (input: ToastInput) => void;
@@ -369,11 +371,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const sendSaleQuote = useCallback(
-    async (saleId: string) => {
+    async (saleId: string, message?: string) => {
       const res = await fetch(`/api/sales/send-quote?locale=${locale}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ saleId }),
+        body: JSON.stringify({ saleId, message: message?.trim() || undefined }),
       });
       const json = (await res.json()) as {
         error?: string;
@@ -404,6 +406,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [mutate, t],
   );
 
+  const deleteSale = useCallback(
+    async (id: string) => {
+      await mutate({ op: "deleteSale", id }, t("toast.saleDeleted"));
+    },
+    [mutate, t],
+  );
+
   const addProduct = useCallback(
     async (input: ProductInput) => {
       await mutate({ op: "addProduct", input }, t("toast.productCreated"));
@@ -427,8 +436,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         { op: "addInvoiceFromSale", saleId },
         t("toast.invoiceFromSale"),
       );
-      const invoice = snap.invoices.find((inv) => inv.saleId === saleId);
-      return invoice?.id ?? snap.invoices.at(-1)?.id ?? null;
+      return snap.invoices.find((inv) => inv.saleId === saleId) ?? null;
     },
     [mutate, t],
   );
@@ -457,6 +465,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addSale,
       sendSaleQuote,
       updateSaleStatus,
+      deleteSale,
       addProduct,
       updateProduct,
       addInvoiceFromSale,
@@ -484,6 +493,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addSale,
       sendSaleQuote,
       updateSaleStatus,
+      deleteSale,
       addProduct,
       updateProduct,
       addInvoiceFromSale,

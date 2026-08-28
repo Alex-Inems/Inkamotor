@@ -4,7 +4,7 @@ import { type Locale } from "@/lib/i18n";
 import { saveReplyAttachment } from "@/lib/mail/attachments";
 import {
   quoteEmailBodyText,
-  quoteEmailHtml,
+  quoteEmailHtmlFromText,
   quoteEmailSubject,
   quotePdfFileName,
 } from "@/lib/mail/quote-email-copy";
@@ -30,6 +30,7 @@ export async function sendSaleQuoteEmail(input: {
   sale: Sale;
   locale: Locale;
   relatedInquiryId?: string | null;
+  message?: string | null;
 }) {
   const { sale, locale } = input;
   const to = sale.email.trim();
@@ -39,8 +40,9 @@ export async function sendSaleQuoteEmail(input: {
 
   const pdfBase64 = await buildQuotePdfBase64(sale, locale);
   const subject = quoteEmailSubject(sale, locale);
-  const bodyText = quoteEmailBodyText(sale, locale);
-  const htmlContent = quoteEmailHtml(sale, locale);
+  const bodyText =
+    input.message?.trim() || quoteEmailBodyText(sale, locale);
+  const htmlContent = quoteEmailHtmlFromText(bodyText, locale);
   const relatedMailId = (await findRelatedMailId(to)) ?? undefined;
 
   await sendTransactionalEmail({
@@ -72,6 +74,12 @@ export async function sendSaleQuoteEmail(input: {
     fileName: quotePdfFileName(sale),
     mimeType: "application/pdf",
     base64: pdfBase64,
+  }).then((saved) => {
+    if (!saved) {
+      throw new Error(
+        "Quotation was emailed but the PDF could not be saved to Inbox. Run supabase/mail_attachments.sql in Supabase.",
+      );
+    }
   });
 
   return { to, subject, replyId: reply.id };

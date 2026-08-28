@@ -159,6 +159,8 @@ export default function InboxPage() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
+  const [deletingConversation, setDeletingConversation] = useState(false);
   const [opened, setOpened] = useState<string[]>([]);
   const threadRef = useRef<HTMLDivElement>(null);
   const pendingChat = useRef<string | null>(null);
@@ -420,6 +422,56 @@ export default function InboxPage() {
     }
   }
 
+  async function deleteMessage(messageKey: string) {
+    if (!window.confirm(t("pages.inbox.deleteMessageConfirm"))) return;
+    setDeletingMessageKey(messageKey);
+    try {
+      const res = await fetch("/api/inbox/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "message", key: messageKey }),
+      });
+      const json = (await res.json()) as ApiError;
+      if (!res.ok) {
+        pushToast(json.error || t("pages.inbox.deleteFailed"));
+        return;
+      }
+      pushToast(t("pages.inbox.messageDeleted"));
+      await Promise.all([loadMail(), loadReplies()]);
+    } finally {
+      setDeletingMessageKey(null);
+    }
+  }
+
+  async function deleteConversation() {
+    if (!active) return;
+    if (
+      !window.confirm(
+        t("pages.inbox.deleteConversationConfirm", { email: active.email }),
+      )
+    ) {
+      return;
+    }
+    setDeletingConversation(true);
+    try {
+      const res = await fetch("/api/inbox/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "conversation", email: active.email }),
+      });
+      const json = (await res.json()) as ApiError;
+      if (!res.ok) {
+        pushToast(json.error || t("pages.inbox.deleteFailed"));
+        return;
+      }
+      pushToast(t("pages.inbox.conversationDeleted"));
+      closeThread();
+      await Promise.all([loadMail(), loadReplies()]);
+    } finally {
+      setDeletingConversation(false);
+    }
+  }
+
   const activeName = active ? displayName(active.name, active.email) : "";
   const activeLead = active
     ? leads.find((l) => l.email.toLowerCase() === active.email) ?? null
@@ -652,6 +704,8 @@ export default function InboxPage() {
                       contactEmail={active.email}
                       showOriginal={showOriginal}
                       locale={loc}
+                      deletingMessageKey={deletingMessageKey}
+                      onDeleteMessage={(key) => void deleteMessage(key)}
                     />
                   </div>
                 );
@@ -812,6 +866,14 @@ export default function InboxPage() {
                   )
                 }
               />
+              <DetailAction
+                label={
+                  deletingConversation
+                    ? t("common.deleting")
+                    : t("pages.inbox.deleteConversation")
+                }
+                onClick={() => void deleteConversation()}
+              />
             </div>
           </div>
         </aside>
@@ -923,12 +985,16 @@ function MessageGroup({
   contactEmail,
   showOriginal,
   locale,
+  deletingMessageKey,
+  onDeleteMessage,
 }: {
   group: Group;
   contactName: string;
   contactEmail: string;
   showOriginal: boolean;
   locale: string;
+  deletingMessageKey: string | null;
+  onDeleteMessage: (key: string) => void;
 }) {
   const last = group.items[group.items.length - 1];
 
@@ -955,6 +1021,8 @@ function MessageGroup({
             tail={m.key === last?.key}
             showOriginal={showOriginal}
             locale={locale}
+            deleting={deletingMessageKey === m.key}
+            onDelete={() => onDeleteMessage(m.key)}
           />
         ))}
       </div>
@@ -969,6 +1037,8 @@ function MessageBody({
   tail,
   showOriginal,
   locale,
+  deleting,
+  onDelete,
 }: {
   message: Message;
   mine: boolean;
@@ -976,6 +1046,8 @@ function MessageBody({
   tail: boolean;
   showOriginal: boolean;
   locale: string;
+  deleting: boolean;
+  onDelete: () => void;
 }) {
   const { t } = useLocale();
   const [showQuoted, setShowQuoted] = useState(false);
@@ -993,15 +1065,39 @@ function MessageBody({
 
   if (showOriginal) {
     return (
-      <pre className={`${bubble} text-xs whitespace-pre-wrap wrap-break-word`}>
-        {message.raw}
-        {stampEl}
-      </pre>
+      <div className="relative group/msg max-w-full">
+        <button
+          type="button"
+          aria-label={t("pages.inbox.deleteMessage")}
+          disabled={deleting}
+          onClick={onDelete}
+          className={`absolute top-1 ${mine ? "left-1.5" : "right-1.5"} z-10 flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none opacity-50 transition-opacity hover:bg-black/10 hover:opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-70 ${
+            deleting ? "opacity-40" : ""
+          }`}
+        >
+          ×
+        </button>
+        <pre className={`${bubble} text-xs whitespace-pre-wrap wrap-break-word`}>
+          {message.raw}
+          {stampEl}
+        </pre>
+      </div>
     );
   }
 
   return (
-    <div className={`${bubble} text-[14px] leading-[1.4]`}>
+    <div className={`${bubble} relative text-[14px] leading-[1.4] group/msg`}>
+      <button
+        type="button"
+        aria-label={t("pages.inbox.deleteMessage")}
+        disabled={deleting}
+        onClick={onDelete}
+        className={`absolute top-1 ${mine ? "left-1.5" : "right-1.5"} z-10 flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none opacity-50 transition-opacity hover:bg-black/10 hover:opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-70 ${
+          deleting ? "opacity-40" : ""
+        }`}
+      >
+        ×
+      </button>
       {senderName ? (
         <p className="mb-0.5 hidden text-[12.5px] font-semibold text-[#86c5c9] sm:block">
           {senderName}

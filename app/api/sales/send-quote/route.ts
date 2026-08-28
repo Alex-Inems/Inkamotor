@@ -11,6 +11,7 @@ export const maxDuration = 60;
 
 type Body = {
   saleId?: string;
+  message?: string;
 };
 
 export async function POST(request: Request) {
@@ -61,6 +62,7 @@ export async function POST(request: Request) {
       sale: enriched,
       locale,
       relatedInquiryId: sale.inquiryId,
+      message: body.message?.trim() || null,
     });
 
     if (sale.status === "pending") {

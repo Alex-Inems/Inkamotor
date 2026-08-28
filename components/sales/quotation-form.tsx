@@ -5,9 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { btnSecondary, btnToolbar, btnToolbarPrimary, inputUnderlineClass } from "@/components/modal";
 import { ClientSearchInput } from "@/components/sales/client-search-input";
 import { ProductSearchInput } from "@/components/sales/product-search-input";
+import { QuoteTemplateSearchInput } from "@/components/sales/quote-template-search-input";
+import { SendQuotationModal } from "@/components/sales/send-quotation-modal";
 import { OdooFormToolbar } from "@/components/sales/odoo-form-toolbar";
 import { useCrm } from "@/lib/crm-store";
-import { type SaleLine, type SaleStatus } from "@/lib/demo-data";
+import { type Sale, type SaleLine, type SaleStatus } from "@/lib/demo-data";
 import {
   defaultValidityDate,
   emptyQuotationLine,
@@ -17,6 +19,7 @@ import {
   PAYMENT_TERMS,
   primaryProductLabel,
   QUOTE_TEMPLATES,
+  type OdooQuoteTemplate,
 } from "@/lib/quotation-form-data";
 import { getTemplateNoteHtml } from "@/lib/quote-template-terms";
 import {
@@ -54,6 +57,8 @@ export function QuotationForm() {
   const [lines, setLines] = useState<SaleLine[]>([emptyQuotationLine()]);
   const [salesperson] = useState(t("pages.sales.defaultSalesperson"));
   const [saving, setSaving] = useState(false);
+  const [sendQuoteSale, setSendQuoteSale] = useState<Sale | null>(null);
+  const [sendingQuote, setSendingQuote] = useState(false);
 
   useEffect(() => {
     const draft = loadQuotationDraft();
@@ -119,10 +124,9 @@ export function QuotationForm() {
     router.push("/sales/new/catalogue");
   }
 
-  function onTemplateChange(name: string) {
-    setQuoteTemplateName(name);
-    const tpl = QUOTE_TEMPLATES.find((row) => row.name === name);
-    if (tpl) setValidityDate(defaultValidityDate(tpl.numberOfDays));
+  function onTemplateSelect(tpl: OdooQuoteTemplate) {
+    setQuoteTemplateName(tpl.name);
+    setValidityDate(defaultValidityDate(tpl.numberOfDays));
   }
 
   function onLeadSelect(lead: { name: string; email: string; company: string }) {
@@ -157,14 +161,14 @@ export function QuotationForm() {
   async function save(status: SaleStatus = "pending") {
     if (!customer.trim()) {
       pushToast(t("pages.sales.customerRequired"));
-      return;
+      return null;
     }
     const billable = lines.filter(
       (line) => line.displayType === "product" && line.description.trim(),
     );
     if (billable.length === 0) {
       pushToast(t("pages.sales.lineRequired"));
-      return;
+      return null;
     }
     if (status === "sent") {
       const emailTrim = email.trim();
@@ -174,7 +178,7 @@ export function QuotationForm() {
         emailTrim.endsWith("@inkamototours.local")
       ) {
         pushToast(t("pages.sales.clientEmailRequired"));
-        return;
+        return null;
       }
     }
     setSaving(true);
@@ -198,16 +202,31 @@ export function QuotationForm() {
         salesperson,
         status: draftStatus,
       });
-      if (!sale) return;
-      if (status === "sent") {
-        await sendSaleQuote(sale.id);
-      }
+      return sale;
+    } catch {
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function prepareSendQuotation() {
+    const sale = await save("sent");
+    if (sale) setSendQuoteSale(sale);
+  }
+
+  async function confirmSendQuotation(message: string) {
+    if (!sendQuoteSale) return;
+    setSendingQuote(true);
+    try {
+      await sendSaleQuote(sendQuoteSale.id, message);
       clearQuotationDraft();
+      setSendQuoteSale(null);
       router.push("/sales?tab=bookings");
     } catch {
       /* toasts handled in store */
     } finally {
-      setSaving(false);
+      setSendingQuote(false);
     }
   }
 
@@ -217,16 +236,21 @@ export function QuotationForm() {
         <button
           type="button"
           className={btnToolbar}
-          disabled={saving}
-          onClick={() => void save("sent")}
+          disabled={saving || sendingQuote}
+          onClick={() => void prepareSendQuotation()}
         >
           {t("pages.sales.sendQuotation")}
         </button>
         <button
           type="button"
           className={btnToolbar}
-          disabled={saving}
-          onClick={() => void save("confirmed")}
+          disabled={saving || sendingQuote}
+          onClick={() => void save("confirmed").then((sale) => {
+            if (sale) {
+              clearQuotationDraft();
+              router.push("/sales?tab=bookings");
+            }
+          })}
         >
           {t("pages.sales.confirmOrder")}
         </button>
@@ -250,8 +274,13 @@ export function QuotationForm() {
         <button
           type="button"
           className={btnToolbarPrimary}
-          disabled={saving}
-          onClick={() => void save("pending")}
+          disabled={saving || sendingQuote}
+          onClick={() => void save("pending").then((sale) => {
+            if (sale) {
+              clearQuotationDraft();
+              router.push("/sales?tab=bookings");
+            }
+          })}
         >
           {t("common.save")}
         </button>
@@ -303,17 +332,12 @@ export function QuotationForm() {
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
               {t("pages.sales.quoteTemplate")}
             </span>
-            <select
+            <QuoteTemplateSearchInput
               className={inputUnderlineClass}
               value={quoteTemplateName}
-              onChange={(e) => onTemplateChange(e.target.value)}
-            >
-              {QUOTE_TEMPLATES.map((tpl) => (
-                <option key={tpl.id} value={tpl.name}>
-                  {tpl.name}
-                </option>
-              ))}
-            </select>
+              placeholder={t("pages.sales.pickTemplate")}
+              onTemplateSelect={onTemplateSelect}
+            />
           </label>
           <label className="block space-y-1">
             <span className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
@@ -535,6 +559,17 @@ export function QuotationForm() {
           </div>
         )}
       </div>
+
+      <SendQuotationModal
+        open={!!sendQuoteSale}
+        sale={sendQuoteSale}
+        sending={sendingQuote}
+        onClose={() => {
+          if (sendingQuote) return;
+          setSendQuoteSale(null);
+        }}
+        onSend={(message) => void confirmSendQuotation(message)}
+      />
     </>
   );
 }

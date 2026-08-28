@@ -122,15 +122,7 @@ export function groupMailRooms(input: {
     mine: boolean,
     raw: string,
     at: string,
-  ) => {
-    const preview = previewOf(cleanBody(raw));
-    const ts = new Date(at).getTime();
-    return room.messages.some((msg) => {
-      if (msg.mine !== mine) return false;
-      if (previewOf(msg.clean) !== preview) return false;
-      return Math.abs(new Date(msg.at).getTime() - ts) < 5 * 60_000;
-    });
-  };
+  ) => findNearDuplicate(room, mine, raw, at) !== undefined;
 
   for (const m of mail) {
     const raw = m.bodyText || m.preview || "";
@@ -203,7 +195,11 @@ export function groupMailRooms(input: {
         : r.toEmail);
     if (!target) continue;
     const room = ensure(target, r.toName ?? related?.name ?? null);
-    if (hasNearDuplicate(room, true, r.bodyText, r.sentAt)) continue;
+    const duplicate = findNearDuplicate(room, true, r.bodyText, r.sentAt);
+    if (duplicate) {
+      if (r.attachments?.length) duplicate.attachments = r.attachments;
+      continue;
+    }
     room.messages.push({
       key: `out-${r.id}`,
       mine: true,
@@ -228,4 +224,19 @@ export function groupMailRooms(input: {
     room.lastMailId = lastIn?.mailId;
   }
   return list.sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+}
+
+function findNearDuplicate(
+  room: MailRoom,
+  mine: boolean,
+  raw: string,
+  at: string,
+) {
+  const preview = previewOf(cleanBody(raw));
+  const ts = new Date(at).getTime();
+  return room.messages.find((msg) => {
+    if (msg.mine !== mine) return false;
+    if (previewOf(msg.clean) !== preview) return false;
+    return Math.abs(new Date(msg.at).getTime() - ts) < 5 * 60_000;
+  });
 }

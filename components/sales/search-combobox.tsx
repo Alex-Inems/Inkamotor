@@ -25,6 +25,8 @@ export type SearchComboboxProps<T> = {
   emptyLabel: string;
   limit?: number;
   menuMinWidth?: number;
+  /** Pick from list only — opening shows all items; parent updates on select. */
+  selectOnly?: boolean;
 };
 
 export function SearchCombobox<T>({
@@ -42,6 +44,7 @@ export function SearchCombobox<T>({
   emptyLabel,
   limit = 12,
   menuMinWidth = 280,
+  selectOnly = false,
 }: SearchComboboxProps<T>) {
   const listId = useId();
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -50,10 +53,13 @@ export function SearchCombobox<T>({
   const pickingRef = useRef(false);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
+  const [filtering, setFiltering] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
 
-  const results = filterItems(items, query, limit);
+  const filterQuery = selectOnly && open && !filtering ? "" : query;
+  const results = filterItems(items, filterQuery, limit);
+  const inputValue = selectOnly && open && !filtering ? value : query;
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -74,15 +80,18 @@ export function SearchCombobox<T>({
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open, menuMinWidth, query, results.length]);
+  }, [open, menuMinWidth, filterQuery, results.length]);
 
   useEffect(() => {
-    if (!open) setQuery(value);
+    if (!open) {
+      setQuery(value);
+      setFiltering(false);
+    }
   }, [value, open]);
 
   useEffect(() => {
     if (!open) setActiveIndex(-1);
-  }, [open, query, results.length]);
+  }, [open, filterQuery, results.length]);
 
   useEffect(() => {
     function onPointerDown(e: MouseEvent) {
@@ -95,11 +104,18 @@ export function SearchCombobox<T>({
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
 
+  function openMenu() {
+    setOpen(true);
+    setFiltering(false);
+    setQuery(value);
+  }
+
   function pick(item: T) {
     const label = getItemLabel(item);
     pickingRef.current = true;
     setQuery(label);
-    onValueChange(label);
+    setFiltering(false);
+    if (!selectOnly) onValueChange(label);
     onSelect?.(item);
     setOpen(false);
     setActiveIndex(-1);
@@ -111,8 +127,8 @@ export function SearchCombobox<T>({
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!open) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        setOpen(true);
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
+        openMenu();
         e.preventDefault();
       }
       return;
@@ -121,6 +137,7 @@ export function SearchCombobox<T>({
     if (e.key === "Escape") {
       setOpen(false);
       setQuery(value);
+      setFiltering(false);
       setActiveIndex(-1);
       return;
     }
@@ -169,17 +186,20 @@ export function SearchCombobox<T>({
             ) : (
               results.map((item, index) => {
                 const active = index === activeIndex;
+                const selected = getItemLabel(item) === value;
                 return (
                   <li key={getItemKey(item)} role="presentation">
                     <button
                       id={`${listId}-opt-${index}`}
                       type="button"
                       role="option"
-                      aria-selected={active}
+                      aria-selected={active || selected}
                       className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors ${
                         active
                           ? "bg-accent/25 text-ink"
-                          : "text-ink hover:bg-accent/15"
+                          : selected
+                            ? "bg-accent/10 text-ink"
+                            : "text-ink hover:bg-accent/15"
                       }`}
                       onMouseEnter={() => setActiveIndex(index)}
                       onMouseDown={(e) => e.preventDefault()}
@@ -210,39 +230,74 @@ export function SearchCombobox<T>({
             aria-activedescendant={
               activeIndex >= 0 ? `${listId}-opt-${activeIndex}` : undefined
             }
-            className={`${className ?? ""} w-full pr-8`}
-            value={query}
+            className={`${className ?? ""} w-full ${selectOnly ? "pr-8" : "pr-8"}`}
+            value={inputValue}
             placeholder={placeholder}
             onChange={(e) => {
-              setQuery(e.target.value);
-              onValueChange(e.target.value);
+              const next = e.target.value;
+              setQuery(next);
+              setFiltering(true);
+              if (!selectOnly) onValueChange(next);
               setOpen(true);
             }}
-            onFocus={() => {
-              setOpen(true);
-              window.requestAnimationFrame(() => inputRef.current?.select());
+            onFocus={openMenu}
+            onClick={() => {
+              if (!open) openMenu();
             }}
             onBlur={() => {
               window.setTimeout(() => {
                 if (pickingRef.current) return;
                 setOpen(false);
                 setQuery(value);
+                setFiltering(false);
               }, 100);
             }}
             onKeyDown={onKeyDown}
           />
-          <span
-            className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1 text-mute"
-            aria-hidden
-          >
-            <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 opacity-70">
-              <path
-                fillRule="evenodd"
-                d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </span>
+          {selectOnly ? (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label={open ? "Close" : "Open"}
+              className="absolute inset-y-0 right-0 flex items-center px-2 text-mute hover:text-ink"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                if (open) {
+                  setOpen(false);
+                  setQuery(value);
+                  setFiltering(false);
+                } else {
+                  openMenu();
+                  inputRef.current?.focus();
+                }
+              }}
+            >
+              <svg
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className={`h-4 w-4 opacity-70 transition-transform ${open ? "rotate-180" : ""}`}
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
+          ) : (
+            <span
+              className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-1 text-mute"
+              aria-hidden
+            >
+              <svg viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4 opacity-70">
+                <path
+                  fillRule="evenodd"
+                  d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </span>
+          )}
         </div>
       </div>
       {menu}

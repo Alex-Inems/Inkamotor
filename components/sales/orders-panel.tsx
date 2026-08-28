@@ -7,11 +7,13 @@ import {
   btnSecondary,
   Modal,
 } from "@/components/modal";
+import { InvoiceDocument } from "@/components/invoice-document";
 import { QuoteDocument } from "@/components/quote-document";
 import { EmptyHint, StatusBadge } from "@/components/ui";
+import { SendQuotationModal } from "@/components/sales/send-quotation-modal";
 import { OdooControlPanel } from "@/components/sales/odoo-control-panel";
 import { useCrm } from "@/lib/crm-store";
-import { type Sale, type SaleStatus } from "@/lib/demo-data";
+import { type Invoice, type Sale, type SaleStatus } from "@/lib/demo-data";
 import { enrichSale } from "@/lib/sale-quote";
 import { formatDate, formatNumber, formatSalesMoney } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
@@ -145,7 +147,7 @@ function groupSales(
 }
 
 export function OrdersPanel() {
-  const { sales, updateSaleStatus, sendSaleQuote, addInvoiceFromSale, invoices, pushToast } =
+  const { sales, updateSaleStatus, sendSaleQuote, addInvoiceFromSale, invoices, deleteSale, pushToast } =
     useCrm();
   const { t, locale } = useLocale();
   const [view, setView] = useState<ViewMode>("kanban");
@@ -154,8 +156,12 @@ export function OrdersPanel() {
   const [groupBy, setGroupBy] = useState<GroupByKey | null>(null);
   const [selected, setSelected] = useState<Sale | null>(null);
   const [quotePreview, setQuotePreview] = useState<Sale | null>(null);
+  const [invoicePreview, setInvoicePreview] = useState<Invoice | null>(null);
+  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [sendingQuoteId, setSendingQuoteId] = useState<string | null>(null);
+  const [sendQuoteSale, setSendQuoteSale] = useState<Sale | null>(null);
+  const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
 
   const stageLabel = (id: SaleStatus) => t(`saleStages.${id}`);
 
@@ -196,13 +202,13 @@ export function OrdersPanel() {
     return chips;
   }, [filter, groupBy, t]);
 
-  async function sendQuotation(sale: Sale) {
+  async function sendQuotation(sale: Sale, message: string) {
     setSendingQuoteId(sale.id);
     try {
-      await sendSaleQuote(sale.id);
-      const refreshed = sales.find((row) => row.id === sale.id);
-      const next = { ...sale, status: "sent" as const };
-      if (selected?.id === sale.id) setSelected(enrichSale(refreshed ?? next));
+      await sendSaleQuote(sale.id, message);
+      const sent = enrichSale({ ...sale, status: "sent" });
+      if (selected?.id === sale.id) setSelected(sent);
+      setSendQuoteSale(null);
     } catch {
       /* toast in store */
     } finally {
@@ -217,6 +223,25 @@ export function OrdersPanel() {
     await updateSaleStatus(id, status);
     setMovingId(null);
     if (selected?.id === id) setSelected({ ...sale, status });
+  }
+
+  async function deleteSaleOrder(sale: Sale) {
+    if (
+      !window.confirm(
+        t("pages.sales.deleteSaleConfirm", { number: sale.number }),
+      )
+    ) {
+      return;
+    }
+    setDeletingSaleId(sale.id);
+    try {
+      await deleteSale(sale.id);
+      setSelected(null);
+    } catch {
+      /* toast in store */
+    } finally {
+      setDeletingSaleId(null);
+    }
   }
 
   return (
@@ -463,21 +488,25 @@ export function OrdersPanel() {
                 {t("pages.sales.previewQuote")}
               </button>
               {selected.invoiceId ? (
-                <span className="inline-flex min-h-11 items-center px-3 text-sm text-mute">
-                  {t("pages.sales.invoiceLinked", {
-                    number:
-                      invoices.find((inv) => inv.id === selected.invoiceId)?.number ??
-                      selected.invoiceId,
-                  })}
-                </span>
+                <button
+                  type="button"
+                  className={btnSecondary}
+                  onClick={() => {
+                    const invoice = invoices.find((inv) => inv.id === selected.invoiceId);
+                    if (invoice) setInvoicePreview(invoice);
+                  }}
+                >
+                  {t("pages.sales.previewInvoice")}
+                </button>
               ) : (
                 <button
                   type="button"
                   className={btnSecondary}
                   onClick={() => {
-                    void addInvoiceFromSale(selected.id).then((invoiceId) => {
-                      if (invoiceId) {
-                        setSelected({ ...selected, invoiceId });
+                    void addInvoiceFromSale(selected.id).then((invoice) => {
+                      if (invoice) {
+                        setSelected({ ...selected, invoiceId: invoice.id });
+                        setInvoicePreview(invoice);
                       }
                     });
                   }}
@@ -491,9 +520,7 @@ export function OrdersPanel() {
                     type="button"
                     className={btnPrimary}
                     disabled={sendingQuoteId === selected.id}
-                    onClick={() => {
-                      void sendQuotation(selected);
-                    }}
+                    onClick={() => setSendQuoteSale(enrichSale(selected))}
                   >
                     {sendingQuoteId === selected.id
                       ? t("common.sending")
@@ -544,6 +571,18 @@ export function OrdersPanel() {
                   {t("pages.sales.cancelOrder")}
                 </button>
               ) : null}
+              <button
+                type="button"
+                className={btnGhost}
+                disabled={deletingSaleId === selected.id}
+                onClick={() => {
+                  void deleteSaleOrder(selected);
+                }}
+              >
+                {deletingSaleId === selected.id
+                  ? t("common.deleting")
+                  : t("pages.sales.deleteSale")}
+              </button>
             </div>
           </div>
         ) : null}
@@ -585,6 +624,84 @@ export function OrdersPanel() {
           </div>
         ) : null}
       </Modal>
+
+      <Modal
+        open={!!invoicePreview}
+        title={t("pages.sales.previewInvoice")}
+        onClose={() => setInvoicePreview(null)}
+        wide
+        footer={
+          invoicePreview ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={btnPrimary}
+                disabled={downloadingInvoice}
+                onClick={() => {
+                  if (!invoicePreview) return;
+                  setDownloadingInvoice(true);
+                  void import("@/lib/invoice-pdf")
+                    .then(({ downloadInvoicePdf }) =>
+                      downloadInvoicePdf(invoicePreview, locale),
+                    )
+                    .then(() =>
+                      pushToast(
+                        t("pages.invoices.downloaded", {
+                          file: `${invoicePreview.number}.pdf`,
+                        }),
+                      ),
+                    )
+                    .catch((err) =>
+                      pushToast(
+                        err instanceof Error
+                          ? err.message
+                          : t("pages.invoices.pdfFailed"),
+                      ),
+                    )
+                    .finally(() => setDownloadingInvoice(false));
+                }}
+              >
+                {downloadingInvoice
+                  ? t("common.downloading")
+                  : t("pages.invoices.downloadPdf")}
+              </button>
+              <button
+                type="button"
+                className={btnSecondary}
+                onClick={() => {
+                  document.body.classList.add("printing-invoice");
+                  const done = () => document.body.classList.remove("printing-invoice");
+                  window.addEventListener("afterprint", done, { once: true });
+                  window.print();
+                  window.setTimeout(done, 1000);
+                }}
+              >
+                {t("pages.invoices.printPdf")}
+              </button>
+            </div>
+          ) : null
+        }
+      >
+        {invoicePreview ? (
+          <div className="printing-invoice">
+            <InvoiceDocument invoice={invoicePreview} locale={locale} />
+          </div>
+        ) : null}
+      </Modal>
+
+      <SendQuotationModal
+        open={!!sendQuoteSale}
+        sale={sendQuoteSale}
+        sending={!!sendQuoteSale && sendingQuoteId === sendQuoteSale.id}
+        onClose={() => {
+          if (sendingQuoteId) return;
+          setSendQuoteSale(null);
+        }}
+        onSend={(message) => {
+          if (!sendQuoteSale) return;
+          void sendQuotation(sendQuoteSale, message);
+        }}
+      />
     </>
   );
 }

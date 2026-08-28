@@ -509,6 +509,16 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
       if (error) throw new Error(error.message);
       break;
     }
+    case "deleteSale": {
+      const { error: invErr } = await sb
+        .from("invoices")
+        .update({ sale_id: null })
+        .eq("sale_id", mutation.id);
+      if (invErr) throw new Error(invErr.message);
+      const { error } = await sb.from("sales").delete().eq("id", mutation.id);
+      if (error) throw new Error(error.message);
+      break;
+    }
     case "addProduct": {
       const snap = await loadCrmSnapshot();
       const id = `prod_${Date.now()}`;

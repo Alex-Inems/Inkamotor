@@ -25,11 +25,12 @@ export async function GET(request: Request, { params }: Params) {
   const url = new URL(request.url);
   const download = url.searchParams.get("download") === "1";
   const safeName = file.meta.fileName.replace(/[^\w.\-()+ ]/g, "_");
+  const body = new Uint8Array(file.data);
 
-  return new Response(new Uint8Array(file.data), {
+  return new Response(body, {
     headers: {
-      "Content-Type": file.meta.mimeType,
-      "Content-Length": String(file.data.length),
+      "Content-Type": file.meta.mimeType || "application/pdf",
+      "Content-Length": String(body.byteLength),
       "Content-Disposition": `${
         download ? "attachment" : "inline"
       }; filename="${safeName}"`,

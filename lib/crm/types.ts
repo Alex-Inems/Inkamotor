@@ -95,6 +95,7 @@ export type CrmMutation =
       };
     }
   | { op: "updateSaleStatus"; id: string; status: SaleStatus }
+  | { op: "deleteSale"; id: string }
   | {
       op: "addProduct";
       input: {

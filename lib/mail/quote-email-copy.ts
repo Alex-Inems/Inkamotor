@@ -21,10 +21,9 @@ export function quoteEmailBodyText(sale: Sale, locale: Locale) {
     .replace("{total}", total);
 }
 
-export function quoteEmailHtml(sale: Sale, locale: Locale) {
-  const body = quoteEmailBodyText(sale, locale);
+export function quoteEmailHtmlFromText(bodyText: string, locale: Locale) {
   const copy = messagesFor(locale);
-  const paragraphs = body
+  const paragraphs = bodyText
     .split(/\n+/)
     .map((p) => `<p>${escapeHtml(p)}</p>`)
     .join("");
@@ -33,6 +32,10 @@ export function quoteEmailHtml(sale: Sale, locale: Locale) {
     <p style="margin-top:1rem;color:#666;font-size:13px">${escapeHtml(copy.pages.sales.quoteEmailAttached)}</p>
     <p style="color:#666;font-size:13px">— ${escapeHtml(invoiceCompany.name)}<br/>${escapeHtml(invoiceCompany.email)}<br/>${escapeHtml(invoiceCompany.phone)}</p>
   </div>`;
+}
+
+export function quoteEmailHtml(sale: Sale, locale: Locale) {
+  return quoteEmailHtmlFromText(quoteEmailBodyText(sale, locale), locale);
 }
 
 export function quotePdfFileName(sale: Sale) {

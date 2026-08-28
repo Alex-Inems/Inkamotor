@@ -1,3 +1,4 @@
+import { decodeBytea, encodeByteaHex } from "@/lib/mail/bytea";
 import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
 
 export type MailAttachmentMeta = {
@@ -34,7 +35,7 @@ export async function saveReplyAttachment(input: {
       reply_id: input.replyId,
       file_name: input.fileName,
       mime_type: input.mimeType ?? "application/pdf",
-      file_data: bytes,
+      file_data: encodeByteaHex(bytes),
       byte_size: bytes.length,
     })
     .select("id, reply_id, file_name, mime_type, byte_size")
@@ -81,17 +82,8 @@ export async function getReplyAttachmentFile(id: string) {
   if (error || !data) return null;
 
   const row = data as Record<string, unknown>;
-  const raw = row.file_data;
-  let buffer: Buffer;
-  if (Buffer.isBuffer(raw)) {
-    buffer = raw;
-  } else if (raw instanceof Uint8Array) {
-    buffer = Buffer.from(raw);
-  } else if (typeof raw === "string") {
-    buffer = Buffer.from(raw, "base64");
-  } else {
-    return null;
-  }
+  const buffer = decodeBytea(row.file_data);
+  if (!buffer?.length) return null;
 
   return {
     meta: mapMeta(row),
