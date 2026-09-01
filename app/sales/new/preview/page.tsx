@@ -11,7 +11,9 @@ import { useCrm } from "@/lib/crm-store";
 import { loadQuotationDraft } from "@/lib/quotation-draft";
 import { getTemplateNoteHtml } from "@/lib/quote-template-terms";
 import { enrichSale } from "@/lib/sale-quote";
-import { primaryProductLabel, linesTotal, QUOTE_TEMPLATES } from "@/lib/quotation-form-data";
+import { buildQuotationLines, getQuoteTemplateByName } from "@/lib/quote-templates";
+import { useQuoteTemplates } from "@/lib/quote-templates-store";
+import { primaryProductLabel, linesTotal } from "@/lib/quotation-form-data";
 import { useLocale } from "@/lib/i18n";
 
 function PreviewPageInner() {
@@ -20,6 +22,7 @@ function PreviewPageInner() {
   const { t, locale } = useLocale();
   const { pushToast } = useCrm();
   const [draft, setDraft] = useState<ReturnType<typeof loadQuotationDraft>>(null);
+  const { templates } = useQuoteTemplates();
   const autoPrint = searchParams.get("print") === "1";
 
   useEffect(() => {
@@ -38,8 +41,8 @@ function PreviewPageInner() {
   }, [draft, autoPrint]);
 
   const template = useMemo(
-    () => QUOTE_TEMPLATES.find((row) => row.name === draft?.quoteTemplateName) ?? null,
-    [draft?.quoteTemplateName],
+    () => getQuoteTemplateByName(templates, draft?.quoteTemplateName ?? ""),
+    [templates, draft?.quoteTemplateName],
   );
 
   if (!draft) {
@@ -51,12 +54,17 @@ function PreviewPageInner() {
   }
 
   const total = linesTotal(draft.lines);
+  const saleLines = buildQuotationLines(
+    draft.trip ?? draft.voyage ?? "",
+    draft.lines,
+    t("pages.sales.voyage"),
+  );
   const sale = enrichSale({
     id: "draft",
     number: t("pages.sales.newQuotation"),
     customer: draft.customer || "—",
     email: draft.email || "—",
-    product: primaryProductLabel(draft.lines),
+    product: primaryProductLabel(saleLines),
     amount: total,
     currency: "EUR",
     status: "pending",
@@ -66,7 +74,7 @@ function PreviewPageInner() {
     createdAt: new Date().toISOString().slice(0, 10),
     closedAt: null,
     notes: "",
-    lines: draft.lines,
+    lines: saleLines,
     quoteTemplateName: draft.quoteTemplateName,
     paymentTerms: draft.paymentTerms,
     validityDate: draft.validityDate,

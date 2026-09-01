@@ -3,7 +3,6 @@
 import { SearchCombobox } from "@/components/sales/search-combobox";
 import {
   type OdooQuoteTemplate,
-  QUOTE_TEMPLATES,
 } from "@/lib/quotation-form-data";
 import { useLocale } from "@/lib/i18n";
 
@@ -43,11 +42,13 @@ function templateInitials(name: string) {
 
 export function QuoteTemplateSearchInput({
   value,
+  templates,
   onTemplateSelect,
   placeholder,
   className,
 }: {
   value: string;
+  templates: OdooQuoteTemplate[];
   onTemplateSelect: (template: OdooQuoteTemplate) => void;
   placeholder?: string;
   className?: string;
@@ -59,7 +60,7 @@ export function QuoteTemplateSearchInput({
       value={value}
       onValueChange={() => {}}
       onSelect={onTemplateSelect}
-      items={QUOTE_TEMPLATES}
+      items={templates}
       filterItems={filterTemplates}
       getItemKey={(template) => String(template.id)}
       getItemLabel={(template) => template.name}

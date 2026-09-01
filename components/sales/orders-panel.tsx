@@ -1,20 +1,14 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import {
-  btnGhost,
-  btnPrimary,
-  btnSecondary,
-  Modal,
-} from "@/components/modal";
-import { InvoiceDocument } from "@/components/invoice-document";
-import { QuoteDocument } from "@/components/quote-document";
+import { btnGhost } from "@/components/modal";
 import { EmptyHint, StatusBadge } from "@/components/ui";
-import { SendQuotationModal } from "@/components/sales/send-quotation-modal";
 import { OdooControlPanel } from "@/components/sales/odoo-control-panel";
 import { useCrm } from "@/lib/crm-store";
-import { type Invoice, type Sale, type SaleStatus } from "@/lib/demo-data";
+import { type Sale, type SaleStatus } from "@/lib/demo-data";
 import { enrichSale } from "@/lib/sale-quote";
+import { SalesAmount } from "@/components/sales/sales-amount";
 import { formatDate, formatNumber, formatSalesMoney } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
 import { saleTone } from "@/lib/status";
@@ -147,21 +141,17 @@ function groupSales(
 }
 
 export function OrdersPanel() {
-  const { sales, updateSaleStatus, sendSaleQuote, addInvoiceFromSale, invoices, deleteSale, pushToast } =
-    useCrm();
+  const router = useRouter();
+  const { sales } = useCrm();
   const { t, locale } = useLocale();
   const [view, setView] = useState<ViewMode>("kanban");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SaleFilter>("all");
   const [groupBy, setGroupBy] = useState<GroupByKey | null>(null);
-  const [selected, setSelected] = useState<Sale | null>(null);
-  const [quotePreview, setQuotePreview] = useState<Sale | null>(null);
-  const [invoicePreview, setInvoicePreview] = useState<Invoice | null>(null);
-  const [downloadingInvoice, setDownloadingInvoice] = useState(false);
-  const [movingId, setMovingId] = useState<string | null>(null);
-  const [sendingQuoteId, setSendingQuoteId] = useState<string | null>(null);
-  const [sendQuoteSale, setSendQuoteSale] = useState<Sale | null>(null);
-  const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
+
+  const openSale = (sale: Sale) => {
+    router.push(`/sales/${sale.id}`);
+  };
 
   const stageLabel = (id: SaleStatus) => t(`saleStages.${id}`);
 
@@ -201,48 +191,6 @@ export function OrdersPanel() {
     }
     return chips;
   }, [filter, groupBy, t]);
-
-  async function sendQuotation(sale: Sale, message: string) {
-    setSendingQuoteId(sale.id);
-    try {
-      await sendSaleQuote(sale.id, message);
-      const sent = enrichSale({ ...sale, status: "sent" });
-      if (selected?.id === sale.id) setSelected(sent);
-      setSendQuoteSale(null);
-    } catch {
-      /* toast in store */
-    } finally {
-      setSendingQuoteId(null);
-    }
-  }
-
-  async function moveSale(id: string, status: SaleStatus) {
-    const sale = sales.find((s) => s.id === id);
-    if (!sale || sale.status === status) return;
-    setMovingId(id);
-    await updateSaleStatus(id, status);
-    setMovingId(null);
-    if (selected?.id === id) setSelected({ ...sale, status });
-  }
-
-  async function deleteSaleOrder(sale: Sale) {
-    if (
-      !window.confirm(
-        t("pages.sales.deleteSaleConfirm", { number: sale.number }),
-      )
-    ) {
-      return;
-    }
-    setDeletingSaleId(sale.id);
-    try {
-      await deleteSale(sale.id);
-      setSelected(null);
-    } catch {
-      /* toast in store */
-    } finally {
-      setDeletingSaleId(null);
-    }
-  }
 
   return (
     <>
@@ -330,9 +278,9 @@ export function OrdersPanel() {
                         <SaleKanbanCard
                           key={sale.id}
                           sale={sale}
-                          busy={movingId === sale.id}
+                          busy={false}
                           stageLabel={stageLabel(sale.status)}
-                          onOpen={() => setSelected(enrichSale(sale))}
+                          onOpen={() => openSale(enrichSale(sale))}
                         />
                       ))}
                     </div>
@@ -386,7 +334,7 @@ export function OrdersPanel() {
                               {t("pages.sales.defaultSalesperson")}
                             </td>
                             <td className="whitespace-nowrap font-medium">
-                              {formatSalesMoney(s.amount, locale)}
+                              <SalesAmount amount={s.amount} locale={locale} />
                             </td>
                             <td>
                               <StatusBadge tone={saleTone(s.status)}>
@@ -397,7 +345,7 @@ export function OrdersPanel() {
                               <button
                                 type="button"
                                 className={btnGhost}
-                                onClick={() => setSelected(enrichSale(s))}
+                                onClick={() => openSale(enrichSale(s))}
                               >
                                 {t("common.open")}
                               </button>
@@ -413,295 +361,6 @@ export function OrdersPanel() {
           )}
         </div>
       )}
-
-      <Modal
-        open={!!selected}
-        title={selected?.number ?? t("pages.sales.sale")}
-        onClose={() => setSelected(null)}
-        wide
-      >
-        {selected ? (
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{selected.customer}</p>
-                <p className="text-sm text-mute">{selected.email}</p>
-                {selected.quoteTemplateName ? (
-                  <p className="mt-1 text-sm text-mute">{selected.quoteTemplateName}</p>
-                ) : null}
-              </div>
-              <StatusBadge tone={saleTone(selected.status)}>
-                {stageLabel(selected.status)}
-              </StatusBadge>
-            </div>
-            {selected.lines.length > 0 ? (
-              <ul className="space-y-1 text-sm">
-                {selected.lines.map((line, i) => (
-                  <li key={`${line.description}-${i}`} className="text-mute">
-                    {line.displayType === "section" ? (
-                      <span className="font-semibold text-ink">{line.description}</span>
-                    ) : line.displayType === "note" ? (
-                      <span className="whitespace-pre-line text-xs">{line.description}</span>
-                    ) : (
-                      <>
-                        {line.description}
-                        {" · "}
-                        {formatSalesMoney(line.qty * line.unitPrice, locale)}
-                      </>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm">{selected.product}</p>
-            )}
-            <p className="font-display text-2xl font-bold">
-              {formatSalesMoney(selected.amount, locale)}
-            </p>
-            <p className="text-xs text-mute">
-              {t("pages.sales.orderDateLine", {
-                date: formatDate(selected.createdAt, locale),
-              })}
-              {" · "}
-              {t("pages.sales.sourceLine", {
-                source: t(`sources.${selected.source}`),
-              })}
-              {selected.paymentTerms
-                ? ` · ${t("pages.sales.paymentTerms")}: ${selected.paymentTerms}`
-                : ""}
-              {selected.inquiryId
-                ? ` · ${t("pages.sales.inquiryRef", { id: selected.inquiryId })}`
-                : ""}
-              {selected.leadId
-                ? ` · ${t("pages.sales.leadRef", { id: selected.leadId })}`
-                : ""}
-            </p>
-            {selected.notes ? (
-              <p className="text-sm text-mute whitespace-pre-line">{selected.notes}</p>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() => setQuotePreview(enrichSale(selected))}
-              >
-                {t("pages.sales.previewQuote")}
-              </button>
-              {selected.invoiceId ? (
-                <button
-                  type="button"
-                  className={btnSecondary}
-                  onClick={() => {
-                    const invoice = invoices.find((inv) => inv.id === selected.invoiceId);
-                    if (invoice) setInvoicePreview(invoice);
-                  }}
-                >
-                  {t("pages.sales.previewInvoice")}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className={btnSecondary}
-                  onClick={() => {
-                    void addInvoiceFromSale(selected.id).then((invoice) => {
-                      if (invoice) {
-                        setSelected({ ...selected, invoiceId: invoice.id });
-                        setInvoicePreview(invoice);
-                      }
-                    });
-                  }}
-                >
-                  {t("pages.sales.createInvoice")}
-                </button>
-              )}
-              {selected.status === "pending" ? (
-                <>
-                  <button
-                    type="button"
-                    className={btnPrimary}
-                    disabled={sendingQuoteId === selected.id}
-                    onClick={() => setSendQuoteSale(enrichSale(selected))}
-                  >
-                    {sendingQuoteId === selected.id
-                      ? t("common.sending")
-                      : t("pages.sales.sendQuotation")}
-                  </button>
-                  <button
-                    type="button"
-                    className={btnSecondary}
-                    onClick={() => {
-                      void moveSale(selected.id, "confirmed");
-                    }}
-                  >
-                    {t("pages.sales.confirmOrder")}
-                  </button>
-                </>
-              ) : null}
-              {selected.status === "sent" ? (
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  onClick={() => {
-                    void moveSale(selected.id, "confirmed");
-                  }}
-                >
-                  {t("pages.sales.confirmOrder")}
-                </button>
-              ) : null}
-              {selected.status === "confirmed" ? (
-                <button
-                  type="button"
-                  className={btnPrimary}
-                  onClick={() => {
-                    void moveSale(selected.id, "fulfilled");
-                  }}
-                >
-                  {t("pages.sales.lockOrder")}
-                </button>
-              ) : null}
-              {selected.status !== "cancelled" &&
-              selected.status !== "fulfilled" ? (
-                <button
-                  type="button"
-                  className={btnSecondary}
-                  onClick={() => {
-                    void moveSale(selected.id, "cancelled");
-                  }}
-                >
-                  {t("pages.sales.cancelOrder")}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className={btnGhost}
-                disabled={deletingSaleId === selected.id}
-                onClick={() => {
-                  void deleteSaleOrder(selected);
-                }}
-              >
-                {deletingSaleId === selected.id
-                  ? t("common.deleting")
-                  : t("pages.sales.deleteSale")}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        open={!!quotePreview}
-        title={t("pages.sales.previewQuote")}
-        onClose={() => setQuotePreview(null)}
-        wide
-        footer={
-          quotePreview ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={btnPrimary}
-                onClick={() => {
-                  void import("@/lib/quote-pdf").then(({ downloadQuotePdf }) =>
-                    downloadQuotePdf(quotePreview, locale).catch((err) =>
-                      pushToast(
-                        err instanceof Error ? err.message : t("pages.sales.quotePdfFailed"),
-                      ),
-                    ),
-                  );
-                }}
-              >
-                {t("pages.sales.downloadQuote")}
-              </button>
-              <button type="button" className={btnSecondary} onClick={() => window.print()}>
-                {t("pages.invoices.print")}
-              </button>
-            </div>
-          ) : null
-        }
-      >
-        {quotePreview ? (
-          <div className="printing-invoice">
-            <QuoteDocument sale={quotePreview} locale={locale} />
-          </div>
-        ) : null}
-      </Modal>
-
-      <Modal
-        open={!!invoicePreview}
-        title={t("pages.sales.previewInvoice")}
-        onClose={() => setInvoicePreview(null)}
-        wide
-        footer={
-          invoicePreview ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={btnPrimary}
-                disabled={downloadingInvoice}
-                onClick={() => {
-                  if (!invoicePreview) return;
-                  setDownloadingInvoice(true);
-                  void import("@/lib/invoice-pdf")
-                    .then(({ downloadInvoicePdf }) =>
-                      downloadInvoicePdf(invoicePreview, locale),
-                    )
-                    .then(() =>
-                      pushToast(
-                        t("pages.invoices.downloaded", {
-                          file: `${invoicePreview.number}.pdf`,
-                        }),
-                      ),
-                    )
-                    .catch((err) =>
-                      pushToast(
-                        err instanceof Error
-                          ? err.message
-                          : t("pages.invoices.pdfFailed"),
-                      ),
-                    )
-                    .finally(() => setDownloadingInvoice(false));
-                }}
-              >
-                {downloadingInvoice
-                  ? t("common.downloading")
-                  : t("pages.invoices.downloadPdf")}
-              </button>
-              <button
-                type="button"
-                className={btnSecondary}
-                onClick={() => {
-                  document.body.classList.add("printing-invoice");
-                  const done = () => document.body.classList.remove("printing-invoice");
-                  window.addEventListener("afterprint", done, { once: true });
-                  window.print();
-                  window.setTimeout(done, 1000);
-                }}
-              >
-                {t("pages.invoices.printPdf")}
-              </button>
-            </div>
-          ) : null
-        }
-      >
-        {invoicePreview ? (
-          <div className="printing-invoice">
-            <InvoiceDocument invoice={invoicePreview} locale={locale} />
-          </div>
-        ) : null}
-      </Modal>
-
-      <SendQuotationModal
-        open={!!sendQuoteSale}
-        sale={sendQuoteSale}
-        sending={!!sendQuoteSale && sendingQuoteId === sendQuoteSale.id}
-        onClose={() => {
-          if (sendingQuoteId) return;
-          setSendQuoteSale(null);
-        }}
-        onSend={(message) => {
-          if (!sendQuoteSale) return;
-          void sendQuotation(sendQuoteSale, message);
-        }}
-      />
     </>
   );
 }
@@ -750,9 +409,7 @@ function SaleKanbanCard({
                   {sale.number}
                 </p>
               </div>
-              <p className="shrink-0 text-xs font-semibold text-gold">
-                {formatSalesMoney(sale.amount, locale)}
-              </p>
+              <SalesAmount amount={sale.amount} locale={locale} className="shrink-0 text-xs" />
             </div>
             <p className="mt-2 line-clamp-2 text-[11px] leading-snug text-mute">
               {sale.product}

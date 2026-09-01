@@ -9,6 +9,11 @@ import {
 } from "react";
 import Link from "next/link";
 import { MessageAttachments } from "@/components/inbox/message-attachments";
+import {
+  MessageCompose,
+  type MessageComposePayload,
+} from "@/components/inbox/message-compose";
+import { LinkifiedText } from "@/components/inbox/linkified-text";
 import { useCrm } from "@/lib/crm-store";
 import { quickSaleInput } from "@/lib/quotation-form-data";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
@@ -157,7 +162,6 @@ export default function InboxPage() {
   const [starred, setStarred] = useState<string[]>([]);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
-  const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
   const [deletingConversation, setDeletingConversation] = useState(false);
@@ -378,7 +382,6 @@ export default function InboxPage() {
   function openRoom(email: string) {
     setActiveEmail(email);
     setDetailsOpen(false);
-    setDraft("");
     setShowOriginal(false);
     setOpened((prev) => (prev.includes(email) ? prev : [...prev, email]));
   }
@@ -388,8 +391,8 @@ export default function InboxPage() {
     setActiveEmail(null);
   }
 
-  async function send() {
-    if (!active || !draft.trim()) return;
+  async function send(payload: MessageComposePayload) {
+    if (!active || (!payload.message && payload.attachments.length === 0)) return;
     setSending(true);
     try {
       const res = await fetch("/api/inbox/reply", {
@@ -399,8 +402,9 @@ export default function InboxPage() {
           toEmail: active.email,
           toName: active.name || undefined,
           inReplyToSubject: active.lastSubject,
-          message: draft.trim(),
+          message: payload.message,
           relatedMailId: active.lastMailId,
+          attachments: payload.attachments,
         }),
       });
       const json = await res.json();
@@ -414,7 +418,6 @@ export default function InboxPage() {
           prev.some((r) => r.id === saved.id) ? prev : [saved, ...prev],
         );
       }
-      setDraft("");
       await loadReplies();
       void loadMail();
     } finally {
@@ -714,38 +717,12 @@ export default function InboxPage() {
 
             <footer className="shrink-0 bg-panel/90 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:border-t sm:border-line sm:bg-panel sm:px-5 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {conn?.brevo.ready ? (
-                <div className="flex items-end gap-2">
-                  <textarea
-                    rows={1}
-                    value={draft}
-                    onChange={(e) => {
-                      setDraft(e.target.value);
-                      const el = e.target;
-                      el.style.height = "auto";
-                      el.style.height = `${Math.min(el.scrollHeight, 128)}px`;
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void send();
-                      }
-                    }}
-                    placeholder={t("pages.inbox.messagePlaceholder", { name: activeName })}
-                    className="max-h-32 min-h-11 flex-1 resize-none rounded-[22px] border border-line bg-ash px-3.5 py-2.5 text-sm leading-snug outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => void send()}
-                    disabled={sending || !draft.trim()}
-                    aria-label={t("pages.inbox.send")}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chat-out text-chat-out-text transition-colors hover:bg-accent-deep disabled:opacity-40 sm:w-auto sm:rounded-none sm:bg-accent sm:px-4 sm:text-sm sm:font-semibold sm:text-cream"
-                  >
-                    <span className="sm:hidden">
-                      {sending ? "…" : <SendIcon />}
-                    </span>
-                    <span className="hidden sm:inline">{sending ? "…" : t("pages.inbox.send")}</span>
-                  </button>
-                </div>
+                <MessageCompose
+                  variant="inbox"
+                  placeholder={t("pages.inbox.messagePlaceholder", { name: activeName })}
+                  sending={sending}
+                  onSend={send}
+                />
               ) : (
                 <p className="px-1 pb-1 text-xs text-gold">
                   {t("pages.inbox.sendingMissing")}
@@ -1119,7 +1096,13 @@ function MessageBody({
       ) : null}
 
       {clean.text ? (
-        <p className="whitespace-pre-wrap wrap-break-word">{clean.text}</p>
+        <LinkifiedText
+          text={clean.text}
+          className="whitespace-pre-wrap wrap-break-word"
+          linkClassName={`font-semibold underline underline-offset-2 ${
+            mine ? "text-chat-out-text" : "text-sand"
+          }`}
+        />
       ) : clean.fields.length === 0 ? (
         <p className="opacity-80">{message.raw?.trim() || t("pages.inbox.emptyMessage")}</p>
       ) : null}
@@ -1222,14 +1205,6 @@ function DetailAction({
     >
       {label}
     </button>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <path d="M3.4 20.6 21 12 3.4 3.4l-.4 7.1 12.2 1.5L3 13.5z" />
-    </svg>
   );
 }
 

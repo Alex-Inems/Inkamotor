@@ -25,6 +25,7 @@ export function MessageAttachments({
         const previewUrl = `/api/inbox/attachments/${file.id}`;
         const downloadUrl = `${previewUrl}?download=1`;
         const isPdf = file.mimeType.includes("pdf");
+        const isImage = file.mimeType.startsWith("image/");
 
         return (
           <div
@@ -45,7 +46,7 @@ export function MessageAttachments({
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
-                {isPdf ? (
+                {isPdf || isImage ? (
                   <a
                     href={previewUrl}
                     target="_blank"
@@ -69,6 +70,13 @@ export function MessageAttachments({
                 title={file.fileName}
                 src={previewUrl}
                 className="h-56 w-full border-0 bg-white sm:h-72"
+              />
+            ) : isImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewUrl}
+                alt={file.fileName}
+                className="max-h-72 w-full bg-white object-contain"
               />
             ) : null}
           </div>

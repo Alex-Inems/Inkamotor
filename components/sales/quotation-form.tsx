@@ -1,33 +1,37 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { btnSecondary, btnToolbar, btnToolbarPrimary, inputUnderlineClass } from "@/components/modal";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { btnToolbar, btnToolbarPrimary, inputUnderlineClass } from "@/components/modal";
 import { ClientSearchInput } from "@/components/sales/client-search-input";
-import { ProductSearchInput } from "@/components/sales/product-search-input";
 import { QuoteTemplateSearchInput } from "@/components/sales/quote-template-search-input";
+import { QuotationLinesEditor } from "@/components/sales/quotation-lines-editor";
+import { QuotationOtherInfoTab } from "@/components/sales/quotation-other-info-tab";
 import { SendQuotationModal } from "@/components/sales/send-quotation-modal";
 import { OdooFormToolbar } from "@/components/sales/odoo-form-toolbar";
 import { useCrm } from "@/lib/crm-store";
 import { type Sale, type SaleLine, type SaleStatus } from "@/lib/demo-data";
 import {
+  defaultQuotationOtherInfo,
   defaultValidityDate,
   emptyQuotationLine,
   getPaymentTermLabel,
-  lineTotal,
   linesTotal,
   PAYMENT_TERMS,
   primaryProductLabel,
-  QUOTE_TEMPLATES,
   type OdooQuoteTemplate,
+  type QuotationOtherInfo,
 } from "@/lib/quotation-form-data";
+import { applyLocalizedTemplateToQuotationLines } from "@/lib/quote-template-lines";
+import { buildQuotationLines, parseStoredQuotationLines } from "@/lib/quote-templates";
+import { useQuoteTemplates } from "@/lib/quote-templates-store";
 import { getTemplateNoteHtml } from "@/lib/quote-template-terms";
 import {
   clearQuotationDraft,
   loadQuotationDraft,
   saveQuotationDraft,
 } from "@/lib/quotation-draft";
-import { formatSalesMoney } from "@/lib/format";
+import { SalesAmount } from "@/components/sales/sales-amount";
 import { useLocale } from "@/lib/i18n";
 
 type Tab = "lines" | "other";
@@ -44,60 +48,97 @@ export function QuotationForm() {
   const router = useRouter();
   const { t, locale } = useLocale();
   const { leads, products, addSale, sendSaleQuote, pushToast } = useCrm();
+  const { templates, ready: templatesReady } = useQuoteTemplates();
+  const defaultTemplate = templates[0] ?? null;
   const [tab, setTab] = useState<Tab>("lines");
   const [customer, setCustomer] = useState("");
   const [email, setEmail] = useState("");
-  const [quoteTemplateName, setQuoteTemplateName] = useState(
-    QUOTE_TEMPLATES[0]?.name ?? "",
-  );
-  const [validityDate, setValidityDate] = useState(
-    defaultValidityDate(QUOTE_TEMPLATES[0]?.numberOfDays ?? 10),
-  );
+  const [quoteTemplateName, setQuoteTemplateName] = useState("");
+  const [validityDate, setValidityDate] = useState(() => defaultValidityDate(10));
   const [paymentTerms, setPaymentTerms] = useState(PAYMENT_TERMS[1]?.name ?? "");
+  const [trip, setTrip] = useState("");
   const [lines, setLines] = useState<SaleLine[]>([emptyQuotationLine()]);
-  const [salesperson] = useState(t("pages.sales.defaultSalesperson"));
+  const [otherInfo, setOtherInfo] = useState<QuotationOtherInfo>(() =>
+    defaultQuotationOtherInfo(null, t),
+  );
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendQuoteSale, setSendQuoteSale] = useState<Sale | null>(null);
   const [sendingQuote, setSendingQuote] = useState(false);
+  const prevLocale = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!templatesReady) return;
     const draft = loadQuotationDraft();
-    if (!draft) return;
-    setCustomer(draft.customer);
-    setEmail(draft.email);
-    setQuoteTemplateName(draft.quoteTemplateName);
-    setValidityDate(draft.validityDate);
-    setPaymentTerms(draft.paymentTerms);
-    setLines(draft.lines.length > 0 ? draft.lines : [emptyQuotationLine()]);
-  }, []);
+    if (draft) {
+      setCustomer(draft.customer);
+      setEmail(draft.email);
+      setQuoteTemplateName(draft.quoteTemplateName);
+      setValidityDate(draft.validityDate);
+      setPaymentTerms(draft.paymentTerms);
+      if (draft.trip != null || draft.voyage != null) {
+        setTrip(draft.trip ?? draft.voyage ?? "");
+        setLines(draft.lines.length > 0 ? draft.lines : [emptyQuotationLine()]);
+      } else {
+        const parsed = parseStoredQuotationLines(draft.lines);
+        setTrip(parsed.trip);
+        setLines(parsed.bodyLines.length > 0 ? parsed.bodyLines : [emptyQuotationLine()]);
+      }
+      if (draft.otherInfo) setOtherInfo(draft.otherInfo);
+      setDraftHydrated(true);
+      return;
+    }
+
+    const tpl = defaultTemplate;
+    if (!tpl) {
+      setDraftHydrated(true);
+      return;
+    }
+    setQuoteTemplateName(tpl.name);
+    setValidityDate(defaultValidityDate(tpl.numberOfDays));
+    setOtherInfo(defaultQuotationOtherInfo(tpl, t));
+    setTrip("");
+    setLines(applyLocalizedTemplateToQuotationLines([], tpl, locale));
+    setDraftHydrated(true);
+  }, [templatesReady, defaultTemplate, t, locale]);
 
   const template = useMemo(
-    () => QUOTE_TEMPLATES.find((row) => row.name === quoteTemplateName) ?? null,
-    [quoteTemplateName],
+    () => templates.find((row) => row.name === quoteTemplateName) ?? defaultTemplate,
+    [templates, quoteTemplateName, defaultTemplate],
   );
 
-  const termsHtml = useMemo(
-    () => getTemplateNoteHtml(template, locale),
-    [template, locale],
-  );
+  useEffect(() => {
+    if (!draftHydrated || !template) return;
+    if (prevLocale.current === null) {
+      prevLocale.current = locale;
+      return;
+    }
+    if (prevLocale.current === locale) return;
+    prevLocale.current = locale;
+    setLines((prev) => applyLocalizedTemplateToQuotationLines(prev, template, locale));
+  }, [locale, template, draftHydrated]);
+
+  const termsHtml = useMemo(() => {
+    const primary = getTemplateNoteHtml(template, locale);
+    if (primary.trim()) return primary;
+    const fallbackTemplate = templates.find((row) =>
+      getTemplateNoteHtml(row, locale).trim(),
+    );
+    return fallbackTemplate ? getTemplateNoteHtml(fallbackTemplate, locale) : "";
+  }, [template, templates, locale]);
 
   const total = linesTotal(lines);
 
-  const catalogProducts = useMemo(
-    () =>
-      [...products]
-        .filter((product) => product.active && product.saleOk)
-        .sort((a, b) => a.name.localeCompare(b.name, locale)),
-    [products, locale],
-  );
-
-  function onProductPick(index: number, product: { name: string; listPrice: number }) {
-    updateLine(index, {
-      description: product.name,
-      unitPrice: product.listPrice,
-    });
+  function onTemplateSelect(tpl: OdooQuoteTemplate) {
+    setQuoteTemplateName(tpl.name);
+    setValidityDate(defaultValidityDate(tpl.numberOfDays));
+    setOtherInfo((prev) => ({
+      ...prev,
+      onlineSignature: tpl.requireSignature,
+      onlinePayment: tpl.requirePayment,
+    }));
+    setLines((prev) => applyLocalizedTemplateToQuotationLines(prev, tpl, locale));
   }
-
   function persistDraft() {
     saveQuotationDraft({
       customer,
@@ -105,9 +146,17 @@ export function QuotationForm() {
       quoteTemplateName,
       validityDate,
       paymentTerms,
+      trip,
+      voyage: trip,
       lines,
+      otherInfo,
     });
   }
+
+  const saleLines = useMemo(
+    () => buildQuotationLines(trip, lines, t("pages.sales.voyage")),
+    [trip, lines, t],
+  );
 
   function openPreview() {
     persistDraft();
@@ -124,38 +173,11 @@ export function QuotationForm() {
     router.push("/sales/new/catalogue");
   }
 
-  function onTemplateSelect(tpl: OdooQuoteTemplate) {
-    setQuoteTemplateName(tpl.name);
-    setValidityDate(defaultValidityDate(tpl.numberOfDays));
-  }
-
   function onLeadSelect(lead: { name: string; email: string; company: string }) {
     const label =
       lead.name.trim() || lead.company.trim() || lead.email.trim();
     setCustomer(label);
     if (lead.email) setEmail(lead.email);
-  }
-
-  function updateLine(index: number, patch: Partial<SaleLine>) {
-    setLines((prev) =>
-      prev.map((line, i) => (i === index ? { ...line, ...patch } : line)),
-    );
-  }
-
-  function removeLine(index: number) {
-    setLines((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  function addLine(type: SaleLine["displayType"]) {
-    setLines((prev) => [
-      ...prev,
-      {
-        description: "",
-        displayType: type,
-        qty: type === "product" ? 1 : 0,
-        unitPrice: 0,
-      },
-    ]);
   }
 
   async function save(status: SaleStatus = "pending") {
@@ -187,19 +209,19 @@ export function QuotationForm() {
       const sale = await addSale({
         customer: customer.trim(),
         email: email.trim() || `quote+${Date.now()}@inkamototours.local`,
-        product: primaryProductLabel(lines),
+        product: primaryProductLabel(saleLines),
         amount: total,
         currency: "EUR",
         source: "website",
         inquiryId: null,
         leadId: null,
         notes: t("pages.sales.createdInCrm"),
-        lines,
+        lines: saleLines,
         quoteTemplateName,
         paymentTerms,
         validityDate,
         termsHtml,
-        salesperson,
+        salesperson: otherInfo.seller,
         status: draftStatus,
       });
       return sale;
@@ -222,7 +244,7 @@ export function QuotationForm() {
       await sendSaleQuote(sendQuoteSale.id, message);
       clearQuotationDraft();
       setSendQuoteSale(null);
-      router.push("/sales?tab=bookings");
+      router.push(`/sales/${sendQuoteSale.id}`);
     } catch {
       /* toasts handled in store */
     } finally {
@@ -335,6 +357,7 @@ export function QuotationForm() {
             <QuoteTemplateSearchInput
               className={inputUnderlineClass}
               value={quoteTemplateName}
+              templates={templates}
               placeholder={t("pages.sales.pickTemplate")}
               onTemplateSelect={onTemplateSelect}
             />
@@ -394,169 +417,49 @@ export function QuotationForm() {
 
         {tab === "lines" ? (
           <div className="px-4 py-4">
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{t("pages.sales.lineProduct")}</th>
-                    <th className="w-24 text-right">{t("pages.sales.lineQty")}</th>
-                    <th className="w-32 text-right">{t("pages.sales.lineUnitPrice")}</th>
-                    <th className="w-32 text-right">{t("pages.sales.lineAmount")}</th>
-                    <th className="w-10" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((line, index) =>
-                    line.displayType === "section" ? (
-                      <tr key={`line-${index}`} className="bg-ash/40">
-                        <td colSpan={4}>
-                          <input
-                            className={`${inputUnderlineClass} font-semibold`}
-                            value={line.description}
-                            onChange={(e) =>
-                              updateLine(index, { description: e.target.value })
-                            }
-                            placeholder={t("pages.sales.sectionTitle")}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="text-xs text-mute hover:text-ink"
-                            onClick={() => removeLine(index)}
-                          >
-                            ×
-                          </button>
-                        </td>
-                      </tr>
-                    ) : line.displayType === "note" ? (
-                      <tr key={`line-${index}`}>
-                        <td colSpan={4}>
-                          <textarea
-                            className={`${inputUnderlineClass} min-h-16 text-sm`}
-                            value={line.description}
-                            onChange={(e) =>
-                              updateLine(index, { description: e.target.value })
-                            }
-                            placeholder={t("pages.sales.notePlaceholder")}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="text-xs text-mute hover:text-ink"
-                            onClick={() => removeLine(index)}
-                          >
-                            ×
-                          </button>
-                        </td>
-                      </tr>
-                    ) : (
-                      <tr key={`line-${index}`}>
-                        <td>
-                          <ProductSearchInput
-                            className={inputUnderlineClass}
-                            products={catalogProducts}
-                            value={line.description}
-                            placeholder={t("pages.sales.pickProduct")}
-                            onValueChange={(text) =>
-                              updateLine(index, { description: text })
-                            }
-                            onProductSelect={(product) => onProductPick(index, product)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className={`${inputUnderlineClass} text-right`}
-                            value={line.qty}
-                            onChange={(e) =>
-                              updateLine(index, { qty: Number(e.target.value) || 0 })
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            className={`${inputUnderlineClass} text-right`}
-                            value={line.unitPrice}
-                            onChange={(e) =>
-                              updateLine(index, {
-                                unitPrice: Number(e.target.value) || 0,
-                              })
-                            }
-                          />
-                        </td>
-                        <td className="text-right font-medium tabular-nums">
-                          {formatSalesMoney(lineTotal(line), locale)}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="text-xs text-mute hover:text-ink"
-                            onClick={() => removeLine(index)}
-                          >
-                            ×
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" className={btnSecondary} onClick={openCatalogue}>
-                {t("pages.sales.addProduct")}
-              </button>
-              <button type="button" className={btnSecondary} onClick={() => addLine("section")}>
-                {t("pages.sales.addSection")}
-              </button>
-              <button type="button" className={btnSecondary} onClick={() => addLine("note")}>
-                {t("pages.sales.addNote")}
-              </button>
-            </div>
+            {!draftHydrated || !templatesReady ? (
+              <p className="text-sm text-mute">{t("common.loading")}</p>
+            ) : (
+              <>
+                <label className="mb-4 grid grid-cols-1 gap-2 border border-line bg-ash/40 px-3 py-3 sm:grid-cols-[minmax(0,7rem)_minmax(0,1fr)] sm:items-center sm:gap-4">
+                  <span className="text-sm font-semibold text-ink">
+                    {t("pages.sales.tripName")}
+                  </span>
+                  <input
+                    className={inputUnderlineClass}
+                    value={trip}
+                    onChange={(e) => setTrip(e.target.value)}
+                    placeholder={t("pages.sales.tripNamePlaceholder")}
+                  />
+                </label>
+                <QuotationLinesEditor
+                  lines={lines}
+                  products={products}
+                  onChange={setLines}
+                  onOpenCatalogue={openCatalogue}
+                  termsHtml={termsHtml}
+                />
+              </>
+            )}
 
             <div className="mt-6 flex justify-end">
               <div className="min-w-[220px] space-y-1 border border-line bg-ash/30 px-4 py-3 text-sm">
                 <div className="flex justify-between text-mute">
                   <span>{t("pages.sales.amountUntaxed")}</span>
-                  <span>{formatSalesMoney(total, locale)}</span>
+                  <SalesAmount amount={total} locale={locale} className="text-right" />
                 </div>
                 <div className="flex justify-between font-semibold text-ink">
                   <span>{t("pages.sales.total")}</span>
-                  <span>{formatSalesMoney(total, locale)}</span>
+                  <SalesAmount amount={total} locale={locale} size="md" className="text-right" />
                 </div>
               </div>
             </div>
-
-            {termsHtml ? (
-              <div
-                className="quote-terms mt-6 border-t border-line pt-4 text-xs leading-relaxed text-mute [&_li]:ml-4 [&_p]:mb-2 [&_strong]:text-ink"
-                dangerouslySetInnerHTML={{ __html: termsHtml }}
-              />
-            ) : null}
           </div>
         ) : (
-          <div className="space-y-3 px-4 py-4 text-sm">
-            <p>
-              <span className="text-mute">{t("pages.sales.salesperson")}: </span>
-              {salesperson}
-            </p>
-            <p>
-              <span className="text-mute">{t("pages.sales.quoteTemplate")}: </span>
-              {quoteTemplateName || "—"}
-            </p>
-            <p>
-              <span className="text-mute">{t("pages.sales.paymentTerms")}: </span>
-              {paymentTerms || "—"}
-            </p>
-          </div>
+          <QuotationOtherInfoTab
+            value={otherInfo}
+            onChange={(patch) => setOtherInfo((prev) => ({ ...prev, ...patch }))}
+          />
         )}
       </div>
 

@@ -1,4 +1,5 @@
 import type { SaleLine } from "@/lib/demo-data";
+import type { QuotationOtherInfo } from "@/lib/quotation-form-data";
 
 export type QuotationDraft = {
   customer: string;
@@ -6,7 +7,10 @@ export type QuotationDraft = {
   quoteTemplateName: string;
   validityDate: string;
   paymentTerms: string;
+  voyage?: string;
+  trip?: string;
   lines: SaleLine[];
+  otherInfo?: QuotationOtherInfo;
 };
 
 const STORAGE_KEY = "inkamoto-quotation-draft";

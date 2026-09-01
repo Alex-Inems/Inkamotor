@@ -1,15 +1,12 @@
-import templates from "@/lib/seed/odoo-quote-templates.json";
 import paymentTerms from "@/lib/seed/payment-terms.json";
 import type { SaleLine } from "@/lib/demo-data";
+import {
+  SEED_QUOTE_TEMPLATES,
+  type OdooQuoteTemplate,
+} from "@/lib/quote-templates";
 
-export type OdooQuoteTemplate = {
-  id: number;
-  name: string;
-  numberOfDays: number;
-  requireSignature: boolean;
-  requirePayment: boolean;
-  noteHtml: string;
-};
+export type { OdooQuoteTemplate };
+export { SEED_QUOTE_TEMPLATES as QUOTE_TEMPLATES };
 
 export type PaymentTerm = {
   id: number;
@@ -17,8 +14,6 @@ export type PaymentTerm = {
   nameEn: string;
   nameEs: string;
 };
-
-export const QUOTE_TEMPLATES = templates as OdooQuoteTemplate[];
 export const PAYMENT_TERMS = paymentTerms as PaymentTerm[];
 
 export function getPaymentTermLabel(term: PaymentTerm, locale: string) {
@@ -56,6 +51,63 @@ export function primaryProductLabel(lines: SaleLine[]) {
   return product?.description.trim() || "Circuit moto Inkamoto";
 }
 
+export type QuotationOtherInfo = {
+  seller: string;
+  salesTeam: string;
+  onlineSignature: boolean;
+  onlinePayment: boolean;
+  onlinePaymentPercent: number;
+  customerReference: string;
+  tags: string;
+  taxPosition: string;
+  paymentMethod: string;
+  project: string;
+  warehouse: string;
+  incoterm: string;
+  incotermLocation: string;
+  shippingPolicy: string;
+  deliveryDate: string;
+  originalDocument: string;
+  opportunity: string;
+  campaign: string;
+  medium: string;
+  trackingSource: string;
+};
+
+export function defaultQuotationOtherInfo(
+  template: OdooQuoteTemplate | null,
+  t: (key: string) => string,
+) {
+  const delivery = new Date();
+  delivery.setDate(delivery.getDate() + 14);
+  delivery.setHours(9, 0, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const deliveryLocal = `${delivery.getFullYear()}-${pad(delivery.getMonth() + 1)}-${pad(delivery.getDate())}T${pad(delivery.getHours())}:${pad(delivery.getMinutes())}`;
+
+  return {
+    seller: t("pages.sales.defaultSalesperson"),
+    salesTeam: t("pages.sales.defaultSalesTeam"),
+    onlineSignature: template?.requireSignature ?? true,
+    onlinePayment: template?.requirePayment ?? false,
+    onlinePaymentPercent: 100,
+    customerReference: "",
+    tags: "",
+    taxPosition: "",
+    paymentMethod: "",
+    project: "",
+    warehouse: t("pages.sales.defaultWarehouse"),
+    incoterm: "",
+    incotermLocation: "",
+    shippingPolicy: t("pages.sales.shippingAsap"),
+    deliveryDate: deliveryLocal,
+    originalDocument: "",
+    opportunity: "",
+    campaign: "",
+    medium: "",
+    trackingSource: "",
+  };
+}
+
 export function quickSaleInput(input: {
   customer: string;
   email: string;
@@ -66,7 +118,7 @@ export function quickSaleInput(input: {
   leadId: string | null;
   notes: string;
 }) {
-  const template = QUOTE_TEMPLATES[0]!;
+  const template = SEED_QUOTE_TEMPLATES[0]!;
   return {
     ...input,
     currency: "EUR" as const,

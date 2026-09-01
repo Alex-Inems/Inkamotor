@@ -32,19 +32,23 @@ export function KpiCard({
   label,
   value,
   hint,
+  valueClassName,
 }: {
   label: string;
-  value: string;
+  value: string | React.ReactNode;
   hint?: React.ReactNode;
+  valueClassName?: string;
 }) {
   return (
     <div className="h-full border border-line bg-panel px-5 py-4 sm:px-6 sm:py-5">
       <p className="text-[0.7rem] font-medium uppercase leading-snug tracking-[0.14em] text-mute">
         {label}
       </p>
-      <p className="mt-2.5 font-display text-[1.45rem] leading-tight tracking-wide break-words sm:text-2xl lg:text-3xl">
+      <div
+        className={`mt-2.5 font-display text-[1.45rem] leading-tight tracking-wide break-words sm:text-2xl lg:text-3xl ${valueClassName ?? ""}`}
+      >
         {value}
-      </p>
+      </div>
       {hint ? (
         <div className="mt-2 text-xs leading-relaxed text-mute break-words">
           {hint}

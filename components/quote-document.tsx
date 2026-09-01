@@ -5,7 +5,8 @@ import { invoiceCompany } from "@/lib/invoice-company";
 import { type Sale } from "@/lib/demo-data";
 import { saleTotal } from "@/lib/sale-quote";
 import { resolveSaleTermsHtml } from "@/lib/quote-template-terms";
-import { formatDate, formatSalesMoney } from "@/lib/format";
+import { SalesAmount } from "@/components/sales/sales-amount";
+import { formatDate } from "@/lib/format";
 import { messagesFor, type Locale } from "@/lib/i18n";
 
 export function QuoteDocument({
@@ -146,10 +147,20 @@ export function QuoteDocument({
                   <td className="px-3 py-2.5">{line.description}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{line.qty}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">
-                    {formatSalesMoney(line.unitPrice, locale)}
+                    <SalesAmount
+                      amount={line.unitPrice}
+                      locale={locale}
+                      variant="paper"
+                      className="inline-block"
+                    />
                   </td>
                   <td className="px-3 py-2.5 text-right font-medium tabular-nums">
-                    {formatSalesMoney(line.qty * line.unitPrice, locale)}
+                    <SalesAmount
+                      amount={line.qty * line.unitPrice}
+                      locale={locale}
+                      variant="paper"
+                      className="inline-block"
+                    />
                   </td>
                 </tr>
               );
@@ -162,9 +173,7 @@ export function QuoteDocument({
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#31595d]">
               {copy.total}
             </p>
-            <p className="font-display text-3xl tracking-wide text-[#31595d]">
-              {formatSalesMoney(total, locale)}
-            </p>
+            <SalesAmount amount={total} locale={locale} variant="paper" size="lg" />
           </div>
         </div>
 

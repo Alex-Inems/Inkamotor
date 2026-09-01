@@ -8,6 +8,7 @@ import { Topbar } from "./topbar";
 import { ToastStack } from "./toast-stack";
 import { FirstRunTour } from "./first-run-tour";
 import { CrmProvider } from "@/lib/crm-store";
+import { QuoteTemplatesProvider } from "@/lib/quote-templates-store";
 import { LocaleProvider, useT, type Locale } from "@/lib/i18n";
 import { InboxNotificationsProvider } from "@/lib/inbox-notifications";
 import { SessionUserProvider } from "@/lib/session-user";
@@ -23,6 +24,7 @@ const pageKeys: Record<string, string> = {
   "/sales/new": "nav.sales",
   "/sales/new/preview": "nav.sales",
   "/sales/new/catalogue": "nav.sales",
+  "/sales/quote-templates": "nav.sales",
   "/products": "nav.sales",
   "/bookings": "nav.sales",
   "/search-console": "nav.searchConsole",
@@ -49,9 +51,11 @@ export function CrmShell({
     <LocaleProvider initialLocale={locale}>
       <SessionUserProvider user={user}>
         <CrmProvider>
-          <InboxNotificationsProvider>
-            <CrmShellInner>{children}</CrmShellInner>
-          </InboxNotificationsProvider>
+          <QuoteTemplatesProvider>
+            <InboxNotificationsProvider>
+              <CrmShellInner>{children}</CrmShellInner>
+            </InboxNotificationsProvider>
+          </QuoteTemplatesProvider>
         </CrmProvider>
       </SessionUserProvider>
     </LocaleProvider>
@@ -61,8 +65,10 @@ export function CrmShell({
 function CrmShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const t = useT();
-  const title = t(pageKeys[pathname] ?? "brand.crm");
+  const isSaleDetail = /^\/sales\/(?!new)[^/]+$/.test(pathname);
+  const title = t(pageKeys[pathname] ?? (isSaleDetail ? "nav.sales" : "brand.crm"));
   const fullBleed = pathname === "/inbox";
+  const wideMain = isSaleDetail;
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -140,7 +146,9 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
           className={
             fullBleed
               ? "min-h-0 flex-1 overflow-hidden"
-              : "mx-auto w-full max-w-7xl px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8"
+              : wideMain
+                ? "mx-auto w-full max-w-none px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8"
+                : "mx-auto w-full max-w-7xl px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8"
           }
         >
           {children}

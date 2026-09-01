@@ -1,28 +1,16 @@
-import templates from "@/lib/seed/odoo-quote-templates.json";
 import type { Sale, SaleLine } from "@/lib/demo-data";
+import {
+  getQuoteTemplateByName,
+  SEED_QUOTE_TEMPLATES,
+} from "@/lib/quote-templates";
 
-export type OdooQuoteTemplate = {
-  id: number;
-  name: string;
-  numberOfDays: number;
-  requireSignature: boolean;
-  requirePayment: boolean;
-  noteHtml: string;
-};
-
-const list = templates as OdooQuoteTemplate[];
-
-export const DEFAULT_QUOTE_TEMPLATE = list[0]!;
+export const DEFAULT_QUOTE_TEMPLATE = SEED_QUOTE_TEMPLATES[0]!;
 
 export function getQuoteTemplate(id: number) {
-  return list.find((t) => t.id === id) ?? null;
+  return SEED_QUOTE_TEMPLATES.find((t) => t.id === id) ?? null;
 }
 
-export function getQuoteTemplateByName(name: string) {
-  const key = name.trim().toLowerCase();
-  if (!key) return null;
-  return list.find((t) => t.name.trim().toLowerCase() === key) ?? null;
-}
+export { getQuoteTemplateByName } from "@/lib/quote-templates";
 
 /** Odoo S00171 — exact lines + template from live Odoo (Aug 2026). */
 export const SALE_S00171_LINES: SaleLine[] = [
@@ -84,7 +72,8 @@ export function enrichSale(sale: Sale): Sale {
   let next = sale;
   if (!next.termsHtml) {
     const tpl =
-      getQuoteTemplateByName(next.quoteTemplateName) ?? DEFAULT_QUOTE_TEMPLATE;
+      getQuoteTemplateByName(SEED_QUOTE_TEMPLATES, next.quoteTemplateName) ??
+      DEFAULT_QUOTE_TEMPLATE;
     next = {
       ...next,
       termsHtml: tpl.noteHtml,

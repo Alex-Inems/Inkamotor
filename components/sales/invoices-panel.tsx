@@ -10,6 +10,7 @@ import {
   inputClass,
   Modal,
 } from "@/components/modal";
+import { SalesAmount } from "@/components/sales/sales-amount";
 import { EmptyHint, KpiCard, Panel, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -196,12 +197,12 @@ export function InvoicesPanel({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label={t("pages.invoices.paid")}
-          value={formatSalesMoney(paidTotal, locale)}
+          value={<SalesAmount amount={paidTotal} locale={locale} size="inherit" />}
           hint={t("pages.invoices.paidHint", { n: paid.length })}
         />
         <KpiCard
           label={t("pages.invoices.outstanding")}
-          value={formatSalesMoney(outstandingTotal, locale)}
+          value={<SalesAmount amount={outstandingTotal} locale={locale} size="inherit" />}
           hint={t("pages.invoices.outstandingHint", { n: outstanding.length })}
         />
         <KpiCard label={t("pages.invoices.overdue")} value={formatNumber(overdue.length, false, locale)} />
@@ -266,7 +267,7 @@ export function InvoicesPanel({
                         {formatDate(inv.dueDate, locale)}
                       </td>
                       <td className="whitespace-nowrap font-medium">
-                        {formatSalesMoney(invoiceTotal(inv), locale)}
+                        <SalesAmount amount={invoiceTotal(inv)} locale={locale} />
                       </td>
                       <td className="whitespace-nowrap">
                         <button

@@ -2,7 +2,7 @@
 
 import { SearchCombobox } from "@/components/sales/search-combobox";
 import type { Product } from "@/lib/demo-data";
-import { formatSalesMoney } from "@/lib/format";
+import { SalesAmount } from "@/components/sales/sales-amount";
 import { useLocale } from "@/lib/i18n";
 
 const PRODUCT_TONES = [
@@ -107,9 +107,7 @@ export function ProductSearchInput({
                 <span className="block truncate text-xs text-mute">{subtitle}</span>
               ) : null}
             </span>
-            <span className="shrink-0 pl-2 text-sm font-medium tabular-nums text-gold">
-              {formatSalesMoney(product.listPrice, locale)}
-            </span>
+            <SalesAmount amount={product.listPrice} locale={locale} className="shrink-0 pl-2" />
           </>
         );
       }}

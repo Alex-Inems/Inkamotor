@@ -2,7 +2,7 @@ import { QUOTE_TEMPLATE_TERMS_I18N } from "@/lib/seed/quote-template-terms-i18n"
 import type { Sale } from "@/lib/demo-data";
 import type { Locale } from "@/lib/i18n";
 import type { OdooQuoteTemplate } from "@/lib/quotation-form-data";
-import { getQuoteTemplateByName } from "@/lib/sale-quote";
+import { getQuoteTemplateByName, SEED_QUOTE_TEMPLATES } from "@/lib/quote-templates";
 
 export function getTemplateNoteHtml(
   template: OdooQuoteTemplate | null | undefined,
@@ -14,8 +14,14 @@ export function getTemplateNoteHtml(
   return translated ?? template.noteHtml;
 }
 
-export function resolveSaleTermsHtml(sale: Sale, locale: Locale): string {
-  const template = getQuoteTemplateByName(sale.quoteTemplateName);
+export function resolveSaleTermsHtml(
+  sale: Sale,
+  locale: Locale,
+  templates = SEED_QUOTE_TEMPLATES,
+): string {
+  const template = getQuoteTemplateByName(templates, sale.quoteTemplateName);
   const localized = getTemplateNoteHtml(template, locale);
-  return localized || sale.termsHtml;
+  if (localized.trim()) return localized;
+  const fallback = templates.find((row) => getTemplateNoteHtml(row, locale).trim());
+  return (fallback ? getTemplateNoteHtml(fallback, locale) : "") || sale.termsHtml;
 }

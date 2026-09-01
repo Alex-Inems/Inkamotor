@@ -34,13 +34,13 @@ export function Sidebar({
   return (
     <aside
       id="app-nav"
-      className={`fixed inset-y-0 left-0 z-[45] flex w-[min(18.5rem,calc(100vw-2.75rem))] flex-col border-r border-line bg-ash pt-[6px] shadow-xl transition-transform duration-200 ease-out pl-[env(safe-area-inset-left)] lg:bottom-0 lg:top-[6px] lg:z-40 lg:w-[var(--crm-sidebar)] lg:translate-x-0 lg:pt-0 lg:shadow-none ${
+      className={`fixed inset-y-0 left-0 z-[45] flex w-[min(var(--crm-sidebar),calc(100vw-2.75rem))] flex-col border-r border-line bg-ash pt-[6px] shadow-xl transition-transform duration-200 ease-out pl-[env(safe-area-inset-left)] lg:bottom-0 lg:top-[6px] lg:z-40 lg:w-[var(--crm-sidebar)] lg:translate-x-0 lg:pt-0 lg:shadow-none ${
         open ? "translate-x-0" : "pointer-events-none -translate-x-full lg:pointer-events-auto lg:translate-x-0"
       }`}
     >
-      <div className="flex items-start justify-between gap-3 px-4 py-4 sm:px-5">
+      <div className="flex items-start justify-between gap-2 px-3 py-3">
         <div className="min-w-0">
-          <InkamotoLogo className="h-7 w-auto" />
+          <InkamotoLogo className="h-6 w-auto" />
         </div>
         <button
           type="button"
@@ -52,19 +52,19 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className="mx-3 mb-3 border border-line bg-panel px-3 py-2.5">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-mute">
+      <div className="mx-2 mb-2 border border-line bg-panel px-2.5 py-2">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-mute">
           {t("brand.workspace")}
         </p>
-        <p className="mt-0.5 truncate text-sm font-semibold text-ink">
+        <p className="mt-0.5 truncate text-[13px] font-semibold text-ink">
           {currentWorkspace.name}
         </p>
-        <p className="text-xs leading-snug text-mute">
+        <p className="text-[11px] leading-snug text-mute">
           {currentWorkspace.plan} · {currentWorkspace.region}
         </p>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 pb-3">
+      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2">
         {visibleNav.map((item) => {
           const active =
             item.href === "/"
@@ -77,7 +77,7 @@ export function Sidebar({
               href={item.href}
               data-tour={item.tour}
               suppressHydrationWarning
-              className={`flex min-h-11 shrink-0 items-center gap-2.5 px-3 py-2.5 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors sm:text-sm ${
+              className={`flex min-h-10 shrink-0 items-center gap-2 px-2.5 py-2 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors sm:text-[13px] ${
                 active
                   ? "bg-accent text-white"
                   : "text-mute hover:bg-panel hover:text-ink"
@@ -95,13 +95,13 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="mt-auto border-t border-line px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="border border-line bg-panel px-3 py-3">
-          <div className="flex items-start gap-3">
+      <div className="mt-auto border-t border-line px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className="border border-line bg-panel px-2.5 py-2.5">
+          <div className="flex items-start gap-2.5">
             <div className="relative shrink-0">
               <UserAvatar
                 user={currentUser}
-                className="h-10 w-10 text-xs"
+                className="h-9 w-9 text-[11px]"
               />
               <span
                 className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-green ring-2 ring-panel"
@@ -109,20 +109,20 @@ export function Sidebar({
               />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold leading-tight text-ink">
+              <p className="truncate text-[13px] font-semibold leading-tight text-ink">
                 {currentUser.name}
               </p>
-              <p className="mt-0.5 truncate text-[11px] leading-snug text-mute">
+              <p className="mt-0.5 truncate text-[10px] leading-snug text-mute">
                 {currentUser.email}
               </p>
-              <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-sand">
+              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-sand">
                 {t("common.admin")}
               </p>
             </div>
           </div>
           <button
             type="button"
-            className="mt-3 w-full border border-line px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-mute transition-colors hover:border-pink hover:bg-wine/15 hover:text-pink"
+            className="mt-2.5 w-full border border-line px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-mute transition-colors hover:border-pink hover:bg-wine/15 hover:text-pink"
             onClick={() => {
               void (async () => {
                 await fetch("/api/auth/logout", { method: "POST" });

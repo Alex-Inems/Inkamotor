@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLocale } from "@/lib/i18n";
 
-export type SalesTab = "bookings" | "invoices" | "products";
+export type SalesTab = "bookings" | "invoices" | "products" | "quoteTemplates";
 
 export function SalesSubnav() {
   const { t } = useLocale();
@@ -14,14 +14,21 @@ export function SalesSubnav() {
   const active: SalesTab =
     pathname === "/products"
       ? "products"
-      : tabParam === "invoices"
-        ? "invoices"
-        : "bookings";
+      : pathname === "/sales/quote-templates"
+        ? "quoteTemplates"
+        : tabParam === "invoices"
+          ? "invoices"
+          : "bookings";
 
   const items: { id: SalesTab; href: string; label: string }[] = [
     { id: "bookings", href: "/sales?tab=bookings", label: t("pages.sales.menuOrders") },
     { id: "invoices", href: "/sales?tab=invoices", label: t("pages.sales.menuInvoices") },
     { id: "products", href: "/products", label: t("pages.sales.menuProducts") },
+    {
+      id: "quoteTemplates",
+      href: "/sales/quote-templates",
+      label: t("pages.sales.menuQuoteTemplates"),
+    },
   ];
 
   return (

@@ -31,6 +31,15 @@ export function formatSalesMoney(amount: number, locale?: Locale) {
   }).format(amount);
 }
 
+export function formatSalesMoneyParts(amount: number, locale?: Locale) {
+  return new Intl.NumberFormat(tag(locale), {
+    style: "currency",
+    currency: SALES_CURRENCY,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).formatToParts(amount);
+}
+
 export function formatNumber(n: number, compact = false, locale?: Locale) {
   return new Intl.NumberFormat(tag(locale), {
     notation: compact ? "compact" : "standard",

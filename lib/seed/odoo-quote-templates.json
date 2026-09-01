@@ -5,7 +5,45 @@
     "numberOfDays": 10,
     "requireSignature": true,
     "requirePayment": false,
-    "noteHtml": "<p><strong>Conditions de paiement :</strong></p><p>La confirmation de votre réservation s'effectue avec un acompte de <strong>30 %</strong>.</p><p>Le solde total du voyage (<strong>100 %</strong>) doit être réglé <strong>au plus tard 1 mois avant le départ.</strong></p><p>Les paiements doivent être effectués en <strong>euros (€)</strong>.</p><p>Si vous souhaitez effectuer un paiement en <strong>dollars ($)</strong>, merci de nous en informer au préalable afin que nous puissions vous transmettre un numéro de compte dans cette devis.</p><p>⚠️ <strong>Important :</strong></p><ul><li>Ne jamais effectuer de paiement en dollars vers un compte en euros, car les frais de conversion sont très élevés et restent entièrement à votre charge.</li><li>Merci de nous envoyer la preuve de virement dès que vous l'avez effectué</li><li>Tous les frais de virement propres à certaines banques restent à votre charge</li><li>Un lien de paiement rapide et sécurisé peut également être envoyé par email pour virement via Visa ou Mastercard mais notez qu'il y a 4,85% de frais bancaires à votre charge en plus (frais demandés par Vendemas - plateforme de paiement en ligne).</li></ul><p><strong>Notes :</strong></p><p>- Nos motos sont toutes assurées par la SOAT contre les accidents en accord avec la loi péruvienne. Les sorties des motos sont soumises à un contrat de location et pourront seulement être conduites avec un brevet international en vigueur.</p><p>- Chaque participant est tenu de montrer, avant de partir, son permis de conduire international et son assurance accident de voyage de son propre pays avec couverture pour tout le Pérou.</p><p>- Pas de caution mais l'obligation de signer un contrat de responsabilité avec l'agence Inkamoto tours dès votre arrivée au Pérou.</p><p>- Le road-book peut être modifié en fonction d'un accord oral établi par la majorité du groupe et le guide.</p><p>- Selon la nouvelle loi péruvienne, le participant est dans l'obligation de signer un contrat avec l'administration péruvienne pour faire valoir sa signature au Pérou. Le guide vous donnera le document à votre arrivée à Lima.</p><p>- La réservation du participant est définitive dès paiement de l'acompte.</p><p><strong>En cas de modification d'un des éléments de la réservation par le participant, voici le barème des frais d'annulation :</strong></p><p>- A plus de 6 mois avant la date de départ : quinze pour cent (15%) sur le prix total TTC du voyage.</p><p>- Entre 3 et 6 mois avant la date de départ : trente pour cent (30%) sur le prix total TTC du voyage.</p><p>- Entre 3 et 2 mois avant la date de départ : cinquante pour cent (50%) sur le prix total TTC du voyage</p><p>- Entre 2 mois et 1 mois avant la date de départ : soixante pour cent (60%) sur le prix total TTC du voyage.</p><p>- Entre 1 mois et 15 jours avant la date de départ : soixante-dix pour cent (70%) sur le prix total TTC du voyage.</p><p>- Moins de 15 jours avant la date de départ : quatre-vingt-dix pour cent (90 %) du prix total TTC du voyage.</p><p>- En cas de non-présentation le jour du départ : 100 % du prix Total TTC du voyage.</p><p>Nous vous recommandons de prendre une assurance annulation voyage de votre pays au cas où.</p><p>Aucun voyage ne pourra avoir lieu si le règlement intégral du séjour n'a pas été effectué avant la date de départ.</p><p><strong>ANNULATION EXCEPTIONNELLE</strong></p><p>Le présent contrat stipule également qu'Inkamoto tours ainsi que les participants ont le droit de pouvoir annuler tout voyage en cas d'événements externes à l'intérieur du Pérou comme une problématique liée à la pandémie, le climat ou situation politique qui pourrait mettre en danger le voyageur ou modifier radicalement l'itinéraire du voyage.</p><p>Le voyage sera alors reporté sur une durée de 2 ans. Des frais administratifs et des ajustements de tarifs supplémentaires peuvent être demandés en fonction de la complexité du dossier, de la période et de l'augmentation des tarifs de nos voyages sur cette durée.</p>"
+    "noteHtml": "<p><strong>Conditions de paiement :</strong></p><p>La confirmation de votre réservation s'effectue avec un acompte de <strong>30 %</strong>.</p><p>Le solde total du voyage (<strong>100 %</strong>) doit être réglé <strong>au plus tard 1 mois avant le départ.</strong></p><p>Les paiements doivent être effectués en <strong>euros (€)</strong>.</p><p>Si vous souhaitez effectuer un paiement en <strong>dollars ($)</strong>, merci de nous en informer au préalable afin que nous puissions vous transmettre un numéro de compte dans cette devis.</p><p>⚠️ <strong>Important :</strong></p><ul><li>Ne jamais effectuer de paiement en dollars vers un compte en euros, car les frais de conversion sont très élevés et restent entièrement à votre charge.</li><li>Merci de nous envoyer la preuve de virement dès que vous l'avez effectué</li><li>Tous les frais de virement propres à certaines banques restent à votre charge</li><li>Un lien de paiement rapide et sécurisé peut également être envoyé par email pour virement via Visa ou Mastercard mais notez qu'il y a 4,85% de frais bancaires à votre charge en plus (frais demandés par Vendemas - plateforme de paiement en ligne).</li></ul><p><strong>Notes :</strong></p><p>- Nos motos sont toutes assurées par la SOAT contre les accidents en accord avec la loi péruvienne. Les sorties des motos sont soumises à un contrat de location et pourront seulement être conduites avec un brevet international en vigueur.</p><p>- Chaque participant est tenu de montrer, avant de partir, son permis de conduire international et son assurance accident de voyage de son propre pays avec couverture pour tout le Pérou.</p><p>- Pas de caution mais l'obligation de signer un contrat de responsabilité avec l'agence Inkamoto tours dès votre arrivée au Pérou.</p><p>- Le road-book peut être modifié en fonction d'un accord oral établi par la majorité du groupe et le guide.</p><p>- Selon la nouvelle loi péruvienne, le participant est dans l'obligation de signer un contrat avec l'administration péruvienne pour faire valoir sa signature au Pérou. Le guide vous donnera le document à votre arrivée à Lima.</p><p>- La réservation du participant est définitive dès paiement de l'acompte.</p><p><strong>En cas de modification d'un des éléments de la réservation par le participant, voici le barème des frais d'annulation :</strong></p><p>- A plus de 6 mois avant la date de départ : quinze pour cent (15%) sur le prix total TTC du voyage.</p><p>- Entre 3 et 6 mois avant la date de départ : trente pour cent (30%) sur le prix total TTC du voyage.</p><p>- Entre 3 et 2 mois avant la date de départ : cinquante pour cent (50%) sur le prix total TTC du voyage</p><p>- Entre 2 mois et 1 mois avant la date de départ : soixante pour cent (60%) sur le prix total TTC du voyage.</p><p>- Entre 1 mois et 15 jours avant la date de départ : soixante-dix pour cent (70%) sur le prix total TTC du voyage.</p><p>- Moins de 15 jours avant la date de départ : quatre-vingt-dix pour cent (90 %) du prix total TTC du voyage.</p><p>- En cas de non-présentation le jour du départ : 100 % du prix Total TTC du voyage.</p><p>Nous vous recommandons de prendre une assurance annulation voyage de votre pays au cas où.</p><p>Aucun voyage ne pourra avoir lieu si le règlement intégral du séjour n'a pas été effectué avant la date de départ.</p><p><strong>ANNULATION EXCEPTIONNELLE</strong></p><p>Le présent contrat stipule également qu'Inkamoto tours ainsi que les participants ont le droit de pouvoir annuler tout voyage en cas d'événements externes à l'intérieur du Pérou comme une problématique liée à la pandémie, le climat ou situation politique qui pourrait mettre en danger le voyageur ou modifier radicalement l'itinéraire du voyage.</p><p>Le voyage sera alors reporté sur une durée de 2 ans. Des frais administratifs et des ajustements de tarifs supplémentaires peuvent être demandés en fonction de la complexité du dossier, de la période et de l'augmentation des tarifs de nos voyages sur cette durée.</p>",
+    "lines": [
+      {
+        "description": "Services inclus",
+        "displayType": "section",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "> Une moto Kawasaki KLR650cc équipée avec topcase et sacoche de réservoir\n> Transports taxi aéroport hôtel (aller/retour)\n> Transports taxi hôtel jusqu'aux motos (aller/retour)\n> Un guide motard qui tient votre forfait et vous briefe sur le spot la veille du départ\n> Enregistrement Go-pro\n> Logement 14 nuits en chambre double standard/confort – petits déjeuners inclus\n> Assurance accident corporel personnalisé couverture Pérou (excepté rapatriement)\n> Véhicule d'assistance avec chauffeur (ou modèle similaire)",
+        "displayType": "note",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "Non-inclus",
+        "displayType": "section",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "Entrées lieux touristiques (Machu Picchu, lignes de Nasca, etc.)\nNourriture\nBillet d'avion international\nEssence",
+        "displayType": "note",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "A noter",
+        "displayType": "section",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "Chaque voyage peut être adapté, raccourci, allongé ou modifié.",
+        "displayType": "note",
+        "qty": 0,
+        "unitPrice": 0
+      }
+    ]
   },
   {
     "id": 2,
@@ -13,6 +51,44 @@
     "numberOfDays": 30,
     "requireSignature": true,
     "requirePayment": false,
-    "noteHtml": ""
+    "noteHtml": "",
+    "lines": [
+      {
+        "description": "Services inclus",
+        "displayType": "section",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "> Moto équipée avec topcase et sacoche de réservoir\n> Transports taxi aéroport hôtel (aller/retour)\n> Guide motard expérimenté\n> Logement en chambre double – petits déjeuners inclus\n> Assurance accident corporel couverture Pérou (excepté rapatriement)\n> Véhicule d'assistance 4x4 avec chauffeur",
+        "displayType": "note",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "Non-inclus",
+        "displayType": "section",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "Entrées lieux touristiques\nNourriture\nBillet d'avion international\nEssence",
+        "displayType": "note",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "A noter",
+        "displayType": "section",
+        "qty": 0,
+        "unitPrice": 0
+      },
+      {
+        "description": "Chaque voyage peut être adapté, raccourci, allongé ou modifié.",
+        "displayType": "note",
+        "qty": 0,
+        "unitPrice": 0
+      }
+    ]
   }
 ]

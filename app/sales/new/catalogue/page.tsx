@@ -12,7 +12,7 @@ import {
   saveQuotationDraft,
   type QuotationDraft,
 } from "@/lib/quotation-draft";
-import { formatSalesMoney } from "@/lib/format";
+import { SalesAmount } from "@/components/sales/sales-amount";
 import { useLocale } from "@/lib/i18n";
 
 function CataloguePageInner() {
@@ -75,9 +75,7 @@ function CataloguePageInner() {
             >
               <div>
                 <p className="font-medium">{product.name}</p>
-                <p className="text-xs text-mute">
-                  {formatSalesMoney(product.listPrice, locale)}
-                </p>
+                <SalesAmount amount={product.listPrice} locale={locale} className="text-xs" />
               </div>
               <button
                 type="button"

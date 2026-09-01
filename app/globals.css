@@ -28,13 +28,14 @@
   --purple: #624e8a;
   --wine: #9f2627;
   --green: #65814f;
+  --green-light: #b8d4a8;
   --sale: #9f2627;
   --chat-in: #3f3c38;
   --chat-out: #4a8a90;
   --chat-out-text: #fbf8f1;
   --background: var(--canvas);
   --foreground: var(--ink);
-  --crm-sidebar: 15rem;
+  --crm-sidebar: 12rem;
   --crm-gutter: max(0.75rem, env(safe-area-inset-left));
 }
 
@@ -56,6 +57,7 @@
   --color-purple: var(--purple);
   --color-wine: var(--wine);
   --color-green: var(--green);
+  --color-green-light: var(--green-light);
   --color-sale: var(--sale);
   --color-chat-in: var(--chat-in);
   --color-chat-out: var(--chat-out);
@@ -127,6 +129,10 @@ button {
   max-width: 100%;
 }
 
+.quotation-lines-editor textarea {
+  field-sizing: content;
+}
+
 .data-table {
   width: 100%;
   min-width: 36rem;
@@ -161,6 +167,10 @@ button {
   padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+}
+
+.quotation-lines-editor textarea {
+  field-sizing: content;
 }
 
 @media (max-width: 639px) {
