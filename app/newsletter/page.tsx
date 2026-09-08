@@ -46,6 +46,7 @@ type Subscriber = {
   source: string | null;
   blocked: boolean;
   addedAt: string | null;
+  tags?: string[];
 };
 
 type Template = {
@@ -96,6 +97,8 @@ export default function NewsletterPage() {
   const [newSubscriber, setNewSubscriber] = useState({ email: "", name: "" });
   const [addingSubscriber, setAddingSubscriber] = useState(false);
   const [recipientQuery, setRecipientQuery] = useState("");
+  const [recipientTag, setRecipientTag] = useState("all");
+  const [audienceTags, setAudienceTags] = useState<string[]>([]);
   const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [templateId, setTemplateId] = useState("");
@@ -147,16 +150,19 @@ export default function NewsletterPage() {
           : raw || t("pages.newsletter.loadFailed"),
       );
       setSubscribers([]);
+      setAudienceTags([]);
       setSubscriberTotal(0);
       return;
     }
     const data = json as {
       subscribers: Subscriber[];
+      tags?: string[];
       total: number;
       autoSubscribe: boolean;
     };
     setSubscriberError(null);
     setSubscribers(data.subscribers ?? []);
+    setAudienceTags(data.tags ?? []);
     setSubscriberTotal(data.total ?? 0);
     setAutoSubscribe(Boolean(data.autoSubscribe));
   }, [t]);
@@ -194,13 +200,23 @@ export default function NewsletterPage() {
     [subscribers],
   );
 
+  const taggedSendable = useMemo(() => {
+    if (recipientTag === "all") return sendable;
+    const want = recipientTag.toLowerCase();
+    return sendable.filter((s) =>
+      (s.tags ?? []).some((tag) => tag.toLowerCase() === want),
+    );
+  }, [sendable, recipientTag]);
+
   const visibleRecipients = useMemo(() => {
     const q = recipientQuery.trim().toLowerCase();
-    if (!q) return sendable;
-    return sendable.filter((s) =>
-      `${s.email} ${s.name ?? ""}`.toLowerCase().includes(q),
+    if (!q) return taggedSendable;
+    return taggedSendable.filter((s) =>
+      `${s.email} ${s.name ?? ""} ${(s.tags ?? []).join(" ")}`
+        .toLowerCase()
+        .includes(q),
     );
-  }, [sendable, recipientQuery]);
+  }, [taggedSendable, recipientQuery]);
 
   function toggleEmail(email: string) {
     setSelectedEmails((prev) =>
@@ -211,6 +227,7 @@ export default function NewsletterPage() {
   function closeComposer() {
     setOpenAdd(false);
     setRecipientQuery("");
+    setRecipientTag("all");
     setSelectedEmails([]);
     setComposerNotice(null);
     setSendDone(false);
@@ -221,6 +238,7 @@ export default function NewsletterPage() {
     setComposerNotice(null);
     setSelectedEmails([]);
     setRecipientQuery("");
+    setRecipientTag("all");
     setForm({ name: "", subject: "", preview: "", html: "" });
     setWhen("now");
     setScheduleAt("");
@@ -935,14 +953,52 @@ export default function NewsletterPage() {
                 {t("pages.newsletter.wavesInProgress")}
               </p>
             ) : null}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <select
+                className={inputClass}
+                value={recipientTag}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setRecipientTag(next);
+                  if (next === "all") return;
+                  const want = next.toLowerCase();
+                  const emails = sendable
+                    .filter((s) =>
+                      (s.tags ?? []).some((tag) => tag.toLowerCase() === want),
+                    )
+                    .map((s) => s.email);
+                  setSelectedEmails(emails);
+                }}
+              >
+                <option value="all">{t("pages.newsletter.allTags")}</option>
+                {audienceTags.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className={inputClass}
+                placeholder={t("pages.newsletter.searchPeople")}
+                value={recipientQuery}
+                onChange={(e) => setRecipientQuery(e.target.value)}
+              />
+            </div>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 className={btnGhost}
-                onClick={() => setSelectedEmails(sendable.map((s) => s.email))}
-                disabled={sendable.length === 0}
+                onClick={() =>
+                  setSelectedEmails(taggedSendable.map((s) => s.email))
+                }
+                disabled={taggedSendable.length === 0}
               >
-                {t("pages.newsletter.selectAll")}
+                {recipientTag === "all"
+                  ? t("pages.newsletter.selectAll")
+                  : t("pages.newsletter.selectTag", {
+                      tag: recipientTag,
+                      n: taggedSendable.length,
+                    })}
               </button>
               <button
                 type="button"
@@ -952,16 +1008,14 @@ export default function NewsletterPage() {
               >
                 {t("pages.newsletter.selectNone")}
               </button>
-          </div>
-            <input
-              className={inputClass}
-              placeholder={t("pages.newsletter.searchPeople")}
-              value={recipientQuery}
-              onChange={(e) => setRecipientQuery(e.target.value)}
-            />
+            </div>
             {sendable.length === 0 ? (
               <p className="border border-line px-3 py-6 text-center text-sm text-mute">
                 {t("pages.newsletter.noSendable")}
+              </p>
+            ) : taggedSendable.length === 0 ? (
+              <p className="border border-line px-3 py-6 text-center text-sm text-mute">
+                {t("pages.newsletter.noTagMatches", { tag: recipientTag })}
               </p>
             ) : (
               <ul className="max-h-56 overflow-y-auto border border-line">
@@ -985,8 +1039,20 @@ export default function NewsletterPage() {
                               {s.email}
                             </span>
                           ) : null}
+                          {(s.tags ?? []).length > 0 ? (
+                            <span className="mt-1 flex flex-wrap gap-1">
+                              {(s.tags ?? []).map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mute"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null}
                         </span>
-          </label>
+                      </label>
                     </li>
                   );
                 })}

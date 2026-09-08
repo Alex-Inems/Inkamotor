@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ContactForm, ContactFormActions } from "@/components/contact-form";
 import { PriorityStars } from "@/components/priority-stars";
+import { BulkQuoteByTagModal } from "@/components/sales/bulk-quote-by-tag-modal";
 import { btnGhost, btnPrimary, btnSecondary, inputClass, Modal } from "@/components/modal";
 import { EmptyHint, PageHeader, StatusBadge } from "@/components/ui";
 import {
@@ -45,6 +46,7 @@ export default function LeadsPage() {
   const [draft, setDraft] = useState("");
   const [stage, setStage] = useState<LeadStatus | "all">("all");
   const [country, setCountry] = useState("all");
+  const [tag, setTag] = useState("all");
   const [kind, setKind] = useState<"all" | "person" | "company">("all");
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "completeness",
@@ -67,6 +69,8 @@ export default function LeadsPage() {
   const [total, setTotal] = useState(0);
   const [stageTotals, setStageTotals] = useState<Record<string, number>>({});
   const [countries, setCountries] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [bulkQuoteOpen, setBulkQuoteOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropStage, setDropStage] = useState<LeadStatus | null>(null);
@@ -154,6 +158,7 @@ export default function LeadsPage() {
       q: query,
       stage: view === "kanban" ? "all" : stage,
       country,
+      tag,
       kind,
       sort: sort.key,
       dir: sort.dir,
@@ -166,6 +171,7 @@ export default function LeadsPage() {
       rows?: LeadRow[];
       total?: number;
       countries?: string[];
+      tags?: string[];
       stageCounts?: Record<string, number>;
       error?: string;
     };
@@ -185,8 +191,9 @@ export default function LeadsPage() {
       setStageTotals(json.stageCounts);
     }
     if (json.countries?.length) setCountries(json.countries);
+    if (json.tags) setTags(json.tags);
     setLoading(false);
-  }, [country, kind, page, pushToast, query, sort.dir, sort.key, stage, t, view]);
+  }, [country, kind, page, pushToast, query, sort.dir, sort.key, stage, t, tag, view]);
 
   useEffect(() => {
     setLoading(true);
@@ -483,6 +490,14 @@ export default function LeadsPage() {
             </div>
             <button
               type="button"
+              className={btnSecondary}
+              disabled={tags.length === 0}
+              onClick={() => setBulkQuoteOpen(true)}
+            >
+              {t("pages.sales.bulkQuoteTitle")}
+            </button>
+            <button
+              type="button"
               className={btnPrimary}
               onClick={() => {
                 setSelectedId(null);
@@ -496,7 +511,7 @@ export default function LeadsPage() {
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <input
           className={`${inputClass} col-span-2 lg:col-span-1`}
           placeholder={t("pages.leads.searchTable")}
@@ -522,6 +537,21 @@ export default function LeadsPage() {
         ) : (
           <div className="hidden lg:block" />
         )}
+        <select
+          className={inputClass}
+          value={tag}
+          onChange={(e) => {
+            setTag(e.target.value);
+            setPage(0);
+          }}
+        >
+          <option value="all">{t("pages.leads.allTags")}</option>
+          {tags.map((name) => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
         <select
           className={inputClass}
           value={country}
@@ -1001,6 +1031,14 @@ export default function LeadsPage() {
           stageLabel={stageLabel}
         />
       </Modal>
+
+      <BulkQuoteByTagModal
+        open={bulkQuoteOpen}
+        initialTag={tag}
+        tags={tags}
+        onClose={() => setBulkQuoteOpen(false)}
+        onDone={() => setBulkQuoteOpen(false)}
+      />
     </div>
   );
 }

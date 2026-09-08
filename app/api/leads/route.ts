@@ -39,6 +39,7 @@ export async function GET(req: Request) {
       q: url.searchParams.get("q") ?? "",
       stage: stage !== "all" && isValidStageId(stage) ? stage : "all",
       country: url.searchParams.get("country") ?? "all",
+      tag: url.searchParams.get("tag") ?? "all",
       kind: kind === "company" || kind === "person" ? kind : "all",
       sort:
         sort === "email" || sort === "updated" || sort === "name"

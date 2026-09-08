@@ -5,6 +5,7 @@ import {
   leadSearchText,
   parseLeadDetails,
   serializeContactNotes,
+  tagList,
   withResolvedCompany,
   type ContactDetails,
   type ContactWrite,
@@ -25,6 +26,8 @@ export type LeadListQuery = {
   q?: string;
   stage?: LeadStatus | "all";
   country?: string;
+  /** Exact tag match (Étiquettes), case-insensitive */
+  tag?: string;
   kind?: "all" | "person" | "company";
   sort?: "completeness" | "name" | "email" | "updated";
   dir?: "asc" | "desc";
@@ -41,7 +44,7 @@ const LIST_COLS =
 
 const PAGE = 1000;
 const TTL_MS = 5 * 60 * 1000;
-const CATALOG_VERSION = 3;
+const CATALOG_VERSION = 4;
 
 let catalog: { rows: CachedLead[]; at: number; v: number } | null = null;
 let inflight: Promise<CachedLead[]> | null = null;
@@ -129,6 +132,7 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
   rows: LeadTableRow[];
   total: number;
   countries: string[];
+  tags: string[];
   page: number;
   limit: number;
   stageCounts?: Record<string, number>;
@@ -143,6 +147,8 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
   const q = input.q ? safeFilter(input.q).toLowerCase() : "";
   const country =
     input.country && input.country !== "all" ? input.country.trim() : "";
+  const tag =
+    input.tag && input.tag !== "all" ? input.tag.trim().toLowerCase() : "";
 
   const all = await loadCatalog();
   const filtered = all.filter((row) => {
@@ -150,6 +156,10 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
       return false;
     }
     if (country && row.details.country !== country) return false;
+    if (tag) {
+      const tags = tagList(row.details.tags).map((name) => name.toLowerCase());
+      if (!tags.includes(tag)) return false;
+    }
     if (input.kind === "company" && !row.details.isCompany) return false;
     if (input.kind === "person" && row.details.isCompany) return false;
     if (q && !row.haystack.includes(q)) return false;
@@ -188,10 +198,17 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
     ),
   ].sort((a, b) => compareText(a, b));
 
+  const tags = [
+    ...new Set(
+      all.flatMap((row) => tagList(row.details.tags)).filter((name) => name.length > 0),
+    ),
+  ].sort((a, b) => compareText(a, b));
+
   return {
     rows: slice.map(({ lead, details, score }) => ({ lead, details, score })),
     total: filtered.length,
     countries,
+    tags,
     page,
     limit,
     stageCounts,

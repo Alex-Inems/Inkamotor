@@ -10,6 +10,7 @@ export function Modal({
   children,
   footer,
   wide,
+  extraWide,
 }: {
   open: boolean;
   title: string;
@@ -17,6 +18,7 @@ export function Modal({
   children: React.ReactNode;
   footer?: React.ReactNode;
   wide?: boolean;
+  extraWide?: boolean;
 }) {
   const t = useT();
   useEffect(() => {
@@ -47,7 +49,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby="modal-title"
         className={`relative z-10 flex max-h-[100svh] w-full flex-col overflow-hidden border border-line bg-panel shadow-xl sm:max-h-[92svh] ${
-          wide ? "sm:max-w-3xl" : "sm:max-w-lg"
+          extraWide ? "sm:max-w-5xl" : wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         } rounded-t-xl sm:rounded-none`}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-panel px-4 py-3 sm:px-5">

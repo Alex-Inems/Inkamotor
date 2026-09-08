@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "translate-inbox": "npx --yes tsx scripts/translate-inbox.ts",
     "import-sales": "npx --yes tsx scripts/import-sales.ts",
-    "import-products": "npx --yes tsx scripts/import-products.ts"
+    "import-products": "npx --yes tsx scripts/import-products.ts",
+    "import-barcelonnette": "npx --yes tsx scripts/import-barcelonnette.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

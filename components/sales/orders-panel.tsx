@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { btnGhost } from "@/components/modal";
+import { useEffect, useMemo, useState } from "react";
+import { btnGhost, btnSecondary } from "@/components/modal";
 import { EmptyHint, StatusBadge } from "@/components/ui";
+import { BulkQuoteByTagModal } from "@/components/sales/bulk-quote-by-tag-modal";
 import { OdooControlPanel } from "@/components/sales/odoo-control-panel";
 import { useCrm } from "@/lib/crm-store";
 import { type Sale, type SaleStatus } from "@/lib/demo-data";
@@ -148,6 +149,24 @@ export function OrdersPanel() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SaleFilter>("all");
   const [groupBy, setGroupBy] = useState<GroupByKey | null>(null);
+  const [bulkQuoteOpen, setBulkQuoteOpen] = useState(false);
+  const [leadTags, setLeadTags] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/leads?limit=1&kanban=1");
+        const json = (await res.json()) as { tags?: string[] };
+        if (!cancelled && json.tags) setLeadTags(json.tags);
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openSale = (sale: Sale) => {
     router.push(`/sales/${sale.id}`);
@@ -194,6 +213,16 @@ export function OrdersPanel() {
 
   return (
     <>
+      <div className="mb-3 flex flex-wrap justify-end gap-2">
+        <button
+          type="button"
+          className={btnSecondary}
+          disabled={leadTags.length === 0}
+          onClick={() => setBulkQuoteOpen(true)}
+        >
+          {t("pages.sales.bulkQuoteTitle")}
+        </button>
+      </div>
       <OdooControlPanel
         query={query}
         onQueryChange={setQuery}
@@ -361,6 +390,12 @@ export function OrdersPanel() {
           )}
         </div>
       )}
+      <BulkQuoteByTagModal
+        open={bulkQuoteOpen}
+        tags={leadTags}
+        onClose={() => setBulkQuoteOpen(false)}
+        onDone={() => setBulkQuoteOpen(false)}
+      />
     </>
   );
 }

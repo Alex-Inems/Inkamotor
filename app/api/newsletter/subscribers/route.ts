@@ -21,9 +21,10 @@ export async function GET() {
   }
 
   try {
-    const subscribers = await listDbSubscribers();
+    const { subscribers, tags } = await listDbSubscribers();
     return Response.json({
       subscribers,
+      tags,
       total: subscribers.length,
       autoSubscribe: autoSubscribeEnabled(),
     });

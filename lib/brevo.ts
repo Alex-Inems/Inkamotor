@@ -165,6 +165,8 @@ export type Subscriber = {
   source: string | null;
   blocked: boolean;
   addedAt: string | null;
+  /** Lead Étiquettes (empty for manual-only newsletter rows) */
+  tags?: string[];
 };
 
 function attrString(

@@ -1,4 +1,5 @@
 import type { Subscriber } from "@/lib/brevo";
+import { parseLeadDetails, tagList } from "@/lib/crm/contact-details";
 import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
 
 const PAGE = 1000;
@@ -24,6 +25,7 @@ function mapRow(row: Row): Subscriber {
     source: row.source,
     blocked: Boolean(row.blocked),
     addedAt: row.added_at,
+    tags: [],
   };
 }
 
@@ -40,7 +42,7 @@ async function fetchLeadPeople(): Promise<Subscriber[]> {
   for (let i = 0; i < pages; i++) {
     const { data, error } = await sb
       .from("leads")
-      .select("id, name, email, source, created_at")
+      .select("id, name, email, source, created_at, notes")
       .range(i * PAGE, i * PAGE + PAGE - 1);
     if (error) throw new Error(error.message);
     batches.push(data ?? []);
@@ -52,6 +54,21 @@ async function fetchLeadPeople(): Promise<Subscriber[]> {
       .trim()
       .toLowerCase();
     if (!email.includes("@") || unique.has(email)) continue;
+    const details = parseLeadDetails({
+      id: String(row.id ?? email),
+      name: String(row.name ?? ""),
+      email,
+      phone: "",
+      company: "",
+      source: "manual",
+      status: "new",
+      value: 0,
+      currency: "USD",
+      owner: "Team",
+      createdAt: String(row.created_at ?? ""),
+      lastContact: String(row.created_at ?? ""),
+      notes: String(row.notes ?? ""),
+    });
     unique.set(email, {
       id: email,
       email,
@@ -59,6 +76,7 @@ async function fetchLeadPeople(): Promise<Subscriber[]> {
       source: String(row.source ?? "") || null,
       blocked: false,
       addedAt: row.created_at ? String(row.created_at) : null,
+      tags: tagList(details.tags),
     });
   }
   return [...unique.values()];
@@ -101,6 +119,7 @@ function mergePeople(fromLeads: Subscriber[], table: Row[]): Subscriber[] {
         name: mapped.name || existing.name,
         source: mapped.source || existing.source,
         addedAt: mapped.addedAt || existing.addedAt,
+        tags: existing.tags ?? [],
       });
     } else {
       byEmail.set(mapped.email, mapped);
@@ -109,18 +128,27 @@ function mergePeople(fromLeads: Subscriber[], table: Row[]): Subscriber[] {
   return [...byEmail.values()];
 }
 
-export async function listDbSubscribers(): Promise<Subscriber[]> {
+export async function listDbSubscribers(): Promise<{
+  subscribers: Subscriber[];
+  tags: string[];
+}> {
   if (missingSupabaseEnv().length) {
     throw new Error("Supabase is not configured");
   }
   const people = await fetchLeadPeople();
+  let subscribers: Subscriber[];
   try {
     const table = await fetchTableRows();
-    if (table === "missing") return people;
-    return mergePeople(people, table);
+    subscribers = table === "missing" ? people : mergePeople(people, table);
   } catch {
-    return people;
+    subscribers = people;
   }
+  const tags = [
+    ...new Set(
+      subscribers.flatMap((person) => person.tags ?? []).filter(Boolean),
+    ),
+  ].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return { subscribers, tags };
 }
 
 export async function upsertDbSubscriber(input: {
