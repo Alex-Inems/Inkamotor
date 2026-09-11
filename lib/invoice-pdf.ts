@@ -1,5 +1,9 @@
 import { jsPDF } from "jspdf";
-import { invoiceCompany } from "@/lib/invoice-company";
+import {
+  invoiceCompany,
+  invoiceCompanyAddressLine,
+  invoiceCompanyFromLines,
+} from "@/lib/invoice-company";
 import { invoiceTotal, type Invoice } from "@/lib/demo-data";
 import { formatDate, formatSalesMoney } from "@/lib/format";
 import { messagesFor, type Locale } from "@/lib/i18n";
@@ -92,7 +96,7 @@ export async function downloadInvoicePdf(
 
   // Teal header block
   const headerTop = stripeH;
-  const headerH = 42;
+  const headerH = 48;
   rgb(doc, brand.teal, "fill");
   doc.rect(0, headerTop, pageW, headerH, "F");
   // subtle deep edge at bottom of header
@@ -117,7 +121,7 @@ export async function downloadInvoicePdf(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   const tagline = doc.splitTextToSize(
-    `${copy.tagline}\n${invoiceCompany.address}`,
+    `${copy.tagline}\n${invoiceCompanyAddressLine()}\nR.U.C. : ${invoiceCompany.ruc}`,
     95,
   );
   doc.text(tagline, margin, y + 12);
@@ -166,26 +170,31 @@ export async function downloadInvoicePdf(
   y += 5;
   rgb(doc, brand.ink, "text");
   doc.setFontSize(10);
-  doc.text(invoiceCompany.name, margin, y);
+  const fromLines = invoiceCompanyFromLines();
+  doc.setFont("helvetica", "bold");
+  doc.text(fromLines[0]!, margin, y);
   doc.text(invoice.client, col2, y);
 
-  y += 5;
+  y += 4.5;
   rgb(doc, brand.body, "text");
   doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  let fromY = y;
+  for (const line of fromLines.slice(1)) {
+    const wrapped = doc.splitTextToSize(line, contentW / 2 - 6);
+    doc.text(wrapped, margin, fromY);
+    fromY += wrapped.length * 3.6;
+  }
+  let billY = y;
   doc.setFontSize(9);
-  doc.text(invoiceCompany.email, margin, y);
-  doc.text(invoice.email, col2, y);
-  y += 4.5;
-  doc.text(invoiceCompany.phone, margin, y);
-  let billExtra = 0;
+  doc.text(invoice.email, col2, billY);
+  billY += 4.5;
   if (invoice.clientAddress) {
     const addr = doc.splitTextToSize(invoice.clientAddress, contentW / 2 - 6);
-    doc.text(addr, col2, y);
-    billExtra = Math.max(0, (addr.length - 1) * 4);
+    doc.text(addr, col2, billY);
+    billY += addr.length * 4;
   }
-  y += 4.5;
-  doc.text(invoiceCompany.website, margin, y);
-  y += Math.max(10, billExtra + 8);
+  y = Math.max(fromY, billY) + 8;
 
   // Table header
   const tableX = margin;

@@ -1,6 +1,9 @@
 import { jsonError } from "@/lib/api";
 import { missingBrevoEnv, sendTransactionalEmail } from "@/lib/brevo";
-import { invoiceCompany } from "@/lib/invoice-company";
+import {
+  invoiceCompany,
+  invoiceCompanyPhonesLine,
+} from "@/lib/invoice-company";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +53,7 @@ export async function POST(request: Request) {
         body.totalLabel ? ` (${body.totalLabel})` : ""
       } from ${invoiceCompany.name}.</p>
       <p>Reply to this email with any questions.</p>
-      <p>— ${invoiceCompany.name}<br/>${invoiceCompany.email}<br/>${invoiceCompany.phone}</p>
+      <p>— ${invoiceCompany.name}<br/>${invoiceCompany.email}<br/>${invoiceCompanyPhonesLine()}<br/>R.U.C. : ${invoiceCompany.ruc}</p>
     </div>`;
 
   try {

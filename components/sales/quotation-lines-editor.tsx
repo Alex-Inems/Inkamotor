@@ -31,7 +31,7 @@ function splitBoilerplateBlocks(lines: SaleLine[]) {
 }
 
 function blocksToLines(blocks: LineBlock[], products: SaleLine[]) {
-  return [...blocks.flat(), ...products];
+  return [...products, ...blocks.flat()];
 }
 
 function moveBlock(blocks: LineBlock[], from: number, to: number) {
@@ -202,6 +202,67 @@ export function QuotationLinesEditor({
 
   return (
     <div className="quotation-lines-editor max-w-full overflow-x-hidden">
+      {productLines.length > 0 ? (
+        <div className="mb-4 space-y-3 border-b border-line pb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
+            {t("pages.sales.lineProduct")}
+          </p>
+          {productLines.map((line, productIndex) => (
+            <div
+              key={`product-${productIndex}`}
+              className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_auto] sm:items-center sm:gap-3"
+            >
+              <ProductSearchInput
+                className={`${inputUnderlineClass} min-w-0`}
+                products={catalogProducts}
+                value={line.description}
+                placeholder={t("pages.sales.pickProduct")}
+                onValueChange={(text) =>
+                  updateProductLine(productIndex, { description: text })
+                }
+                onProductSelect={(product) => onProductPick(productIndex, product)}
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                aria-label={t("pages.sales.lineQty")}
+                className={`${inputUnderlineClass} text-right`}
+                value={line.qty}
+                onChange={(e) =>
+                  updateProductLine(productIndex, { qty: Number(e.target.value) || 0 })
+                }
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                aria-label={t("pages.sales.lineUnitPrice")}
+                className={`${inputUnderlineClass} text-right`}
+                value={line.unitPrice}
+                onChange={(e) =>
+                  updateProductLine(productIndex, {
+                    unitPrice: Number(e.target.value) || 0,
+                  })
+                }
+              />
+              <SalesAmount
+                amount={lineTotal(line)}
+                locale={locale}
+                className="block text-right"
+              />
+              <button
+                type="button"
+                className="justify-self-end text-xs text-mute hover:text-ink sm:justify-self-center"
+                onClick={() => removeProductLine(productIndex)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="space-y-2">
         {blocks.map((block, blockIndex) => (
           <div
@@ -289,67 +350,6 @@ export function QuotationLinesEditor({
           </div>
         ))}
       </div>
-
-      {productLines.length > 0 ? (
-        <div className="mt-4 space-y-3 border-t border-line pt-4">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-            {t("pages.sales.lineProduct")}
-          </p>
-          {productLines.map((line, productIndex) => (
-            <div
-              key={`product-${productIndex}`}
-              className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_5.5rem_5.5rem_auto] sm:items-center sm:gap-3"
-            >
-              <ProductSearchInput
-                className={`${inputUnderlineClass} min-w-0`}
-                products={catalogProducts}
-                value={line.description}
-                placeholder={t("pages.sales.pickProduct")}
-                onValueChange={(text) =>
-                  updateProductLine(productIndex, { description: text })
-                }
-                onProductSelect={(product) => onProductPick(productIndex, product)}
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                aria-label={t("pages.sales.lineQty")}
-                className={`${inputUnderlineClass} text-right`}
-                value={line.qty}
-                onChange={(e) =>
-                  updateProductLine(productIndex, { qty: Number(e.target.value) || 0 })
-                }
-              />
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                aria-label={t("pages.sales.lineUnitPrice")}
-                className={`${inputUnderlineClass} text-right`}
-                value={line.unitPrice}
-                onChange={(e) =>
-                  updateProductLine(productIndex, {
-                    unitPrice: Number(e.target.value) || 0,
-                  })
-                }
-              />
-              <SalesAmount
-                amount={lineTotal(line)}
-                locale={locale}
-                className="block text-right"
-              />
-              <button
-                type="button"
-                className="justify-self-end text-xs text-mute hover:text-ink sm:justify-self-center"
-                onClick={() => removeProductLine(productIndex)}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
 
       {termsHtml?.trim() ? (
         <section className="mt-4 border-t border-line pt-4">

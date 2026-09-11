@@ -1,7 +1,11 @@
 "use client";
 
 import { ColorStripe, InkamotoLogo } from "@/components/brand";
-import { invoiceCompany } from "@/lib/invoice-company";
+import {
+  invoiceCompany,
+  invoiceCompanyAddressLine,
+  invoiceCompanyFromLines,
+} from "@/lib/invoice-company";
 import { invoiceTotal, type Invoice } from "@/lib/demo-data";
 import { SalesAmount } from "@/components/sales/sales-amount";
 import { formatDate } from "@/lib/format";
@@ -53,7 +57,9 @@ export function InvoiceDocument({
             <p className="mt-3 text-xs leading-relaxed text-white/80">
               {copy.tagline}
               <br />
-              {invoiceCompany.address}
+              {invoiceCompanyAddressLine()}
+              <br />
+              R.U.C. : {invoiceCompany.ruc}
             </p>
           </div>
           <div className="text-right">
@@ -103,10 +109,16 @@ export function InvoiceDocument({
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a8478]">
             {copy.from}
           </p>
-          <p className="mt-2 font-semibold">{invoiceCompany.name}</p>
-          <p className="text-sm text-[#5c5850]">{invoiceCompany.email}</p>
-          <p className="text-sm text-[#5c5850]">{invoiceCompany.phone}</p>
-          <p className="text-sm text-[#5c5850]">{invoiceCompany.website}</p>
+          <div className="mt-2 text-sm leading-relaxed text-[#5c5850]">
+            {invoiceCompanyFromLines().map((line, i) => (
+              <p
+                key={line}
+                className={i === 0 ? "font-semibold text-[#1c1b19]" : undefined}
+              >
+                {line}
+              </p>
+            ))}
+          </div>
         </div>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a8478]">

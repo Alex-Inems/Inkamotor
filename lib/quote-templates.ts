@@ -27,7 +27,7 @@ export function isTripSectionLine(line: SaleLine) {
   return line.displayType === "section";
 }
 
-/** Services / notes first, product lines last (Odoo order). */
+/** Product lines first (directly under “Voyage du…”), then sections/notes. */
 export function orderQuotationBodyLines(
   lines: SaleLine[],
   options?: { ensureProduct?: boolean },
@@ -35,9 +35,23 @@ export function orderQuotationBodyLines(
   const products = lines.filter((line) => line.displayType === "product");
   const rest = lines.filter((line) => line.displayType !== "product");
   if (products.length === 0 && options?.ensureProduct) {
-    return [...rest, emptyProductLine()];
+    return [emptyProductLine(), ...rest];
   }
-  return [...rest, ...products];
+  return [...products, ...rest];
+}
+
+/**
+ * Document/PDF order: keep the leading trip section (“Voyage du…”),
+ * then products, then the rest — even for older quotes saved with products last.
+ */
+export function orderQuotationDocumentLines(lines: SaleLine[]): SaleLine[] {
+  const products = lines.filter((line) => line.displayType === "product");
+  if (products.length === 0) return lines;
+  const rest = lines.filter((line) => line.displayType !== "product");
+  if (rest[0]?.displayType === "section") {
+    return [rest[0]!, ...products, ...rest.slice(1)];
+  }
+  return [...products, ...rest];
 }
 
 /** Trip section on the quote — label + dates (e.g. "Voyage du 12 juin…"). */
@@ -103,7 +117,7 @@ export function parseStoredQuotationLinesLegacy(lines: SaleLine[]) {
   return { voyage: parsed.trip, bodyLines: parsed.bodyLines };
 }
 
-/** Replace template boilerplate; keep product lines at the bottom. */
+/** Replace template boilerplate; keep product lines under the trip heading. */
 export function applyTemplateToQuotationLines(
   current: SaleLine[],
   template: OdooQuoteTemplate,
@@ -112,7 +126,7 @@ export function applyTemplateToQuotationLines(
   const products = current.filter((line) => line.displayType === "product");
   const hasProduct = products.some((line) => line.description.trim());
   const productLines = hasProduct ? products : [emptyProductLine()];
-  return [...boilerplate, ...productLines];
+  return [...productLines, ...boilerplate];
 }
 
 export function emptyProductLine(): SaleLine {

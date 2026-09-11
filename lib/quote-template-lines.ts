@@ -26,5 +26,5 @@ export function applyLocalizedTemplateToQuotationLines(
   const products = current.filter((line) => line.displayType === "product");
   const hasProduct = products.some((line) => line.description.trim());
   const productLines = hasProduct ? products : [emptyProductLine()];
-  return [...boilerplate, ...productLines];
+  return [...productLines, ...boilerplate];
 }

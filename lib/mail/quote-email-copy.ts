@@ -1,4 +1,7 @@
-import { invoiceCompany } from "@/lib/invoice-company";
+import {
+  invoiceCompany,
+  invoiceCompanyPhonesLine,
+} from "@/lib/invoice-company";
 import { type Sale } from "@/lib/demo-data";
 import { formatSalesMoney } from "@/lib/format";
 import { messagesFor, type Locale } from "@/lib/i18n";
@@ -30,7 +33,7 @@ export function quoteEmailHtmlFromText(bodyText: string, locale: Locale) {
   return `<div style="font-family:Georgia,serif;line-height:1.5;color:#1c1b19">
     ${paragraphs}
     <p style="margin-top:1rem;color:#666;font-size:13px">${escapeHtml(copy.pages.sales.quoteEmailAttached)}</p>
-    <p style="color:#666;font-size:13px">— ${escapeHtml(invoiceCompany.name)}<br/>${escapeHtml(invoiceCompany.email)}<br/>${escapeHtml(invoiceCompany.phone)}</p>
+    <p style="color:#666;font-size:13px">— ${escapeHtml(invoiceCompany.name)}<br/>${escapeHtml(invoiceCompany.email)}<br/>${escapeHtml(invoiceCompanyPhonesLine())}<br/>${escapeHtml(`R.U.C. : ${invoiceCompany.ruc}`)}</p>
   </div>`;
 }
 

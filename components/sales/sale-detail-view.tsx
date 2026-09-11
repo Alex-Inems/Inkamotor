@@ -20,6 +20,7 @@ import { EmptyHint, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import { type Invoice, type Sale, type SaleStatus } from "@/lib/demo-data";
 import { enrichSale } from "@/lib/sale-quote";
+import { orderQuotationDocumentLines } from "@/lib/quote-templates";
 import { SalesAmount } from "@/components/sales/sales-amount";
 import { formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
@@ -49,6 +50,10 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
 
   const raw = sales.find((row) => row.id === saleId) ?? null;
   const sale = useMemo(() => (raw ? enrichSale(raw) : null), [raw]);
+  const documentLines = useMemo(
+    () => (sale ? orderQuotationDocumentLines(sale.lines) : []),
+    [sale],
+  );
 
   const stageLabel = (id: SaleStatus) => t(`saleStages.${id}`);
 
@@ -228,7 +233,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
             </StatusBadge>
           </div>
 
-          {sale.lines.length > 0 ? (
+          {documentLines.length > 0 ? (
             <div className="table-wrap mb-6">
               <table className="data-table">
                 <thead>
@@ -240,7 +245,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {sale.lines.map((line, i) =>
+                  {documentLines.map((line, i) =>
                     line.displayType === "section" ? (
                       <tr key={`line-${i}`} className="bg-ash/40">
                         <td colSpan={4} className="font-semibold">

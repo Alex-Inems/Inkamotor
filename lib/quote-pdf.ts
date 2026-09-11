@@ -1,7 +1,12 @@
 import { jsPDF } from "jspdf";
-import { invoiceCompany } from "@/lib/invoice-company";
+import {
+  invoiceCompany,
+  invoiceCompanyAddressLine,
+  invoiceCompanyFromLines,
+} from "@/lib/invoice-company";
 import { type Sale } from "@/lib/demo-data";
 import { saleTotal, stripHtml } from "@/lib/sale-quote";
+import { orderQuotationDocumentLines } from "@/lib/quote-templates";
 import { resolveSaleTermsHtml } from "@/lib/quote-template-terms";
 import { formatDate, formatSalesMoney } from "@/lib/format";
 import { messagesFor, type Locale } from "@/lib/i18n";
@@ -67,6 +72,7 @@ export async function renderQuotePdf(sale: Sale, locale: Locale = "fr") {
   const copy = messagesFor(locale).quoteDoc;
   const money = (n: number) => formatSalesMoney(n, locale);
   const total = saleTotal(sale) || sale.amount;
+  const lines = orderQuotationDocumentLines(sale.lines);
   const logo = await logoDataUrl();
 
   rgb(doc, brand.white, "fill");
@@ -80,7 +86,7 @@ export async function renderQuotePdf(sale: Sale, locale: Locale = "fr") {
   });
 
   const headerTop = stripeH;
-  const headerH = 42;
+  const headerH = 48;
   rgb(doc, brand.teal, "fill");
   doc.rect(0, headerTop, pageW, headerH, "F");
   rgb(doc, brand.tealDeep, "fill");
@@ -98,7 +104,14 @@ export async function renderQuotePdf(sale: Sale, locale: Locale = "fr") {
   rgb(doc, brand.white, "text");
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
-  doc.text(doc.splitTextToSize(`${copy.tagline}\n${invoiceCompany.address}`, 95), margin, y + 12);
+  doc.text(
+    doc.splitTextToSize(
+      `${copy.tagline}\n${invoiceCompanyAddressLine()}\nR.U.C. : ${invoiceCompany.ruc}`,
+      95,
+    ),
+    margin,
+    y + 12,
+  );
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
   doc.text(copy.quotation.toUpperCase(), pageW - margin, y + 2, { align: "right" });
@@ -130,23 +143,44 @@ export async function renderQuotePdf(sale: Sale, locale: Locale = "fr") {
     y += 7;
   }
 
+  const col2 = margin + contentW / 2;
   rgb(doc, brand.mute, "text");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
-  doc.text(copy.customer.toUpperCase(), margin, y);
+  doc.text(copy.from.toUpperCase(), margin, y);
+  doc.text(copy.customer.toUpperCase(), col2, y);
   y += 5;
+
+  const fromLines = invoiceCompanyFromLines();
   rgb(doc, brand.ink, "text");
   doc.setFontSize(10);
-  doc.text(sale.customer, margin, y);
-  y += 5;
-  rgb(doc, brand.body, "text");
-  doc.setFontSize(9);
-  doc.text(sale.email, margin, y);
-  if (sale.paymentTerms) {
-    y += 6;
-    doc.text(`${copy.paymentTerms}: ${sale.paymentTerms}`, margin, y);
-  }
+  doc.setFont("helvetica", "bold");
+  doc.text(fromLines[0]!, margin, y);
+  doc.text(sale.customer, col2, y);
 
-  y += 10;
+  let fromY = y + 4.5;
+  let custY = y + 4.5;
+  rgb(doc, brand.body, "text");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  for (const line of fromLines.slice(1)) {
+    const wrapped = doc.splitTextToSize(line, contentW / 2 - 6);
+    doc.text(wrapped, margin, fromY);
+    fromY += wrapped.length * 3.6;
+  }
+  doc.setFontSize(9);
+  doc.text(sale.email, col2, custY);
+  custY += 4.5;
+  if (sale.paymentTerms) {
+    const terms = doc.splitTextToSize(
+      `${copy.paymentTerms}: ${sale.paymentTerms}`,
+      contentW / 2 - 6,
+    );
+    doc.text(terms, col2, custY);
+    custY += terms.length * 3.8;
+  }
+  y = Math.max(fromY, custY) + 8;
+
   rgb(doc, brand.teal, "fill");
   doc.rect(margin, y - 5, contentW, 9, "F");
   rgb(doc, brand.white, "text");
@@ -160,7 +194,7 @@ export async function renderQuotePdf(sale: Sale, locale: Locale = "fr") {
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  for (const line of sale.lines) {
+  for (const line of lines) {
     if (y > 250) {
       doc.addPage();
       y = margin + 8;
