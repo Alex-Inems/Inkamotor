@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { clampPriority } from "@/lib/crm/contact-details";
 import {
+  getLeadRow,
   listLeadPage,
   parseContactWrite,
   updateLeadPriorityFast,
@@ -28,6 +29,22 @@ export async function GET(req: Request) {
   if (blocked) return blocked;
 
   const url = new URL(req.url);
+  const id = url.searchParams.get("id")?.trim();
+  if (id) {
+    try {
+      const row = await getLeadRow(id);
+      if (!row) {
+        return jsonError(404, { error: "Contact not found", code: "db_error" });
+      }
+      return Response.json({ row });
+    } catch (err) {
+      return jsonError(502, {
+        error: err instanceof Error ? err.message : "Could not load contact",
+        code: "db_error",
+      });
+    }
+  }
+
   const stage = url.searchParams.get("stage") ?? "all";
   const sort = url.searchParams.get("sort") ?? "completeness";
   const dir = url.searchParams.get("dir") === "desc" ? "desc" : "asc";

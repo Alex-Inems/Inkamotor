@@ -1,5 +1,9 @@
 import { jsonError } from "@/lib/api";
-import { builtinById, builtinTemplates } from "@/lib/newsletter/templates";
+import {
+  builtinById,
+  builtinTemplates,
+  templateIdForMailing,
+} from "@/lib/newsletter/templates";
 import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +62,14 @@ export async function POST(request: Request) {
     });
   }
 
-  let body: { name?: string; subject?: string; preview?: string; html?: string };
+  let body: {
+    id?: string;
+    mailingId?: string;
+    name?: string;
+    subject?: string;
+    preview?: string;
+    html?: string;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -74,14 +85,28 @@ export async function POST(request: Request) {
     });
   }
 
-  const id = `tpl_${Date.now()}`;
-  const { error } = await getSupabase().from("newsletter_templates").insert({
-    id,
-    name,
-    subject: body.subject?.trim() || name,
-    preview: body.preview?.trim() || "",
-    html,
-  });
+  const mailingId = body.mailingId?.trim();
+  const id =
+    (mailingId ? templateIdForMailing(mailingId) : body.id?.trim()) ||
+    `tpl_${Date.now()}`;
+  if (builtinById(id)) {
+    return jsonError(400, {
+      error: "Built-in templates cannot be overwritten.",
+      code: "send_failed",
+    });
+  }
+
+  const { error } = await getSupabase().from("newsletter_templates").upsert(
+    {
+      id,
+      name,
+      subject: body.subject?.trim() || name,
+      preview: body.preview?.trim() || "",
+      html,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
   if (error) {
     const hint = isMissingTable(error.message)
       ? " Run supabase/billing_and_templates.sql in the SQL editor."

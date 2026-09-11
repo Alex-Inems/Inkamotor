@@ -272,7 +272,7 @@ export default function OverviewPage() {
             hint={t("overview.inboxHint")}
           />
         </Link>
-        <Link href="/newsletter" className="block">
+        <Link href="/email-marketing" className="block">
           <KpiCard
             label={t("overview.newsletters")}
             value={num(newsletters.length)}
@@ -332,7 +332,7 @@ export default function OverviewPage() {
             <Link href="/inbox" className="py-1.5 leading-relaxed text-sand hover:text-gold">
               {t("overview.inboxReplies")}
             </Link>
-            <Link href="/newsletter" className="py-1.5 leading-relaxed text-sand hover:text-gold">
+            <Link href="/email-marketing" className="py-1.5 leading-relaxed text-sand hover:text-gold">
               {t("nav.newsletter")}
             </Link>
             <Link href="/sales" className="py-1.5 leading-relaxed text-sand hover:text-gold">

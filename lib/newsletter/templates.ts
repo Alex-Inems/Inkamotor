@@ -70,3 +70,14 @@ export const builtinTemplates: NewsletterTemplate[] = [
 export function builtinById(id: string) {
   return builtinTemplates.find((t) => t.id === id) ?? null;
 }
+
+/** Stable template id linked to a mailing (add / remove from templates). */
+export function templateIdForMailing(mailingId: string) {
+  return `tpl_mailing_${mailingId}`;
+}
+
+export function mailingIdFromTemplateId(templateId: string) {
+  return templateId.startsWith("tpl_mailing_")
+    ? templateId.slice("tpl_mailing_".length)
+    : null;
+}

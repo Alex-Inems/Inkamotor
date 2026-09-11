@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   btnGhost,
   btnPrimary,
@@ -9,6 +10,7 @@ import {
   inputClass,
   Modal,
 } from "@/components/modal";
+import { EmailMarketingSubnav } from "@/components/email-marketing/email-marketing-subnav";
 import { EmptyHint, FormNotice, KpiCard, PageHeader, Panel, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
@@ -22,6 +24,7 @@ import {
 } from "@/lib/newsletter/waves";
 import { hideCampaignId, hiddenCampaignIds } from "@/lib/newsletter/hidden-campaigns";
 import { pushWorkspaceNotice } from "@/lib/workspace-notices";
+import type { NewsletterMailing } from "@/lib/newsletter/mailings";
 
 type LiveCampaign = {
   id: string;
@@ -80,8 +83,18 @@ function tone(status: string) {
 }
 
 export default function NewsletterPage() {
+  const { t } = useLocale();
+  return (
+    <Suspense fallback={<p className="text-sm text-mute">{t("common.loading")}</p>}>
+      <NewsletterPageInner />
+    </Suspense>
+  );
+}
+
+function NewsletterPageInner() {
   const { pushToast } = useCrm();
   const { t, locale } = useLocale();
+  const searchParams = useSearchParams();
   const [campaigns, setCampaigns] = useState<LiveCampaign[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,6 +134,8 @@ export default function NewsletterPage() {
   });
   const composerNoticeRef = useRef<HTMLDivElement>(null);
   const subscriberNoticeRef = useRef<HTMLDivElement>(null);
+  const draftLoadedRef = useRef<string | null>(null);
+  const pendingAudienceRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/newsletter");
@@ -194,6 +209,97 @@ export default function NewsletterPage() {
   useEffect(() => {
     if (openAdd && subscribers.length === 0) void loadSubscribers();
   }, [openAdd, loadSubscribers, subscribers.length]);
+
+  useEffect(() => {
+    const compose = searchParams.get("compose");
+    const draftId = searchParams.get("draft")?.trim();
+    if (compose !== "1" || !draftId) return;
+    if (draftLoadedRef.current === draftId) return;
+    draftLoadedRef.current = draftId;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (subscribers.length === 0) await loadSubscribers();
+        const res = await fetch(
+          `/api/newsletter/mailings?id=${encodeURIComponent(draftId)}`,
+        );
+        const json = (await res.json()) as {
+          mailing?: NewsletterMailing;
+          error?: string;
+        };
+        if (!res.ok || !json.mailing) {
+          throw new Error(
+            json.error || t("pages.emailMarketing.draftLoadFailed"),
+          );
+        }
+        if (cancelled) return;
+        const mailing = json.mailing;
+        setForm({
+          name: mailing.name,
+          subject: mailing.subject,
+          preview: mailing.preview,
+          html: mailing.html,
+        });
+        setTemplateId(mailing.templateId ?? "");
+        setEditorKey(`draft-${mailing.id}-${Date.now()}`);
+        if (mailing.recipientTag) {
+          setRecipientTag(mailing.recipientTag);
+          pendingAudienceRef.current = mailing.recipientTag;
+        }
+        const tagParam = searchParams.get("tag")?.trim();
+        if (tagParam) {
+          setRecipientTag(tagParam);
+          pendingAudienceRef.current = tagParam;
+        }
+        if (mailing.scheduledAt) {
+          const d = new Date(mailing.scheduledAt);
+          if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) {
+            const pad = (n: number) => String(n).padStart(2, "0");
+            setWhen("later");
+            setScheduleAt(
+              `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+            );
+          }
+        }
+        setOpenAdd(true);
+        setTab("campaigns");
+        pushToast({
+          message: t("pages.emailMarketing.draftLoaded"),
+          tone: "success",
+        });
+      } catch (err) {
+        if (!cancelled) {
+          pushToast({
+            message:
+              err instanceof Error
+                ? err.message
+                : t("pages.emailMarketing.draftLoadFailed"),
+            tone: "error",
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, loadSubscribers, subscribers.length, pushToast, t]);
+
+  useEffect(() => {
+    const tag = pendingAudienceRef.current;
+    if (!openAdd || !tag || subscribers.length === 0) return;
+    const want = tag.toLowerCase();
+    const emails = subscribers
+      .filter(
+        (s) =>
+          !s.blocked &&
+          (s.tags ?? []).some((name) => name.toLowerCase() === want),
+      )
+      .map((s) => s.email);
+    setSelectedEmails(emails);
+    pendingAudienceRef.current = null;
+  }, [openAdd, subscribers]);
 
   const sendable = useMemo(
     () => subscribers.filter((s) => !s.blocked),
@@ -533,7 +639,7 @@ export default function NewsletterPage() {
   return (
     <div>
       <PageHeader
-        title={t("pages.newsletter.title")}
+        title={t("pages.emailMarketing.tabCampaigns")}
         description={t("pages.newsletter.description")}
         action={
           <div className="flex flex-wrap gap-2">
@@ -547,12 +653,16 @@ export default function NewsletterPage() {
             >
               {t("pages.newsletter.refresh")}
             </button>
-          <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
+            <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
               {t("pages.newsletter.newCampaign")}
-          </button>
+            </button>
           </div>
         }
       />
+
+      <div className="mt-4">
+        <EmailMarketingSubnav />
+      </div>
 
       {error ? (
         <div className="mb-4 border border-wine/40 bg-wine/10 px-4 py-3 text-sm">
@@ -608,11 +718,10 @@ export default function NewsletterPage() {
             key={item.id}
             type="button"
             onClick={() => setTab(item.id)}
-            className={`shrink-0 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.06em] ${
-              tab === item.id
+            className={`shrink-0 px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.06em] ${tab === item.id
                 ? "bg-accent text-white"
                 : "border border-line bg-panel text-ink hover:bg-ash"
-            }`}
+              }`}
           >
             {item.label}
           </button>
@@ -735,89 +844,89 @@ export default function NewsletterPage() {
       ) : null}
 
       {tab === "campaigns" ? (
-      <>
-      <div className="mt-6">
-        <input
-          className={inputClass}
-          placeholder={t("pages.newsletter.search")}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
+        <>
+          <div className="mt-6">
+            <input
+              className={inputClass}
+              placeholder={t("pages.newsletter.search")}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
 
-      <div className="mt-4">
-        <Panel title={t("pages.newsletter.campaignCount", { n: filtered.length })}>
-          {loading ? (
-            <EmptyHint>{t("pages.newsletter.loading")}</EmptyHint>
-          ) : filtered.length === 0 ? (
-            <EmptyHint>
-              {t("pages.newsletter.noCampaigns")}
-            </EmptyHint>
-          ) : (
-            <div className="table-wrap">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>{t("pages.newsletter.campaign")}</th>
-                    <th>{t("common.status")}</th>
-                    <th>{t("common.delivered")}</th>
-                    <th>{t("common.opens")}</th>
-                    <th>{t("common.clicks")}</th>
-                    <th>{t("common.sent")}</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((c) => (
-                    <tr key={c.id}>
-                      <td>
-                        <p className="font-medium">{c.name}</p>
-                        <p className="text-xs text-mute">{c.subject}</p>
-                      </td>
-                      <td>
-                        <StatusBadge tone={tone(c.status)}>{t(`status.${c.status}`)}</StatusBadge>
-                      </td>
-                      <td>{formatNumber(c.recipients, false, locale)}</td>
-                      <td>{formatPercent(openRate(c))}</td>
-                      <td>{formatPercent(clickRate(c))}</td>
-                      <td className="whitespace-nowrap text-mute">
-                        {c.sentAt
-                          ? formatDate(c.sentAt.slice(0, 10), locale)
-                          : c.scheduledAt
-                            ? formatDate(c.scheduledAt.slice(0, 10), locale)
-                            : t("common.dash")}
-                      </td>
-                      <td className="whitespace-nowrap">
-                        <div className="flex flex-wrap justify-end gap-1">
-                        <button
-                          type="button"
-                          className={btnGhost}
-                            onClick={() => setSelected(c)}
-                          >
-                            {t("common.open")}
-                          </button>
-                          <button
-                            type="button"
-                            className={`${btnGhost} text-pink`}
-                            onClick={() => {
-                              setSelected(null);
-                              setDeleteNotice(null);
-                              setPendingDelete(c);
-                            }}
-                          >
-                            {t("pages.newsletter.deleteCampaign")}
-                        </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Panel>
-      </div>
-      </>
+          <div className="mt-4">
+            <Panel title={t("pages.newsletter.campaignCount", { n: filtered.length })}>
+              {loading ? (
+                <EmptyHint>{t("pages.newsletter.loading")}</EmptyHint>
+              ) : filtered.length === 0 ? (
+                <EmptyHint>
+                  {t("pages.newsletter.noCampaigns")}
+                </EmptyHint>
+              ) : (
+                <div className="table-wrap">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>{t("pages.newsletter.campaign")}</th>
+                        <th>{t("common.status")}</th>
+                        <th>{t("common.delivered")}</th>
+                        <th>{t("common.opens")}</th>
+                        <th>{t("common.clicks")}</th>
+                        <th>{t("common.sent")}</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((c) => (
+                        <tr key={c.id}>
+                          <td>
+                            <p className="font-medium">{c.name}</p>
+                            <p className="text-xs text-mute">{c.subject}</p>
+                          </td>
+                          <td>
+                            <StatusBadge tone={tone(c.status)}>{t(`status.${c.status}`)}</StatusBadge>
+                          </td>
+                          <td>{formatNumber(c.recipients, false, locale)}</td>
+                          <td>{formatPercent(openRate(c))}</td>
+                          <td>{formatPercent(clickRate(c))}</td>
+                          <td className="whitespace-nowrap text-mute">
+                            {c.sentAt
+                              ? formatDate(c.sentAt.slice(0, 10), locale)
+                              : c.scheduledAt
+                                ? formatDate(c.scheduledAt.slice(0, 10), locale)
+                                : t("common.dash")}
+                          </td>
+                          <td className="whitespace-nowrap">
+                            <div className="flex flex-wrap justify-end gap-1">
+                              <button
+                                type="button"
+                                className={btnGhost}
+                                onClick={() => setSelected(c)}
+                              >
+                                {t("common.open")}
+                              </button>
+                              <button
+                                type="button"
+                                className={`${btnGhost} text-pink`}
+                                onClick={() => {
+                                  setSelected(null);
+                                  setDeleteNotice(null);
+                                  setPendingDelete(c);
+                                }}
+                              >
+                                {t("pages.newsletter.deleteCampaign")}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          </div>
+        </>
       ) : null}
 
       <Modal open={openAdd} title={t("pages.newsletter.sendTitle")} onClose={closeComposer} wide>
@@ -846,261 +955,261 @@ export default function NewsletterPage() {
             </div>
           ) : (
             <>
-          <Field label={t("pages.newsletter.template")}>
-            <div className="flex flex-wrap gap-2">
-              <select
-                className={inputClass}
-                value={templateId}
-                onChange={(e) => applyTemplate(e.target.value)}
-              >
-                <option value="">{t("pages.newsletter.pickTemplate")}</option>
-                {templates.map((tpl) => (
-                  <option key={tpl.id} value={tpl.id}>
-                    {tpl.name}
-                    {tpl.builtin ? ` · ${t("pages.newsletter.builtin")}` : ""}
-                  </option>
-                ))}
-              </select>
-              <button type="button" className={btnGhost} onClick={() => void saveTemplate()}>
-                {t("pages.newsletter.saveTemplate")}
-              </button>
-              {templateId && !templates.find((tpl) => tpl.id === templateId)?.builtin ? (
+              <Field label={t("pages.newsletter.template")}>
+                <div className="flex flex-wrap gap-2">
+                  <select
+                    className={inputClass}
+                    value={templateId}
+                    onChange={(e) => applyTemplate(e.target.value)}
+                  >
+                    <option value="">{t("pages.newsletter.pickTemplate")}</option>
+                    {templates.map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name}
+                        {tpl.builtin ? ` · ${t("pages.newsletter.builtin")}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button type="button" className={btnGhost} onClick={() => void saveTemplate()}>
+                    {t("pages.newsletter.saveTemplate")}
+                  </button>
+                  {templateId && !templates.find((tpl) => tpl.id === templateId)?.builtin ? (
+                    <button
+                      type="button"
+                      className={btnGhost}
+                      onClick={() => void deleteTemplate(templateId)}
+                    >
+                      {t("pages.newsletter.deleteTemplate")}
+                    </button>
+                  ) : null}
+                </div>
+              </Field>
+              <Field label={t("pages.newsletter.internalName")}>
+                <input
+                  className={inputClass}
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder={t("pages.newsletter.namePlaceholder")}
+                />
+              </Field>
+              <Field label={t("common.subject")}>
+                <input
+                  className={inputClass}
+                  value={form.subject}
+                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                />
+              </Field>
+              <Field label={t("pages.newsletter.previewText")}>
+                <input
+                  className={inputClass}
+                  value={form.preview}
+                  onChange={(e) => setForm({ ...form, preview: e.target.value })}
+                />
+              </Field>
+              <Field label={t("pages.newsletter.body")}>
+                <HtmlEditor
+                  html={form.html}
+                  resetKey={editorKey}
+                  onChange={(html) => setForm({ ...form, html })}
+                />
+              </Field>
+              <fieldset className="space-y-2">
+                <legend className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
+                  {t("pages.newsletter.when")}
+                </legend>
+                <div className="flex flex-wrap gap-3 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="when"
+                      checked={when === "now"}
+                      onChange={() => setWhen("now")}
+                    />
+                    {t("pages.newsletter.sendNowOption")}
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="when"
+                      checked={when === "later"}
+                      onChange={() => setWhen("later")}
+                    />
+                    {t("pages.newsletter.scheduleOption")}
+                  </label>
+                </div>
+                {when === "later" ? (
+                  <input
+                    type="datetime-local"
+                    className={inputClass}
+                    value={scheduleAt}
+                    min={new Date().toISOString().slice(0, 16)}
+                    onChange={(e) => setScheduleAt(e.target.value)}
+                  />
+                ) : null}
+              </fieldset>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
+                    {t("pages.newsletter.recipients")}
+                  </p>
+                  <p className="text-xs text-mute">
+                    {t("pages.newsletter.selectedCount", { n: selectedEmails.length })}
+                  </p>
+                </div>
+                <p className="text-xs text-mute">{t("pages.newsletter.pickRecipients")}</p>
+                {pendingWaves && multiDay ? (
+                  <p className="border border-wine/40 bg-wine/10 px-3 py-2.5 text-sm leading-relaxed text-pink">
+                    {t("pages.newsletter.wavesInProgress")}
+                  </p>
+                ) : null}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <select
+                    className={inputClass}
+                    value={recipientTag}
+                    onChange={(e) => {
+                      const next = e.target.value;
+                      setRecipientTag(next);
+                      if (next === "all") return;
+                      const want = next.toLowerCase();
+                      const emails = sendable
+                        .filter((s) =>
+                          (s.tags ?? []).some((tag) => tag.toLowerCase() === want),
+                        )
+                        .map((s) => s.email);
+                      setSelectedEmails(emails);
+                    }}
+                  >
+                    <option value="all">{t("pages.newsletter.allTags")}</option>
+                    {audienceTags.map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className={inputClass}
+                    placeholder={t("pages.newsletter.searchPeople")}
+                    value={recipientQuery}
+                    onChange={(e) => setRecipientQuery(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() =>
+                      setSelectedEmails(taggedSendable.map((s) => s.email))
+                    }
+                    disabled={taggedSendable.length === 0}
+                  >
+                    {recipientTag === "all"
+                      ? t("pages.newsletter.selectAll")
+                      : t("pages.newsletter.selectTag", {
+                        tag: recipientTag,
+                        n: taggedSendable.length,
+                      })}
+                  </button>
+                  <button
+                    type="button"
+                    className={btnGhost}
+                    onClick={() => setSelectedEmails([])}
+                    disabled={selectedEmails.length === 0}
+                  >
+                    {t("pages.newsletter.selectNone")}
+                  </button>
+                </div>
+                {sendable.length === 0 ? (
+                  <p className="border border-line px-3 py-6 text-center text-sm text-mute">
+                    {t("pages.newsletter.noSendable")}
+                  </p>
+                ) : taggedSendable.length === 0 ? (
+                  <p className="border border-line px-3 py-6 text-center text-sm text-mute">
+                    {t("pages.newsletter.noTagMatches", { tag: recipientTag })}
+                  </p>
+                ) : (
+                  <ul className="max-h-56 overflow-y-auto border border-line">
+                    {visibleRecipients.map((s) => {
+                      const checked = selectedEmails.includes(s.email);
+                      return (
+                        <li key={s.id} className="border-b border-line last:border-b-0">
+                          <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-ash/50">
+                            <input
+                              type="checkbox"
+                              className="mt-1"
+                              checked={checked}
+                              onChange={() => toggleEmail(s.email)}
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm font-medium">
+                                {s.name || s.email}
+                              </span>
+                              {s.name ? (
+                                <span className="block truncate text-xs text-mute">
+                                  {s.email}
+                                </span>
+                              ) : null}
+                              {(s.tags ?? []).length > 0 ? (
+                                <span className="mt-1 flex flex-wrap gap-1">
+                                  {(s.tags ?? []).map((tag) => (
+                                    <span
+                                      key={tag}
+                                      className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mute"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </span>
+                              ) : null}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {multiDay ? (
+                <div className="border border-accent/50 bg-accent-soft px-3 py-3 text-sm leading-relaxed">
+                  {t("pages.newsletter.multiDayNotice", {
+                    n: selectedCount,
+                    days: daysNeeded,
+                    cap: DAILY_NEWSLETTER_CAP,
+                  })}
+                </div>
+              ) : selectedCount > 0 ? (
+                <p className="text-xs text-mute">{t("pages.newsletter.sendsAtPickTime")}</p>
+              ) : (
+                <p className="text-xs text-mute">
+                  {when === "later"
+                    ? t("pages.newsletter.sendsLater")
+                    : t("pages.newsletter.sendsNow")}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="submit"
+                  className={btnPrimary}
+                  disabled={sending || selectedEmails.length === 0}
+                >
+                  {sending
+                    ? t("common.sending")
+                    : when === "later"
+                      ? t("pages.newsletter.scheduleSend")
+                      : t("pages.newsletter.sendNow")}
+                </button>
+                {multiDay ? (
+                  <span className="text-xs text-mute">
+                    {t("pages.newsletter.sendOverDays", { days: daysNeeded })}
+                  </span>
+                ) : null}
                 <button
                   type="button"
-                  className={btnGhost}
-                  onClick={() => void deleteTemplate(templateId)}
+                  className={btnSecondary}
+                  onClick={closeComposer}
                 >
-                  {t("pages.newsletter.deleteTemplate")}
+                  {t("common.cancel")}
                 </button>
-              ) : null}
-            </div>
-          </Field>
-          <Field label={t("pages.newsletter.internalName")}>
-            <input
-              className={inputClass}
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder={t("pages.newsletter.namePlaceholder")}
-            />
-          </Field>
-          <Field label={t("common.subject")}>
-            <input
-                className={inputClass}
-                value={form.subject}
-                onChange={(e) => setForm({ ...form, subject: e.target.value })}
-              />
-            </Field>
-          <Field label={t("pages.newsletter.previewText")}>
-            <input
-              className={inputClass}
-              value={form.preview}
-              onChange={(e) => setForm({ ...form, preview: e.target.value })}
-            />
-          </Field>
-          <Field label={t("pages.newsletter.body")}>
-            <HtmlEditor
-              html={form.html}
-              resetKey={editorKey}
-              onChange={(html) => setForm({ ...form, html })}
-            />
-          </Field>
-          <fieldset className="space-y-2">
-            <legend className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-              {t("pages.newsletter.when")}
-            </legend>
-            <div className="flex flex-wrap gap-3 text-sm">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="when"
-                  checked={when === "now"}
-                  onChange={() => setWhen("now")}
-                />
-                {t("pages.newsletter.sendNowOption")}
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="when"
-                  checked={when === "later"}
-                  onChange={() => setWhen("later")}
-                />
-                {t("pages.newsletter.scheduleOption")}
-              </label>
-            </div>
-            {when === "later" ? (
-              <input
-                type="datetime-local"
-                className={inputClass}
-                value={scheduleAt}
-                min={new Date().toISOString().slice(0, 16)}
-                onChange={(e) => setScheduleAt(e.target.value)}
-              />
-            ) : null}
-          </fieldset>
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-                {t("pages.newsletter.recipients")}
-              </p>
-              <p className="text-xs text-mute">
-                {t("pages.newsletter.selectedCount", { n: selectedEmails.length })}
-              </p>
-            </div>
-            <p className="text-xs text-mute">{t("pages.newsletter.pickRecipients")}</p>
-            {pendingWaves && multiDay ? (
-              <p className="border border-wine/40 bg-wine/10 px-3 py-2.5 text-sm leading-relaxed text-pink">
-                {t("pages.newsletter.wavesInProgress")}
-              </p>
-            ) : null}
-            <div className="grid gap-2 sm:grid-cols-2">
-              <select
-                className={inputClass}
-                value={recipientTag}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setRecipientTag(next);
-                  if (next === "all") return;
-                  const want = next.toLowerCase();
-                  const emails = sendable
-                    .filter((s) =>
-                      (s.tags ?? []).some((tag) => tag.toLowerCase() === want),
-                    )
-                    .map((s) => s.email);
-                  setSelectedEmails(emails);
-                }}
-              >
-                <option value="all">{t("pages.newsletter.allTags")}</option>
-                {audienceTags.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <input
-                className={inputClass}
-                placeholder={t("pages.newsletter.searchPeople")}
-                value={recipientQuery}
-                onChange={(e) => setRecipientQuery(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() =>
-                  setSelectedEmails(taggedSendable.map((s) => s.email))
-                }
-                disabled={taggedSendable.length === 0}
-              >
-                {recipientTag === "all"
-                  ? t("pages.newsletter.selectAll")
-                  : t("pages.newsletter.selectTag", {
-                      tag: recipientTag,
-                      n: taggedSendable.length,
-                    })}
-              </button>
-              <button
-                type="button"
-                className={btnGhost}
-                onClick={() => setSelectedEmails([])}
-                disabled={selectedEmails.length === 0}
-              >
-                {t("pages.newsletter.selectNone")}
-              </button>
-            </div>
-            {sendable.length === 0 ? (
-              <p className="border border-line px-3 py-6 text-center text-sm text-mute">
-                {t("pages.newsletter.noSendable")}
-              </p>
-            ) : taggedSendable.length === 0 ? (
-              <p className="border border-line px-3 py-6 text-center text-sm text-mute">
-                {t("pages.newsletter.noTagMatches", { tag: recipientTag })}
-              </p>
-            ) : (
-              <ul className="max-h-56 overflow-y-auto border border-line">
-                {visibleRecipients.map((s) => {
-                  const checked = selectedEmails.includes(s.email);
-                  return (
-                    <li key={s.id} className="border-b border-line last:border-b-0">
-                      <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-ash/50">
-                        <input
-                          type="checkbox"
-                          className="mt-1"
-                          checked={checked}
-                          onChange={() => toggleEmail(s.email)}
-                        />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm font-medium">
-                            {s.name || s.email}
-                          </span>
-                          {s.name ? (
-                            <span className="block truncate text-xs text-mute">
-                              {s.email}
-                            </span>
-                          ) : null}
-                          {(s.tags ?? []).length > 0 ? (
-                            <span className="mt-1 flex flex-wrap gap-1">
-                              {(s.tags ?? []).map((tag) => (
-                                <span
-                                  key={tag}
-                                  className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mute"
-                                >
-                                  {tag}
-                                </span>
-                              ))}
-                            </span>
-                          ) : null}
-                        </span>
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          {multiDay ? (
-            <div className="border border-accent/50 bg-accent-soft px-3 py-3 text-sm leading-relaxed">
-              {t("pages.newsletter.multiDayNotice", {
-                n: selectedCount,
-                days: daysNeeded,
-                cap: DAILY_NEWSLETTER_CAP,
-              })}
-            </div>
-          ) : selectedCount > 0 ? (
-            <p className="text-xs text-mute">{t("pages.newsletter.sendsAtPickTime")}</p>
-          ) : (
-            <p className="text-xs text-mute">
-              {when === "later"
-                ? t("pages.newsletter.sendsLater")
-                : t("pages.newsletter.sendsNow")}
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="submit"
-              className={btnPrimary}
-              disabled={sending || selectedEmails.length === 0}
-            >
-              {sending
-                ? t("common.sending")
-                : when === "later"
-                  ? t("pages.newsletter.scheduleSend")
-                  : t("pages.newsletter.sendNow")}
-            </button>
-            {multiDay ? (
-              <span className="text-xs text-mute">
-                {t("pages.newsletter.sendOverDays", { days: daysNeeded })}
-              </span>
-            ) : null}
-            <button
-              type="button"
-              className={btnSecondary}
-              onClick={closeComposer}
-            >
-              {t("common.cancel")}
-            </button>
-          </div>
+              </div>
             </>
           )}
         </form>
@@ -1173,8 +1282,8 @@ export default function NewsletterPage() {
               </FormNotice>
             )}
             <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
+              <button
+                type="button"
                 className={`${btnPrimary} bg-wine hover:bg-wine/90`}
                 disabled={deleting}
                 onClick={() => void confirmDelete()}
@@ -1182,15 +1291,15 @@ export default function NewsletterPage() {
                 {deleting
                   ? t("common.deleting")
                   : t("pages.newsletter.deleteCampaign")}
-                  </button>
-                  <button
-                    type="button"
-                    className={btnSecondary}
+              </button>
+              <button
+                type="button"
+                className={btnSecondary}
                 disabled={deleting}
                 onClick={() => setPendingDelete(null)}
               >
                 {t("common.cancel")}
-                </button>
+              </button>
             </div>
           </div>
         ) : null}

@@ -238,8 +238,8 @@ export async function updateLeadPriorityFast(id: string, priority: LeadPriority)
   const details = parseLeadDetails(prev);
   const input = { ...contactWriteFromLead(prev, details), priority };
   const updated = new Date().toISOString().slice(0, 10);
-  const preamble = prev.notes.includes("Imported from Odoo contacts.")
-    ? "Imported from Odoo contacts."
+  const preamble = /Imported from (Odoo )?contacts\./.test(prev.notes)
+    ? "Imported from contacts."
     : "";
   const notes = serializeContactNotes(input, updated, preamble);
   const sb = getSupabase();
@@ -313,6 +313,27 @@ async function existingLead(id: string): Promise<Lead | null> {
   return data ? mapLead(data as Record<string, unknown>) : null;
 }
 
+export async function getLeadRow(id: string): Promise<LeadTableRow | null> {
+  const rows = await loadCatalog();
+  const cached = rows.find((row) => row.lead.id === id);
+  if (cached) {
+    return {
+      lead: cached.lead,
+      details: cached.details,
+      score: cached.score,
+    };
+  }
+  const lead = await existingLead(id);
+  if (!lead) return null;
+  const details = parseLeadDetails(lead);
+  const resolved = withResolvedCompany(lead, details);
+  return {
+    lead: resolved,
+    details,
+    score: completenessScore(resolved, details),
+  };
+}
+
 export async function writeLead(
   input: ContactWrite,
   id?: string,
@@ -330,8 +351,8 @@ export async function writeLead(
     if (!prev) throw new Error("Contact not found");
   }
 
-  const preamble = prev?.notes.includes("Imported from Odoo contacts.")
-    ? "Imported from Odoo contacts."
+  const preamble = /Imported from (Odoo )?contacts\./.test(prev?.notes ?? "")
+    ? "Imported from contacts."
     : "";
   const notes = serializeContactNotes(input, day, preamble);
   const leadId =

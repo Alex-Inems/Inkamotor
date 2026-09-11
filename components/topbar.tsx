@@ -263,7 +263,7 @@ export function Topbar({
                     {t("topbar.openInbox")}
                   </Link>
                   <Link
-                    href="/newsletter"
+                    href="/email-marketing"
                     onClick={() => setNotifOpen(false)}
                     className="flex min-h-10 items-center justify-center border border-line bg-panel text-xs font-semibold uppercase tracking-[0.08em] text-ink transition-colors hover:bg-ash"
                   >

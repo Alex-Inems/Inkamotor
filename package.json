@@ -11,7 +11,10 @@
     "translate-inbox": "npx --yes tsx scripts/translate-inbox.ts",
     "import-sales": "npx --yes tsx scripts/import-sales.ts",
     "import-products": "npx --yes tsx scripts/import-products.ts",
-    "import-barcelonnette": "npx --yes tsx scripts/import-barcelonnette.ts"
+    "import-barcelonnette": "npx --yes tsx scripts/import-barcelonnette.ts",
+    "import-odoo-mailings": "npx --yes tsx scripts/import-odoo-mailings.ts",
+    "rewrite-odoo-mailing-images": "npx --yes tsx scripts/rewrite-odoo-mailing-images.ts",
+    "sync-mailings-to-templates": "npx --yes tsx scripts/sync-mailings-to-templates.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",

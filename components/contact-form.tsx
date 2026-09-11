@@ -2,10 +2,58 @@
 
 import type { ReactNode } from "react";
 import { PriorityStars } from "@/components/priority-stars";
-import { btnPrimary, btnSecondary, Field, inputClass } from "@/components/modal";
+import {
+  btnPrimary,
+  btnSecondary,
+  Field,
+  inputClass,
+  inputUnderlineClass,
+} from "@/components/modal";
 import type { ContactWrite } from "@/lib/crm/contact-details";
 import type { LeadStatus } from "@/lib/demo-data";
 import { useT } from "@/lib/i18n";
+
+function SheetSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="border-b border-line/80 last:border-b-0">
+      <h2 className="px-5 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-gold/90">
+        {title}
+      </h2>
+      <div className="px-5 pb-4 pt-1">{children}</div>
+    </section>
+  );
+}
+
+function SheetRow({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`min-w-0 py-2 ${className}`}>
+      <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-mute">
+        {label}
+      </label>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function SheetGrid({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">{children}</div>
+  );
+}
 
 export function ContactForm({
   value,
@@ -14,6 +62,7 @@ export function ContactForm({
   formId = "contact-form",
   stages,
   stageLabel,
+  layout = "default",
 }: {
   value: ContactWrite;
   onChange: (next: ContactWrite) => void;
@@ -21,6 +70,7 @@ export function ContactForm({
   formId?: string;
   stages: { id: string; label: string }[];
   stageLabel: (id: string) => string;
+  layout?: "default" | "sheet";
 }) {
   const t = useT();
 
@@ -38,6 +88,199 @@ export function ContactForm({
   const stageOptions = stages.some((s) => s.id === value.status)
     ? stages
     : [{ id: value.status, label: stageLabel(value.status) }, ...stages];
+
+  if (layout === "sheet") {
+    const field = `${inputUnderlineClass} w-full`;
+    return (
+      <form
+        id={formId}
+        className="overflow-hidden"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <SheetSection title={t("pages.contacts.sectionContact")}>
+          <SheetGrid>
+            <SheetRow label={t("common.email")}>
+              <input
+                className={field}
+                type="text"
+                value={value.email}
+                onChange={(e) => set("email", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("common.phone")}>
+              <input
+                className={field}
+                value={value.phone}
+                onChange={(e) => set("phone", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("common.company")}>
+              <input
+                className={field}
+                value={value.company}
+                onChange={(e) => set("company", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("pages.leads.kind")}>
+              <select
+                className={field}
+                value={value.isCompany ? "company" : "person"}
+                onChange={(e) => {
+                  const isCompany = e.target.value === "company";
+                  onChange({
+                    ...value,
+                    isCompany,
+                    company:
+                      isCompany && !value.company.trim()
+                        ? value.name.trim()
+                        : value.company,
+                  });
+                }}
+              >
+                <option value="person">{t("pages.leads.person")}</option>
+                <option value="company">{t("pages.leads.company")}</option>
+              </select>
+            </SheetRow>
+            <SheetRow label={t("pages.leads.tags")} className="sm:col-span-2">
+              <input
+                className={field}
+                value={value.tags}
+                onChange={(e) => set("tags", e.target.value)}
+              />
+            </SheetRow>
+          </SheetGrid>
+        </SheetSection>
+
+        <SheetSection title={t("pages.contacts.sectionAddress")}>
+          <SheetGrid>
+            <SheetRow label={t("pages.leads.city")}>
+              <input
+                className={field}
+                value={value.city}
+                onChange={(e) => set("city", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("pages.leads.country")}>
+              <input
+                className={field}
+                value={value.country}
+                onChange={(e) => set("country", e.target.value)}
+              />
+            </SheetRow>
+          </SheetGrid>
+        </SheetSection>
+
+        <SheetSection title={t("pages.contacts.sectionSales")}>
+          <SheetGrid>
+            <SheetRow label={t("pages.leads.stage")}>
+              <select
+                className={field}
+                value={value.status}
+                onChange={(e) => set("status", e.target.value as LeadStatus)}
+              >
+                {stageOptions.map((stage) => (
+                  <option key={stage.id} value={stage.id}>
+                    {stageLabel(stage.id)}
+                  </option>
+                ))}
+              </select>
+            </SheetRow>
+            <SheetRow label={t("pages.leads.active")}>
+              <select
+                className={field}
+                value={value.active ? "yes" : "no"}
+                onChange={(e) => set("active", e.target.value === "yes")}
+              >
+                <option value="yes">{t("common.yes")}</option>
+                <option value="no">{t("common.no")}</option>
+              </select>
+            </SheetRow>
+            <SheetRow label={t("pages.leads.priority")}>
+              <PriorityStars
+                size="md"
+                value={value.priority}
+                onChange={(priority) => set("priority", priority)}
+              />
+            </SheetRow>
+          </SheetGrid>
+        </SheetSection>
+
+        <SheetSection title={t("pages.contacts.sectionMore")}>
+          <SheetGrid>
+            <SheetRow label={t("pages.leads.nextActivity")}>
+              <input
+                className={field}
+                value={value.nextActivity}
+                onChange={(e) => set("nextActivity", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("pages.leads.activityStatus")}>
+              <input
+                className={field}
+                value={value.activityStatus}
+                onChange={(e) => set("activityStatus", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("pages.leads.activities")}>
+              <input
+                className={field}
+                value={value.activities}
+                onChange={(e) => set("activities", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("pages.leads.upcomingActivity")}>
+              <input
+                className={field}
+                value={value.upcomingActivity}
+                onChange={(e) => set("upcomingActivity", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("pages.leads.stats")}>
+              <input
+                className={field}
+                value={value.stats}
+                onChange={(e) => set("stats", e.target.value)}
+              />
+            </SheetRow>
+            <SheetRow label={t("pages.leads.properties")}>
+              <input
+                className={field}
+                value={value.properties}
+                onChange={(e) => set("properties", e.target.value)}
+              />
+            </SheetRow>
+            {value.extras.map((row, index) => (
+              <SheetRow
+                key={`${row.label}-${index}`}
+                label={row.label}
+                className="sm:col-span-2"
+              >
+                <input
+                  className={field}
+                  value={row.value}
+                  onChange={(e) =>
+                    setExtra(index, { ...row, value: e.target.value })
+                  }
+                />
+              </SheetRow>
+            ))}
+          </SheetGrid>
+        </SheetSection>
+
+        <SheetSection title={t("common.notes")}>
+          <textarea
+            className="min-h-28 w-full resize-y rounded-md border border-line bg-ash/20 px-3 py-2.5 text-sm text-ink outline-none placeholder:text-mute/70 focus:border-gold"
+            value={value.notes}
+            onChange={(e) => set("notes", e.target.value)}
+            placeholder={t("pages.contacts.notesPlaceholder")}
+          />
+        </SheetSection>
+      </form>
+    );
+  }
 
   return (
     <form

@@ -81,9 +81,11 @@ function SaleChatBubble({ message }: { message: RoomMessage }) {
 export function SaleChatPanel({
   email,
   customerName,
+  title,
 }: {
   email: string;
   customerName: string;
+  title?: string;
 }) {
   const { t, locale } = useLocale();
   const { pushToast } = useCrm();
@@ -202,13 +204,14 @@ export function SaleChatPanel({
   const displayName = displayContactName(customerName, email);
 
   return (
-    <aside className="flex min-h-[420px] min-w-0 flex-col border-t border-line bg-ash/20 lg:min-h-0 lg:border-t-0 lg:border-l">
-      <header className="shrink-0 border-b border-line bg-panel px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-mute">
-          {t("pages.sales.clientMessages")}
+    <aside className="flex h-full min-h-[420px] min-w-0 flex-col border-l-0 bg-ash/60 lg:min-h-0 lg:border-l lg:border-line">
+      <header className="shrink-0 border-b border-line/80 px-4 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold/90">
+          {title || t("pages.sales.clientMessages")}
         </p>
-        <p className="mt-1 truncate text-sm font-semibold text-ink">{displayName}</p>
-        <p className="truncate text-xs text-mute">{email}</p>
+        {email ? (
+          <p className="mt-1 truncate text-xs text-mute">{email}</p>
+        ) : null}
       </header>
 
       <div ref={threadRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-4 sm:px-4">
@@ -217,7 +220,30 @@ export function SaleChatPanel({
         ) : loading ? (
           <p className="text-sm text-mute">{t("common.loading")}</p>
         ) : messages.length === 0 ? (
-          <EmptyHint>{t("pages.sales.noClientMessages")}</EmptyHint>
+          <div className="flex h-full min-h-[12rem] flex-col items-center justify-center px-4 text-center">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-line bg-panel text-mute">
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                aria-hidden
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M4 6.5h16v11H4zM4 7l8 6 8-6"
+                />
+              </svg>
+            </div>
+            <p className="text-sm font-medium text-ink">
+              {t("pages.sales.noClientMessages")}
+            </p>
+            <p className="mt-1 max-w-[16rem] text-xs text-mute">
+              {t("pages.contacts.chatEmptyHint")}
+            </p>
+          </div>
         ) : (
           messages.map((message) => (
             <SaleChatBubble key={message.key} message={message} />
@@ -225,7 +251,7 @@ export function SaleChatPanel({
         )}
       </div>
 
-      <footer className="shrink-0 border-t border-line bg-panel p-3 sm:p-4">
+      <footer className="shrink-0 border-t border-line/80 bg-panel/80 p-3 sm:p-4">
         {canLoad && brevoReady ? (
           <MessageCompose
             placeholder={t("pages.inbox.messagePlaceholder", { name: displayName })}

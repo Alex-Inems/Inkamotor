@@ -20,6 +20,7 @@ const pageKeys: Record<string, string> = {
   "/follow-ups": "nav.followUps",
   "/analytics": "nav.searchConsole",
   "/leads": "pages.leads.title",
+  "/contacts": "pages.contacts.title",
   "/sales": "nav.sales",
   "/sales/new": "nav.sales",
   "/sales/new/preview": "nav.sales",
@@ -30,6 +31,7 @@ const pageKeys: Record<string, string> = {
   "/search-console": "nav.searchConsole",
   "/invoices": "nav.sales",
   "/newsletter": "nav.newsletter",
+  "/email-marketing": "nav.newsletter",
   "/setup": "nav.setup",
 };
 
@@ -66,9 +68,17 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const t = useT();
   const isSaleDetail = /^\/sales\/(?!new)[^/]+$/.test(pathname);
-  const title = t(pageKeys[pathname] ?? (isSaleDetail ? "nav.sales" : "brand.crm"));
+  const isContactDetail = /^\/contacts\/[^/]+$/.test(pathname);
+  const title = t(
+    pageKeys[pathname] ??
+      (isSaleDetail
+        ? "nav.sales"
+        : isContactDetail
+          ? "pages.contacts.title"
+          : "brand.crm"),
+  );
   const fullBleed = pathname === "/inbox";
-  const wideMain = isSaleDetail;
+  const wideMain = isSaleDetail || isContactDetail;
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -110,10 +120,9 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-        className={`bg-canvas pt-[6px] text-ink ${
-          fullBleed
-            ? "h-[var(--crm-vvh,100dvh)] overflow-hidden"
-            : "min-h-svh"
+      className={`bg-canvas pt-[6px] text-ink ${fullBleed
+          ? "h-[var(--crm-vvh,100dvh)] overflow-hidden"
+          : "min-h-svh"
         }`}
     >
       <ColorStripe className="fixed inset-x-0 top-0 z-50" />
@@ -131,11 +140,10 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
         onClose={() => setNavOpen(false)}
       />
       <div
-        className={`min-w-0 lg:pl-[var(--crm-sidebar)] ${
-          fullBleed
+        className={`min-w-0 lg:pl-[var(--crm-sidebar)] ${fullBleed
             ? "flex h-[calc(var(--crm-vvh,100dvh)-6px)] flex-col"
             : ""
-        }`}
+          }`}
       >
         <Topbar
           title={title}

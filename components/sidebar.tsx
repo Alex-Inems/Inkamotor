@@ -12,9 +12,10 @@ const nav = [
   { href: "/", key: "nav.overview", icon: OverviewIcon, tour: "overview" },
   { href: "/inbox", key: "nav.inbox", icon: InboxIcon, tour: "inbox" },
   { href: "/leads", key: "nav.leads", icon: LeadsIcon, tour: "leads" },
+  { href: "/contacts", key: "nav.contacts", icon: ContactsIcon },
   { href: "/sales", key: "nav.sales", icon: SalesIcon, tour: "sales" },
   { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
-  { href: "/newsletter", key: "nav.newsletter", icon: NewsletterIcon, tour: "newsletter" },
+  { href: "/email-marketing", key: "nav.newsletter", icon: NewsletterIcon, tour: "newsletter" },
 ];
 
 export function Sidebar({
@@ -34,9 +35,8 @@ export function Sidebar({
   return (
     <aside
       id="app-nav"
-      className={`fixed inset-y-0 left-0 z-[45] flex w-[min(var(--crm-sidebar),calc(100vw-2.75rem))] flex-col border-r border-line bg-ash pt-[6px] shadow-xl transition-transform duration-200 ease-out pl-[env(safe-area-inset-left)] lg:bottom-0 lg:top-[6px] lg:z-40 lg:w-[var(--crm-sidebar)] lg:translate-x-0 lg:pt-0 lg:shadow-none ${
-        open ? "translate-x-0" : "pointer-events-none -translate-x-full lg:pointer-events-auto lg:translate-x-0"
-      }`}
+      className={`fixed inset-y-0 left-0 z-[45] flex w-[min(var(--crm-sidebar),calc(100vw-2.75rem))] flex-col border-r border-line bg-ash pt-[6px] shadow-xl transition-transform duration-200 ease-out pl-[env(safe-area-inset-left)] lg:bottom-0 lg:top-[6px] lg:z-40 lg:w-[var(--crm-sidebar)] lg:translate-x-0 lg:pt-0 lg:shadow-none ${open ? "translate-x-0" : "pointer-events-none -translate-x-full lg:pointer-events-auto lg:translate-x-0"
+        }`}
     >
       <div className="flex items-start justify-between gap-2 px-3 py-3">
         <div className="min-w-0">
@@ -69,7 +69,12 @@ export function Sidebar({
           const active =
             item.href === "/"
               ? pathname === "/"
-              : pathname === item.href || pathname.startsWith(`${item.href}/`);
+              : item.href === "/email-marketing"
+                ? pathname === "/email-marketing" ||
+                  pathname.startsWith("/email-marketing/") ||
+                  pathname === "/newsletter" ||
+                  pathname.startsWith("/newsletter/")
+                : pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;
           return (
             <Link
@@ -77,11 +82,10 @@ export function Sidebar({
               href={item.href}
               data-tour={item.tour}
               suppressHydrationWarning
-              className={`flex min-h-10 shrink-0 items-center gap-2 px-2.5 py-2 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors sm:text-[13px] ${
-                active
+              className={`flex min-h-10 shrink-0 items-center gap-2 px-2.5 py-2 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors sm:text-[13px] ${active
                   ? "bg-accent text-white"
                   : "text-mute hover:bg-panel hover:text-ink"
-              }`}
+                }`}
             >
               <Icon active={active} />
               <span className="min-w-0 flex-1 truncate">{t(item.key)}</span>
@@ -234,6 +238,35 @@ function LeadsIcon({ active }: { active: boolean }) {
         strokeWidth="1.4"
         strokeLinecap="round"
         opacity={active ? 1 : 0.9}
+      />
+    </svg>
+  );
+}
+
+function ContactsIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle cx="5.5" cy="5" r="2.2" stroke="currentColor" strokeWidth="1.4" />
+      <circle
+        cx="10.5"
+        cy="5"
+        r="2.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        opacity={active === false ? 0.85 : 1}
+      />
+      <path
+        d="M1.8 13c.9-2 2.3-3 3.7-3s2.8 1 3.7 3"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7 13c.7-1.6 1.8-2.4 3.5-2.4S13.3 11.4 14 13"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity={active === false ? 0.85 : 1}
       />
     </svg>
   );
