@@ -1166,8 +1166,16 @@ export const fr: Messages = {
       tabSettings: "Paramètres",
       modeDesign: "Aperçu",
       modeEdit: "Modifier",
-      editHtmlHint:
-        "Modifiez le HTML complet ici. Repassez en Aperçu pour voir images et mise en page.",
+      editVisualHint:
+        "Cliquez sur le texte de l’email pour le modifier. À l’enregistrement, mettez à jour ce modèle ou créez-en un nouveau.",
+      saveEditsTitle: "Enregistrer les modifications",
+      saveEditsHint:
+        "Enregistrez le mailing, mettez à jour le modèle actuel, ou créez un nouveau modèle à partir de cette version.",
+      saveMailingOnly: "Enregistrer le mailing seulement",
+      saveTemplateSame: "Mettre à jour le modèle « {name} »",
+      saveTemplateNew: "Enregistrer comme nouveau modèle",
+      newTemplateName: "Nom du nouveau modèle",
+      templateUpdated: "Modèle mis à jour",
       emailPreview: "Aperçu de l’email",
       emptyBody: "Corps d’email vide",
       sideBlocks: "Blocs",
@@ -1193,7 +1201,7 @@ export const fr: Messages = {
       blockVideo: "Vidéo",
       blockBadge: "Badge",
       blockCtaBadge: "Badge CTA",
-      styleHint: "Modifiez polices, couleurs et espacements dans l’éditeur.",
+      styleHint: "Passez en Modifier pour changer le texte et les images de l’email.",
       designHint: "Choisissez un modèle de départ pour ce mailing.",
       imageUrlPrompt: "URL de l’image",
       imagesInMailing: "Images de ce mailing ({count})",

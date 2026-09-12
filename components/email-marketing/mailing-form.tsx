@@ -18,7 +18,6 @@ import { OdooFormToolbar } from "@/components/sales/odoo-form-toolbar";
 import { EmailMarketingSubnav } from "@/components/email-marketing/email-marketing-subnav";
 import {
   FaClock,
-  FaCode,
   FaCog,
   FaDesktop,
   FaFlask,
@@ -30,7 +29,6 @@ import {
   FaTrash,
   SNIPPET_THUMB,
 } from "@/components/email-marketing/mailing-icons";
-import { HtmlEditor } from "@/components/html-editor";
 import { EmptyHint } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import { formatNumber } from "@/lib/format";
@@ -144,6 +142,11 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLIFrameElement>(null);
+  const [previewHeight, setPreviewHeight] = useState(640);
+  const [bodyDirty, setBodyDirty] = useState(false);
+  const [saveChoicesOpen, setSaveChoicesOpen] = useState(false);
+  const [templateNameDraft, setTemplateNameDraft] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [form, setForm] = useState({
     name: "",
     subject: "",
@@ -257,10 +260,21 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   const imageSrcs = useMemo(() => collectImageSrcs(form.html), [form.html]);
 
   const linkedTemplateId = isNew ? null : templateIdForMailing(mailingId);
-  const isInTemplates = Boolean(
-    linkedTemplateId &&
-      templates.some((tpl) => tpl.id === linkedTemplateId && !tpl.builtin),
-  );
+  const linkedTemplate = linkedTemplateId
+    ? templates.find((tpl) => tpl.id === linkedTemplateId && !tpl.builtin)
+    : undefined;
+  const selectedTemplate = form.templateId
+    ? templates.find((tpl) => tpl.id === form.templateId)
+    : undefined;
+  const updateTemplateId =
+    selectedTemplate && !selectedTemplate.builtin
+      ? selectedTemplate.id
+      : linkedTemplate?.id ?? null;
+  const updateTemplateName =
+    (selectedTemplate && !selectedTemplate.builtin
+      ? selectedTemplate.name
+      : linkedTemplate?.name) || "";
+  const isInTemplates = Boolean(linkedTemplate);
 
   /** Can't send/schedule again once already sent or mid-send. */
   const sendLocked = form.status === "sent" || form.status === "sending";
@@ -321,25 +335,194 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     }
   }
 
-  function wirePreviewClicks() {
+  function flushPreviewHtml() {
     const doc = previewRef.current?.contentDocument;
-    if (!doc || contentLocked) return;
+    if (!doc?.documentElement) return form.html;
+    const hasHtmlRoot = doc.documentElement.tagName.toLowerCase() === "html";
+    const html = hasHtmlRoot
+      ? `${doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>\n` : "<!DOCTYPE html>\n"}${doc.documentElement.outerHTML}`
+      : doc.body?.innerHTML || form.html;
+    setForm((prev) => ({ ...prev, html }));
+    return html;
+  }
+
+  function resizePreview() {
+    const frame = previewRef.current;
+    const doc = frame?.contentDocument;
+    if (!frame || !doc?.body) return;
+    const root = doc.documentElement;
+    if (root && bodyMode !== "edit") {
+      root.style.overflow = "hidden";
+      root.style.height = "auto";
+    }
+    if (bodyMode !== "edit") {
+      doc.body.style.overflow = "hidden";
+    }
+    doc.body.style.height = "auto";
+    const height = Math.max(
+      doc.body.scrollHeight,
+      doc.body.offsetHeight,
+      root?.scrollHeight ?? 0,
+      root?.offsetHeight ?? 0,
+      320,
+    );
+    setPreviewHeight(height);
+    frame.style.height = `${height}px`;
+  }
+
+  function wirePreviewClicks() {
+    const frame = previewRef.current;
+    const doc = frame?.contentDocument;
+    if (!doc?.body) return;
+    resizePreview();
+
+    const editable = bodyMode === "edit" && !contentLocked;
+    doc.body.contentEditable = editable ? "true" : "false";
+    doc.body.style.caretColor = "#017e84";
+    if (editable) {
+      doc.body.focus();
+    }
+
+    const onInput = () => {
+      setBodyDirty(true);
+      resizePreview();
+    };
+    doc.body.oninput = onInput;
+
     doc.querySelectorAll("img").forEach((img) => {
+      if (!img.complete) {
+        img.addEventListener("load", () => resizePreview(), { once: true });
+      }
+      if (contentLocked) return;
       img.style.cursor = "pointer";
       img.title = t("pages.emailMarketing.clickToReplaceImage");
       img.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
+        if (editable) flushPreviewHtml();
         openReplaceImage(img.currentSrc || img.src);
       };
     });
   }
 
-  async function saveMailing(patch?: {
-    status?: MailingStatus;
-    scheduledAt?: string | null;
-  }) {
-    if (!form.subject.trim() && !form.html.trim()) {
+  useEffect(() => {
+    if (tab !== "body") return;
+    const id = window.setTimeout(() => wirePreviewClicks(), 50);
+    return () => window.clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bodyMode, tab, form.html, editorKey, contentLocked]);
+
+  function enterEditMode() {
+    if (contentLocked) return;
+    setBodyMode("edit");
+  }
+
+  function enterPreviewMode() {
+    if (bodyMode === "edit") {
+      flushPreviewHtml();
+    }
+    setEditorKey(`preview-${Date.now()}`);
+    setBodyMode("design");
+  }
+
+  function openSaveChoices() {
+    const html = bodyMode === "edit" ? flushPreviewHtml() : form.html;
+    setTemplateNameDraft(
+      form.name.trim() || form.subject.trim() || t("pages.emailMarketing.title"),
+    );
+    setSaveChoicesOpen(true);
+    return html;
+  }
+
+  async function saveMailingOnly() {
+    const html = bodyMode === "edit" ? flushPreviewHtml() : form.html;
+    const saved = await saveMailing(undefined, html);
+    if (!saved) return;
+    setBodyDirty(false);
+    setSaveChoicesOpen(false);
+    if (bodyMode === "edit") {
+      setEditorKey(`preview-${Date.now()}`);
+      setBodyMode("design");
+    }
+  }
+
+  async function saveTemplateChoice(mode: "update" | "new") {
+    const html = bodyMode === "edit" ? flushPreviewHtml() : form.html;
+    const saved = await saveMailing(undefined, html);
+    if (!saved) return;
+    setSavingTemplate(true);
+    try {
+      const name =
+        mode === "new"
+          ? templateNameDraft.trim() || saved.name || saved.subject
+          : updateTemplateName || saved.name || saved.subject;
+      const payload =
+        mode === "update"
+          ? updateTemplateId
+            ? {
+                id: updateTemplateId,
+                name,
+                subject: saved.subject,
+                preview: saved.preview,
+                html: saved.html,
+              }
+            : {
+                mailingId: saved.id,
+                name,
+                subject: saved.subject,
+                preview: saved.preview,
+                html: saved.html,
+              }
+          : {
+              name,
+              subject: saved.subject,
+              preview: saved.preview,
+              html: saved.html,
+            };
+      const res = await fetch("/api/newsletter/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = (await res.json()) as { error?: string; id?: string };
+      if (!res.ok) {
+        pushToast({
+          message: json.error || t("pages.emailMarketing.templateFailed"),
+          tone: "error",
+        });
+        return;
+      }
+      if (json.id) {
+        setForm((prev) => ({ ...prev, templateId: json.id! }));
+      }
+      pushToast({
+        message:
+          mode === "update"
+            ? t("pages.emailMarketing.templateUpdated")
+            : t("pages.emailMarketing.templateSaved"),
+        tone: "success",
+      });
+      setBodyDirty(false);
+      setSaveChoicesOpen(false);
+      await refreshTemplates();
+      if (bodyMode === "edit") {
+        setEditorKey(`preview-${Date.now()}`);
+        setBodyMode("design");
+      }
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function saveMailing(
+    patch?: {
+      status?: MailingStatus;
+      scheduledAt?: string | null;
+    },
+    htmlOverride?: string,
+  ) {
+    const html = (htmlOverride ?? form.html).trim();
+    if (!form.subject.trim() && !html) {
       pushToast({
         message: t("pages.emailMarketing.needBody"),
         tone: "error",
@@ -357,7 +540,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           name: form.name.trim() || form.subject.trim(),
           subject: form.subject.trim(),
           preview: form.preview.trim(),
-          html: form.html,
+          html,
           status: patch?.status ?? form.status,
           recipientTag: form.recipientTag || null,
           templateId: form.templateId || null,
@@ -518,7 +701,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   }
 
   async function addToTemplates() {
-    const saved = await saveMailing();
+    const html = bodyMode === "edit" ? flushPreviewHtml() : undefined;
+    const saved = await saveMailing(undefined, html);
     if (!saved) return;
     const res = await fetch("/api/newsletter/templates", {
       method: "POST",
@@ -594,12 +778,13 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     if (contentLocked) return;
     const snippet = BLOCK_SNIPPETS[key];
     if (!snippet) return;
+    if (bodyMode === "edit") flushPreviewHtml();
     setForm((prev) => ({
       ...prev,
       html: `${prev.html || ""}\n${snippet}`,
     }));
+    setBodyDirty(true);
     setEditorKey(`snip-${key}-${Date.now()}`);
-    setBodyMode("design");
   }
 
   function insertImage() {
@@ -673,11 +858,14 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         <button
           type="button"
           className={`${btnToolbar} gap-1.5`}
-          disabled={saving}
-          onClick={() => void saveMailing()}
+          disabled={saving || savingTemplate}
+          onClick={() => {
+            if (bodyMode === "edit" || bodyDirty) openSaveChoices();
+            else void saveMailing();
+          }}
         >
           <FaSave className="h-3.5 w-3.5" />
-          {saving ? t("common.saving") : t("common.save")}
+          {saving || savingTemplate ? t("common.saving") : t("common.save")}
         </button>
         {!isNew ? (
           <button
@@ -884,7 +1072,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             </Field>
           </div>
         ) : (
-          <div className="flex min-h-[70vh] flex-col">
+          <div className="flex flex-col">
             <aside className="shrink-0 border-b border-line bg-[#2c2c2c] text-[#dedede]">
               <div className="flex flex-wrap items-center gap-1 border-b border-white/10 px-2">
                 {(
@@ -914,10 +1102,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     type="button"
                     data-body-mode="design"
                     className={`${btnGhost} gap-1.5 ${bodyMode === "design" ? "bg-white/10 text-white" : "text-[#9a9a9a]"}`}
-                    onClick={() => {
-                      setEditorKey(`design-${Date.now()}`);
-                      setBodyMode("design");
-                    }}
+                    onClick={() => enterPreviewMode()}
                   >
                     <FaDesktop className="h-3.5 w-3.5" />
                     {t("pages.emailMarketing.modeDesign")}
@@ -927,12 +1112,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     data-body-mode="edit"
                     className={`${btnGhost} gap-1.5 ${bodyMode === "edit" ? "bg-white/10 text-white" : "text-[#9a9a9a]"}`}
                     disabled={contentLocked}
-                    onClick={() => {
-                      setEditorKey(`edit-${Date.now()}`);
-                      setBodyMode("edit");
-                    }}
+                    onClick={() => enterEditMode()}
                   >
-                    <FaCode className="h-3.5 w-3.5" />
+                    <FaPencil className="h-3.5 w-3.5" />
                     {t("pages.emailMarketing.modeEdit")}
                   </button>
                 </div>
@@ -1083,7 +1265,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                       type="button"
                       className="flex items-center gap-2 rounded border border-white/15 bg-[#3a3a3a] px-3 py-2 text-sm text-white hover:border-[#017e84]"
                       disabled={contentLocked}
-                      onClick={() => setBodyMode("edit")}
+                      onClick={() => enterEditMode()}
                     >
                       <FaPencil className="h-3.5 w-3.5" />
                       {t("pages.emailMarketing.modeEdit")}
@@ -1128,47 +1310,17 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
               </div>
             </aside>
 
-            <div className="flex min-h-0 flex-1 flex-col">
-              {bodyMode === "design" ? (
-                <div className="flex-1 bg-[#f4f3ef] p-3 sm:p-6">
-                  <div className="mx-auto max-w-4xl overflow-hidden border border-line bg-white shadow-sm">
-                    <iframe
-                      key={editorKey}
-                      ref={previewRef}
-                      title={t("pages.emailMarketing.emailPreview")}
-                      className="min-h-[75vh] w-full bg-white"
-                      sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-                      srcDoc={
-                        form.html?.trim()
-                          ? form.html
-                          : `<p style="padding:24px;font-family:sans-serif;color:#666">${t("pages.emailMarketing.emptyBody")}</p>`
-                      }
-                      onLoad={() => wirePreviewClicks()}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="flex-1 space-y-2 p-3 sm:p-4">
+            <div className="flex flex-col">
+              {bodyMode === "edit" ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-ash/30 px-3 py-2 sm:px-4">
                   <p className="text-xs text-mute">
-                    {t("pages.emailMarketing.editHtmlHint")}
+                    {t("pages.emailMarketing.editVisualHint")}
                   </p>
-                  <HtmlEditor
-                    html={form.html}
-                    resetKey={editorKey}
-                    defaultMode="html"
-                    minHeightClass="min-h-[70vh]"
-                    onChange={(html) =>
-                      setForm((prev) => ({ ...prev, html }))
-                    }
-                  />
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       className={btnSecondary}
-                      onClick={() => {
-                        setEditorKey(`preview-${Date.now()}`);
-                        setBodyMode("design");
-                      }}
+                      onClick={() => enterPreviewMode()}
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <FaDesktop className="h-3.5 w-3.5" />
@@ -1178,14 +1330,39 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     <button
                       type="button"
                       className={btnPrimary}
-                      disabled={saving || contentLocked}
-                      onClick={() => void saveMailing()}
+                      disabled={saving || savingTemplate || contentLocked}
+                      onClick={() => openSaveChoices()}
                     >
-                      {saving ? t("common.saving") : t("common.save")}
+                      {saving || savingTemplate
+                        ? t("common.saving")
+                        : t("common.save")}
                     </button>
                   </div>
                 </div>
-              )}
+              ) : null}
+              <div
+                className={`bg-[#f4f3ef] p-3 sm:p-6 ${
+                  bodyMode === "edit" ? "ring-2 ring-inset ring-[#017e84]/40" : ""
+                }`}
+              >
+                <div className="mx-auto max-w-4xl border border-line bg-white shadow-sm">
+                  <iframe
+                    key={editorKey}
+                    ref={previewRef}
+                    title={t("pages.emailMarketing.emailPreview")}
+                    className="block w-full border-0 bg-white"
+                    style={{ height: previewHeight, overflow: "hidden" }}
+                    scrolling="no"
+                    sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                    srcDoc={
+                      form.html?.trim()
+                        ? form.html
+                        : `<p style="padding:24px;font-family:sans-serif;color:#666">${t("pages.emailMarketing.emptyBody")}</p>`
+                    }
+                    onLoad={() => wirePreviewClicks()}
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1224,6 +1401,68 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             placeholder="you@example.com"
           />
         </Field>
+      </Modal>
+
+      <Modal
+        open={saveChoicesOpen}
+        title={t("pages.emailMarketing.saveEditsTitle")}
+        onClose={() => setSaveChoicesOpen(false)}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className={btnSecondary}
+              onClick={() => setSaveChoicesOpen(false)}
+            >
+              {t("common.cancel")}
+            </button>
+          </div>
+        }
+      >
+        <p className="mb-4 text-sm text-mute">
+          {t("pages.emailMarketing.saveEditsHint")}
+        </p>
+        <div className="space-y-2">
+          <button
+            type="button"
+            className={`${btnSecondary} w-full justify-start text-left`}
+            disabled={saving || savingTemplate}
+            onClick={() => void saveMailingOnly()}
+          >
+            {t("pages.emailMarketing.saveMailingOnly")}
+          </button>
+          {updateTemplateId ? (
+            <button
+              type="button"
+              className={`${btnSecondary} w-full justify-start text-left`}
+              disabled={saving || savingTemplate}
+              onClick={() => void saveTemplateChoice("update")}
+            >
+              {t("pages.emailMarketing.saveTemplateSame").replace(
+                "{name}",
+                updateTemplateName || updateTemplateId,
+              )}
+            </button>
+          ) : null}
+          <div className="rounded border border-line bg-ash/20 p-3">
+            <Field label={t("pages.emailMarketing.newTemplateName")}>
+              <input
+                className={inputClass}
+                value={templateNameDraft}
+                onChange={(e) => setTemplateNameDraft(e.target.value)}
+                placeholder={form.subject || form.name}
+              />
+            </Field>
+            <button
+              type="button"
+              className={`${btnPrimary} mt-3 w-full`}
+              disabled={saving || savingTemplate || !templateNameDraft.trim()}
+              onClick={() => void saveTemplateChoice("new")}
+            >
+              {t("pages.emailMarketing.saveTemplateNew")}
+            </button>
+          </div>
+        </div>
       </Modal>
 
       <Modal

@@ -1165,8 +1165,16 @@ export const es: Messages = {
       tabSettings: "Ajustes",
       modeDesign: "Vista previa",
       modeEdit: "Editar",
-      editHtmlHint:
-        "Edita el HTML completo aquí. Vuelve a Vista previa para ver imágenes y diseño.",
+      editVisualHint:
+        "Haz clic en el texto del email para editarlo. Al guardar, actualiza esta plantilla o crea una nueva.",
+      saveEditsTitle: "Guardar cambios",
+      saveEditsHint:
+        "Guarda el mailing, actualiza la plantilla actual, o crea una plantilla nueva a partir de esta versión.",
+      saveMailingOnly: "Guardar solo el mailing",
+      saveTemplateSame: "Actualizar plantilla “{name}”",
+      saveTemplateNew: "Guardar como plantilla nueva",
+      newTemplateName: "Nombre de la plantilla nueva",
+      templateUpdated: "Plantilla actualizada",
       emailPreview: "Vista previa del email",
       emptyBody: "Cuerpo del email vacío",
       sideBlocks: "Bloques",
@@ -1192,7 +1200,7 @@ export const es: Messages = {
       blockVideo: "Vídeo",
       blockBadge: "Insignia",
       blockCtaBadge: "Insignia CTA",
-      styleHint: "Edita fuentes, colores y espaciado en el editor.",
+      styleHint: "Cambia a Editar para modificar el texto y las imágenes del email.",
       designHint: "Elige una plantilla de partida para este mailing.",
       imageUrlPrompt: "URL de la imagen",
       imagesInMailing: "Imágenes de este mailing ({count})",

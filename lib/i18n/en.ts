@@ -1161,8 +1161,16 @@ export const en = {
       tabSettings: "Settings",
       modeDesign: "Preview",
       modeEdit: "Edit",
-      editHtmlHint:
-        "Edit the full email HTML here. Switch back to Preview to see images and layout.",
+      editVisualHint:
+        "Click any text in the email to edit it. When you save, choose to update this template or create a new one.",
+      saveEditsTitle: "Save edits",
+      saveEditsHint:
+        "Save the mailing, update the current template, or create a new template from this version.",
+      saveMailingOnly: "Save mailing only",
+      saveTemplateSame: "Update template “{name}”",
+      saveTemplateNew: "Save as new template",
+      newTemplateName: "New template name",
+      templateUpdated: "Template updated",
       emailPreview: "Email preview",
       emptyBody: "Empty email body",
       sideBlocks: "Blocks",
@@ -1188,7 +1196,7 @@ export const en = {
       blockVideo: "Video",
       blockBadge: "Badge",
       blockCtaBadge: "CTA badge",
-      styleHint: "Edit fonts, colors, and spacing in the body editor.",
+      styleHint: "Switch to Edit to change text and images in the email.",
       designHint: "Choose a starting template for this mailing.",
       imageUrlPrompt: "Image URL",
       imagesInMailing: "Images in this mailing ({count})",
