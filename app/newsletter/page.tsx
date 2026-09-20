@@ -119,6 +119,7 @@ function NewsletterPageInner() {
   const [when, setWhen] = useState<"now" | "later">("now");
   const [scheduleAt, setScheduleAt] = useState("");
   const [busyEmail, setBusyEmail] = useState<string | null>(null);
+  const [duplicatingTemplate, setDuplicatingTemplate] = useState(false);
   const [composerNotice, setComposerNotice] = useState<FormFlash | null>(null);
   const [subscriberNotice, setSubscriberNotice] = useState<FormFlash | null>(null);
   const [pageNotice, setPageNotice] = useState<FormFlash | null>(null);
@@ -463,6 +464,77 @@ function NewsletterPageInner() {
       tone: "success",
     });
     await loadTemplates();
+  }
+
+  async function duplicateTemplate() {
+    const tpl = templates.find((item) => item.id === templateId);
+    const subject = (form.subject.trim() || tpl?.subject || "").trim();
+    const html = (form.html.trim() || tpl?.html || "").trim();
+    const preview = (form.preview.trim() || tpl?.preview || "").trim();
+    if (!subject || !html) {
+      setComposerNotice({
+        tone: "error",
+        title: t("pages.newsletter.templateNeedBody"),
+      });
+      pushToast({
+        message: t("pages.newsletter.templateNeedBody"),
+        tone: "error",
+      });
+      return;
+    }
+    const suffix = t("pages.emailMarketing.templateCopySuffix");
+    const baseName = (tpl?.name || form.name.trim() || subject).trim();
+    const name = baseName.endsWith(suffix.trim())
+      ? baseName
+      : `${baseName}${suffix}`;
+    setDuplicatingTemplate(true);
+    try {
+      const res = await fetch("/api/newsletter/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          subject,
+          preview,
+          html,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const message =
+          (json as ApiError).error || t("pages.newsletter.templateSaveFailed");
+        setComposerNotice({ tone: "error", title: message });
+        pushToast({ message, tone: "error" });
+        return;
+      }
+      const newId = (json as { id?: string }).id;
+      if (newId) setTemplateId(newId);
+      setForm({
+        name,
+        subject,
+        preview,
+        html,
+      });
+      setEditorKey(`${newId || "copy"}-${Date.now()}`);
+      const detail = t("pages.newsletter.templateDuplicatedDetail").replace(
+        "{name}",
+        name,
+      );
+      setComposerNotice({
+        tone: "success",
+        title: t("pages.newsletter.templateDuplicated"),
+        body: detail,
+      });
+      pushToast({
+        message: t("pages.newsletter.templateDuplicated"),
+        detail,
+        tone: "success",
+        ms: 10000,
+      });
+      await loadTemplates();
+    } finally {
+      setDuplicatingTemplate(false);
+    }
   }
 
   async function deleteTemplate(id: string) {
@@ -973,6 +1045,18 @@ function NewsletterPageInner() {
                   <button type="button" className={btnGhost} onClick={() => void saveTemplate()}>
                     {t("pages.newsletter.saveTemplate")}
                   </button>
+                  {templateId ? (
+                    <button
+                      type="button"
+                      className={btnGhost}
+                      disabled={duplicatingTemplate || sending}
+                      onClick={() => void duplicateTemplate()}
+                    >
+                      {duplicatingTemplate
+                        ? t("pages.emailMarketing.duplicatingTemplate")
+                        : t("pages.newsletter.duplicateTemplate")}
+                    </button>
+                  ) : null}
                   {templateId && !templates.find((tpl) => tpl.id === templateId)?.builtin ? (
                     <button
                       type="button"

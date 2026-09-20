@@ -1,6 +1,11 @@
 import { jsonError } from "@/lib/api";
 import { localeFromRequest } from "@/lib/i18n/request-locale";
-import { listMailMessages, missingImapEnv, syncImapInbox } from "@/lib/mail/imap";
+import {
+  listMailMessages,
+  listMailMessagesForEmail,
+  missingImapEnv,
+  syncImapInbox,
+} from "@/lib/mail/imap";
 import { translateMailList } from "@/lib/mail/translate-mailbox";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
 
@@ -19,7 +24,10 @@ export async function GET(req: Request) {
 
   try {
     const locale = localeFromRequest(req);
-    const messages = await listMailMessages();
+    const email = new URL(req.url).searchParams.get("email")?.trim() || "";
+    const messages = email
+      ? await listMailMessagesForEmail(email)
+      : await listMailMessages();
     const localized = await translateMailList(messages, locale);
     return Response.json({
       messages: localized.messages,

@@ -19,6 +19,7 @@ import { EmailMarketingSubnav } from "@/components/email-marketing/email-marketi
 import {
   FaClock,
   FaCog,
+  FaCopy,
   FaDesktop,
   FaFlask,
   FaPaperPlane,
@@ -29,7 +30,7 @@ import {
   FaTrash,
   SNIPPET_THUMB,
 } from "@/components/email-marketing/mailing-icons";
-import { EmptyHint } from "@/components/ui";
+import { EmptyHint, FormNotice } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import { formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
@@ -147,6 +148,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   const [saveChoicesOpen, setSaveChoicesOpen] = useState(false);
   const [templateNameDraft, setTemplateNameDraft] = useState("");
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "",
     subject: "",
@@ -759,6 +762,105 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     await addToTemplates();
   }
 
+  async function duplicateTemplate() {
+    const html =
+      (bodyMode === "edit" ? flushPreviewHtml() : form.html).trim() ||
+      selectedTemplate?.html ||
+      linkedTemplate?.html ||
+      "";
+    const subject =
+      form.subject.trim() ||
+      selectedTemplate?.subject ||
+      linkedTemplate?.subject ||
+      "";
+    const preview =
+      form.preview.trim() ||
+      selectedTemplate?.preview ||
+      linkedTemplate?.preview ||
+      "";
+    if (!subject || !html) {
+      pushToast({
+        message: t("pages.newsletter.templateNeedBody"),
+        tone: "error",
+      });
+      return;
+    }
+    const suffix = t("pages.emailMarketing.templateCopySuffix");
+    const baseName = (
+      selectedTemplate?.name ||
+      linkedTemplate?.name ||
+      form.name.trim() ||
+      subject
+    ).trim();
+    const name = baseName.endsWith(suffix.trim())
+      ? baseName
+      : `${baseName}${suffix}`;
+    setDuplicating(true);
+    setDuplicateNotice(null);
+    try {
+      const tplRes = await fetch("/api/newsletter/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          subject,
+          preview,
+          html,
+        }),
+      });
+      const tplJson = (await tplRes.json()) as { error?: string; id?: string };
+      if (!tplRes.ok || !tplJson.id) {
+        pushToast({
+          message: tplJson.error || t("pages.emailMarketing.templateFailed"),
+          tone: "error",
+        });
+        return;
+      }
+
+      const mailRes = await fetch("/api/newsletter/mailings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          subject,
+          preview,
+          html,
+          status: "draft",
+          recipientTag: form.recipientTag || null,
+          templateId: tplJson.id,
+          responsible: form.responsible,
+          scheduledAt: null,
+        }),
+      });
+      const mailJson = (await mailRes.json()) as {
+        error?: string;
+        mailing?: NewsletterMailing;
+      };
+      if (!mailRes.ok || !mailJson.mailing) {
+        pushToast({
+          message: mailJson.error || t("pages.emailMarketing.saveFailed"),
+          tone: "error",
+        });
+        return;
+      }
+
+      pushToast({
+        message: t("pages.emailMarketing.templateDuplicated"),
+        detail: t("pages.emailMarketing.templateDuplicatedDetail").replace(
+          "{name}",
+          name,
+        ),
+        tone: "success",
+        ms: 10000,
+      });
+      router.push(
+        `/email-marketing/${encodeURIComponent(mailJson.mailing.id)}`,
+      );
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   function applyTemplate(id: string) {
     const tpl = templates.find((row) => row.id === id);
     if (!tpl) return;
@@ -858,6 +960,17 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         <button
           type="button"
           className={`${btnToolbar} gap-1.5`}
+          disabled={saving || savingTemplate || duplicating || contentLocked}
+          onClick={() => void duplicateTemplate()}
+        >
+          <FaCopy className="h-3.5 w-3.5" />
+          {duplicating
+            ? t("pages.emailMarketing.duplicatingTemplate")
+            : t("pages.emailMarketing.actionDuplicateTemplate")}
+        </button>
+        <button
+          type="button"
+          className={`${btnToolbar} gap-1.5`}
           disabled={saving || savingTemplate}
           onClick={() => {
             if (bodyMode === "edit" || bodyDirty) openSaveChoices();
@@ -914,6 +1027,21 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           })}
         </div>
       </OdooFormToolbar>
+
+      {duplicateNotice ? (
+        <div className="mb-3">
+          <FormNotice
+            tone="success"
+            title={t("pages.emailMarketing.templateDuplicated")}
+            onDismiss={() => setDuplicateNotice(null)}
+          >
+            {t("pages.emailMarketing.templateDuplicatedDetail").replace(
+              "{name}",
+              duplicateNotice,
+            )}
+          </FormNotice>
+        </div>
+      ) : null}
 
       <div className="border border-line bg-panel">
         <div className="grid gap-4 border-b border-line px-4 py-4 sm:grid-cols-[7rem_1fr]">

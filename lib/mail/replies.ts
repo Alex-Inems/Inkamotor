@@ -45,6 +45,19 @@ function mapRow(
   };
 }
 
+async function withAttachments(rows: MailReply[]): Promise<MailReply[]> {
+  const attachmentMap = await listAttachmentsByReplyIds(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    ...row,
+    attachments: (attachmentMap.get(row.id) ?? []).map((file) => ({
+      id: file.id,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      byteSize: file.byteSize,
+    })),
+  }));
+}
+
 export async function listMailReplies(limit = 100): Promise<MailReply[]> {
   const supabase = getSupabase();
   const { data, error } = await supabase
@@ -56,16 +69,28 @@ export async function listMailReplies(limit = 100): Promise<MailReply[]> {
     .limit(limit);
   if (error) throw new Error(error.message);
   const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
-  const attachmentMap = await listAttachmentsByReplyIds(rows.map((row) => row.id));
-  return rows.map((row) => ({
-    ...row,
-    attachments: (attachmentMap.get(row.id) ?? []).map((file) => ({
-      id: file.id,
-      fileName: file.fileName,
-      mimeType: file.mimeType,
-      byteSize: file.byteSize,
-    })),
-  }));
+  return withAttachments(rows);
+}
+
+/** Sent CRM replies for one client email, newest first. */
+export async function listMailRepliesForEmail(
+  email: string,
+  limit = 200,
+): Promise<MailReply[]> {
+  const key = email.trim().toLowerCase();
+  if (!key.includes("@")) return [];
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("mail_replies")
+    .select(
+      "id, to_name, to_email, subject, body_text, related_mail_id, related_inquiry_id, sent_at",
+    )
+    .eq("to_email", key)
+    .order("sent_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  return withAttachments(rows);
 }
 
 type SaveInput = {
@@ -152,8 +177,8 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
   if (!reply && copyError) {
     throw new Error(
       inserted.error?.message ||
-        copyError.message ||
-        "Could not save reply to history",
+      copyError.message ||
+      "Could not save reply to history",
     );
   }
 

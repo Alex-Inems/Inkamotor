@@ -1,6 +1,6 @@
 import { jsonError } from "@/lib/api";
 import { localeFromRequest } from "@/lib/i18n/request-locale";
-import { listMailReplies } from "@/lib/mail/replies";
+import { listMailReplies, listMailRepliesForEmail } from "@/lib/mail/replies";
 import { translateReplyList } from "@/lib/mail/translate-mailbox";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
 
@@ -19,7 +19,10 @@ export async function GET(req: Request) {
 
   try {
     const locale = localeFromRequest(req);
-    const replies = await listMailReplies();
+    const email = new URL(req.url).searchParams.get("email")?.trim() || "";
+    const replies = email
+      ? await listMailRepliesForEmail(email)
+      : await listMailReplies();
     const localized = await translateReplyList(replies, locale);
     return Response.json({
       replies: localized.replies,

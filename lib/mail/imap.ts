@@ -52,6 +52,26 @@ export async function listMailMessages(limit = 150): Promise<MailMessage[]> {
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
 }
 
+/** Full conversation for one client email (inbox + sent), newest first. */
+export async function listMailMessagesForEmail(
+  email: string,
+  limit = 500,
+): Promise<MailMessage[]> {
+  const key = email.trim().toLowerCase();
+  if (!key.includes("@")) return [];
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("mail_messages")
+    .select(
+      "id, message_id, from_name, from_email, to_email, subject, preview, body_text, received_at, is_read",
+    )
+    .or(`from_email.eq."${key}",to_email.eq."${key}"`)
+    .order("received_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+}
+
 export async function listUnreadInbox(limit = 12): Promise<{
   unread: number;
   messages: MailMessage[];

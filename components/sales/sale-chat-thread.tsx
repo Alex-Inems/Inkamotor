@@ -55,11 +55,10 @@ function SaleChatBubble({ message }: { message: RoomMessage }) {
 
   return (
     <div
-      className={`max-w-[88%] rounded-md px-3 py-2 text-sm ${
-        message.mine
+      className={`max-w-[88%] rounded-md px-3 py-2 text-sm ${message.mine
           ? "ml-auto bg-accent/15 text-ink"
           : "mr-auto border border-line bg-panel text-ink"
-      }`}
+        }`}
     >
       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-mute">
         {message.mine ? t("pages.inbox.youPrefix").replace(/:\s*$/, "") : message.subject}
@@ -108,10 +107,11 @@ export function SaleChatPanel({
 
     setLoading(true);
     try {
+      const emailParam = encodeURIComponent(email.trim());
       const [statusRes, mailRes, repliesRes] = await Promise.all([
         fetch("/api/inbox/status"),
-        fetch(`/api/inbox/mail?locale=${locale}`),
-        fetch(`/api/inbox/replies?locale=${locale}`),
+        fetch(`/api/inbox/mail?locale=${locale}&email=${emailParam}`),
+        fetch(`/api/inbox/replies?locale=${locale}&email=${emailParam}`),
       ]);
 
       if (statusRes.ok) {
