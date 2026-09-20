@@ -55,8 +55,8 @@ function stripHtml(html: string) {
 }
 
 function extractEmail(raw: string | false | null | undefined): string | null {
-  if (!raw || raw === false) return null;
-  const match = String(raw).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  if (typeof raw !== "string" || !raw) return null;
+  const match = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   return match?.[0]?.toLowerCase() ?? null;
 }
 
@@ -68,8 +68,8 @@ function isOwnEmail(email: string | null, ownEmails: string[]) {
 }
 
 function asIso(value: string | false | null | undefined) {
-  if (!value || value === false) return new Date().toISOString();
-  const raw = String(value).trim();
+  if (typeof value !== "string" || !value) return new Date().toISOString();
+  const raw = value.trim();
   const normalized = raw.includes("T") ? raw : `${raw.replace(" ", "T")}Z`;
   const d = new Date(normalized);
   return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
