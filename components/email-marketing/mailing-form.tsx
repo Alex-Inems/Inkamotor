@@ -34,6 +34,7 @@ import { EmptyHint, FormNotice } from "@/components/ui";
 import {
   FloatingSelectionToolbar,
   RichTextToolbar,
+  resetHtmlHistory,
 } from "@/components/rich-text-toolbar";
 import { useCrm } from "@/lib/crm-store";
 import { formatNumber } from "@/lib/format";
@@ -462,6 +463,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     setBodyDirty(true);
     flushPreviewHtml();
     resizePreview();
+    // Re-bind image click handlers after undo/format rewrites innerHTML.
+    window.setTimeout(() => wirePreviewClicks(), 0);
   }
 
   function ensureEditThenFormat() {
@@ -478,11 +481,17 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     return html;
   }
 
+  function clearEditHistory() {
+    const doc = previewRef.current?.contentDocument;
+    if (doc) resetHtmlHistory(doc);
+  }
+
   async function saveMailingOnly() {
     const html = bodyMode === "edit" ? flushPreviewHtml() : form.html;
     const saved = await saveMailing(undefined, html);
     if (!saved) return;
     setBodyDirty(false);
+    clearEditHistory();
     setSaveChoicesOpen(false);
     if (bodyMode === "edit") {
       setEditorKey(`preview-${Date.now()}`);
@@ -547,6 +556,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         tone: "success",
       });
       setBodyDirty(false);
+      clearEditHistory();
       setSaveChoicesOpen(false);
       await refreshTemplates();
       if (bodyMode === "edit") {
@@ -618,6 +628,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         responsible: json.mailing!.responsible || prev.responsible,
       }));
       setEditorKey(`saved-${json.mailing.id}-${Date.now()}`);
+      clearEditHistory();
       pushToast({
         message: t("pages.emailMarketing.saved"),
         tone: "success",
@@ -1291,7 +1302,11 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                   <button
                     type="button"
                     data-body-mode="edit"
-                    className={`${btnGhost} gap-1.5 ${bodyMode === "edit" ? "bg-white/10 text-white" : "text-[#9a9a9a]"}`}
+                    className={`${btnGhost} gap-1.5 ${
+                      bodyMode === "edit"
+                        ? "bg-[#017e84] text-white hover:bg-[#016a6f]"
+                        : "border border-[#017e84]/50 bg-[#017e84]/20 text-white hover:bg-[#017e84]/35"
+                    }`}
                     disabled={contentLocked}
                     onClick={() => enterEditMode()}
                   >
@@ -1508,11 +1523,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
 
             <div className="flex flex-col">
               {bodyMode === "edit" ? (
-                <div className="space-y-2 border-b border-line bg-ash/30 px-3 py-2 sm:px-4">
+                <div className="space-y-2 border-b border-[#017e84]/30 bg-[#e7f6f7] px-3 py-3 sm:px-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs text-mute">
-                      {t("pages.emailMarketing.editVisualHint")}
-                    </p>
+                    <div className="min-w-0 space-y-1">
+                      <span className="inline-flex items-center rounded-full bg-[#017e84] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white">
+                        {t("pages.emailMarketing.editingBadge")}
+                      </span>
+                      <p className="text-sm font-medium text-[#1c1b19]">
+                        {t("pages.emailMarketing.editVisualHint")}
+                      </p>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -1521,7 +1541,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                       >
                         <span className="inline-flex items-center gap-1.5">
                           <FaDesktop className="h-3.5 w-3.5" />
-                          {t("pages.emailMarketing.modeDesign")}
+                          {t("pages.emailMarketing.editDone")}
                         </span>
                       </button>
                       <button
