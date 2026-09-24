@@ -22,26 +22,38 @@ function isMissingTable(message: string) {
 
 async function listCustom() {
   const missing = missingSupabaseEnv();
-  if (missing.length) return [] as Row[];
+  if (missing.length) return [] as (Row & { updated_at?: string })[];
   const sb = getSupabase();
   const { data, error } = await sb
     .from("newsletter_templates")
-    .select("id, name, subject, preview, html")
+    .select("id, name, subject, preview, html, updated_at")
     .order("updated_at", { ascending: false });
   if (error) {
     if (isMissingTable(error.message)) return [];
     throw new Error(error.message);
   }
-  return (data ?? []) as Row[];
+  return (data ?? []) as (Row & { updated_at?: string })[];
 }
 
 export async function GET() {
   try {
     const custom = await listCustom();
+    // Newest saved/duplicated templates first; built-ins after.
     return Response.json({
       templates: [
-        ...builtinTemplates,
-        ...custom.map((row) => ({ ...row, builtin: false })),
+        ...custom.map((row) => ({
+          id: row.id,
+          name: row.name,
+          subject: row.subject,
+          preview: row.preview,
+          html: row.html,
+          builtin: false,
+          updatedAt: row.updated_at ?? null,
+        })),
+        ...builtinTemplates.map((row) => ({
+          ...row,
+          updatedAt: null as string | null,
+        })),
       ],
     });
   } catch (err) {

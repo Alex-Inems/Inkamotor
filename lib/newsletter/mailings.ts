@@ -131,8 +131,8 @@ export async function listMailings(): Promise<NewsletterMailing[]> {
   const { data, error } = await sb
     .from("newsletter_mailings")
     .select(SELECT_COLS)
-    .order("mailing_date", { ascending: false, nullsFirst: false })
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .order("mailing_date", { ascending: false, nullsFirst: false });
   if (error) {
     if (isMissingTable(error.message)) {
       throw new Error(

@@ -23,6 +23,7 @@ import {
   waveCount,
 } from "@/lib/newsletter/waves";
 import { hideCampaignId, hiddenCampaignIds } from "@/lib/newsletter/hidden-campaigns";
+import { copyTemplateDisplayName } from "@/lib/newsletter/templates";
 import { pushWorkspaceNotice } from "@/lib/workspace-notices";
 import type { NewsletterMailing } from "@/lib/newsletter/mailings";
 
@@ -120,6 +121,7 @@ function NewsletterPageInner() {
   const [scheduleAt, setScheduleAt] = useState("");
   const [busyEmail, setBusyEmail] = useState<string | null>(null);
   const [duplicatingTemplate, setDuplicatingTemplate] = useState(false);
+  const [templateDirty, setTemplateDirty] = useState(false);
   const [composerNotice, setComposerNotice] = useState<FormFlash | null>(null);
   const [subscriberNotice, setSubscriberNotice] = useState<FormFlash | null>(null);
   const [pageNotice, setPageNotice] = useState<FormFlash | null>(null);
@@ -137,6 +139,16 @@ function NewsletterPageInner() {
   const subscriberNoticeRef = useRef<HTMLDivElement>(null);
   const draftLoadedRef = useRef<string | null>(null);
   const pendingAudienceRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!templateDirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [templateDirty]);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/newsletter");
@@ -414,9 +426,18 @@ function NewsletterPageInner() {
   }
 
   function applyTemplate(id: string) {
+    if (
+      templateDirty &&
+      !window.confirm(t("pages.newsletter.unsavedTemplate"))
+    ) {
+      return;
+    }
     setTemplateId(id);
     const tpl = templates.find((item) => item.id === id);
-    if (!tpl) return;
+    if (!tpl) {
+      setTemplateDirty(false);
+      return;
+    }
     setForm({
       name: form.name || tpl.name,
       subject: tpl.subject,
@@ -424,6 +445,7 @@ function NewsletterPageInner() {
       html: tpl.html,
     });
     setEditorKey(`${id}-${Date.now()}`);
+    setTemplateDirty(false);
   }
 
   async function saveTemplate() {
@@ -438,10 +460,13 @@ function NewsletterPageInner() {
       });
       return;
     }
+    const current = templates.find((item) => item.id === templateId);
+    const updating = Boolean(current && !current.builtin);
     const res = await fetch("/api/newsletter/templates", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        ...(updating ? { id: templateId } : {}),
         name: form.name.trim() || form.subject.trim(),
         subject: form.subject.trim(),
         preview: form.preview.trim(),
@@ -455,12 +480,18 @@ function NewsletterPageInner() {
       pushToast({ message, tone: "error" });
       return;
     }
+    const savedId = (json as { id?: string }).id;
+    if (savedId) setTemplateId(savedId);
+    setTemplateDirty(false);
+    const title = updating
+      ? t("pages.newsletter.templateUpdated")
+      : t("pages.newsletter.templateSaved");
     setComposerNotice({
       tone: "success",
-      title: t("pages.newsletter.templateSaved"),
+      title,
     });
     pushToast({
-      message: t("pages.newsletter.templateSaved"),
+      message: title,
       tone: "success",
     });
     await loadTemplates();
@@ -484,9 +515,11 @@ function NewsletterPageInner() {
     }
     const suffix = t("pages.emailMarketing.templateCopySuffix");
     const baseName = (tpl?.name || form.name.trim() || subject).trim();
-    const name = baseName.endsWith(suffix.trim())
-      ? baseName
-      : `${baseName}${suffix}`;
+    const name = copyTemplateDisplayName(
+      baseName,
+      suffix,
+      templates.map((item) => item.name),
+    );
     setDuplicatingTemplate(true);
     try {
       const res = await fetch("/api/newsletter/templates", {
@@ -515,6 +548,7 @@ function NewsletterPageInner() {
         preview,
         html,
       });
+      setTemplateDirty(false);
       setEditorKey(`${newId || "copy"}-${Date.now()}`);
       const detail = t("pages.newsletter.templateDuplicatedDetail").replace(
         "{name}",
@@ -1043,7 +1077,10 @@ function NewsletterPageInner() {
                     ))}
                   </select>
                   <button type="button" className={btnGhost} onClick={() => void saveTemplate()}>
-                    {t("pages.newsletter.saveTemplate")}
+                    {templateId &&
+                    !templates.find((tpl) => tpl.id === templateId)?.builtin
+                      ? t("pages.newsletter.updateTemplate")
+                      : t("pages.newsletter.saveTemplate")}
                   </button>
                   {templateId ? (
                     <button
@@ -1072,7 +1109,10 @@ function NewsletterPageInner() {
                 <input
                   className={inputClass}
                   value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  onChange={(e) => {
+                    setTemplateDirty(true);
+                    setForm({ ...form, name: e.target.value });
+                  }}
                   placeholder={t("pages.newsletter.namePlaceholder")}
                 />
               </Field>
@@ -1080,21 +1120,30 @@ function NewsletterPageInner() {
                 <input
                   className={inputClass}
                   value={form.subject}
-                  onChange={(e) => setForm({ ...form, subject: e.target.value })}
+                  onChange={(e) => {
+                    setTemplateDirty(true);
+                    setForm({ ...form, subject: e.target.value });
+                  }}
                 />
               </Field>
               <Field label={t("pages.newsletter.previewText")}>
                 <input
                   className={inputClass}
                   value={form.preview}
-                  onChange={(e) => setForm({ ...form, preview: e.target.value })}
+                  onChange={(e) => {
+                    setTemplateDirty(true);
+                    setForm({ ...form, preview: e.target.value });
+                  }}
                 />
               </Field>
               <Field label={t("pages.newsletter.body")}>
                 <HtmlEditor
                   html={form.html}
                   resetKey={editorKey}
-                  onChange={(html) => setForm({ ...form, html })}
+                  onChange={(html) => {
+                    setTemplateDirty(true);
+                    setForm({ ...form, html });
+                  }}
                 />
               </Field>
               <fieldset className="space-y-2">

@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { btnGhost, inputClass } from "@/components/modal";
+import {
+  FloatingSelectionToolbar,
+  RichTextToolbar,
+} from "@/components/rich-text-toolbar";
 import { useT } from "@/lib/i18n";
 
 export function HtmlEditor({
@@ -38,22 +42,6 @@ export function HtmlEditor({
     }
   }
 
-  function cmd(command: string, value?: string) {
-    document.execCommand(command, false, value);
-    onChange(ref.current?.innerHTML || "");
-  }
-
-  function addLink() {
-    const url = window.prompt(t("pages.newsletter.linkPrompt"), "https://");
-    if (url) cmd("createLink", url);
-  }
-
-  function addImage() {
-    const url = window.prompt("Image URL", "https://");
-    if (!url?.trim()) return;
-    cmd("insertImage", url.trim());
-  }
-
   function switchMode(next: "visual" | "html") {
     if (next === mode) return;
     flushVisual();
@@ -62,44 +50,17 @@ export function HtmlEditor({
 
   return (
     <div>
-      <div className="mb-2 flex flex-wrap items-center gap-1">
+      <div className="mb-2 flex flex-wrap items-start gap-2 rounded-md border border-line bg-ash/40 p-2">
         {mode === "visual" ? (
-          <>
-            <button type="button" className={btnGhost} onClick={() => cmd("bold")}>
-              {t("pages.newsletter.bold")}
-            </button>
-            <button
-              type="button"
-              className={btnGhost}
-              onClick={() => cmd("italic")}
-            >
-              {t("pages.newsletter.italic")}
-            </button>
-            <button
-              type="button"
-              className={btnGhost}
-              onClick={() => cmd("formatBlock", "H2")}
-            >
-              {t("pages.newsletter.heading")}
-            </button>
-            <button
-              type="button"
-              className={btnGhost}
-              onClick={() => cmd("insertUnorderedList")}
-            >
-              {t("pages.newsletter.list")}
-            </button>
-            <button type="button" className={btnGhost} onClick={addLink}>
-              {t("pages.newsletter.link")}
-            </button>
-            <button type="button" className={btnGhost} onClick={addImage}>
-              Image
-            </button>
-          </>
+          <RichTextToolbar
+            className="flex-1"
+            getDocument={() => ref.current?.ownerDocument ?? null}
+            onChange={() => onChange(ref.current?.innerHTML || "")}
+          />
         ) : null}
         <button
           type="button"
-          className={`${btnGhost} ml-auto`}
+          className={`${btnGhost} ml-auto shrink-0`}
           onClick={() => switchMode(mode === "visual" ? "html" : "visual")}
         >
           {mode === "visual"
@@ -115,14 +76,21 @@ export function HtmlEditor({
           spellCheck={false}
         />
       ) : (
-        <div
-          ref={ref}
-          className={`html-editor ${minHeightClass}`}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={(e) => onChange(e.currentTarget.innerHTML)}
-          onBlur={flushVisual}
-        />
+        <>
+          <div
+            ref={ref}
+            className={`html-editor ${minHeightClass}`}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={(e) => onChange(e.currentTarget.innerHTML)}
+            onBlur={flushVisual}
+          />
+          <FloatingSelectionToolbar
+            active={mode === "visual"}
+            getDocument={() => ref.current?.ownerDocument ?? null}
+            onChange={() => onChange(ref.current?.innerHTML || "")}
+          />
+        </>
       )}
     </div>
   );

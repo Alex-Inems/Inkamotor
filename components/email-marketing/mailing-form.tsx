@@ -31,11 +31,18 @@ import {
   SNIPPET_THUMB,
 } from "@/components/email-marketing/mailing-icons";
 import { EmptyHint, FormNotice } from "@/components/ui";
+import {
+  FloatingSelectionToolbar,
+  RichTextToolbar,
+} from "@/components/rich-text-toolbar";
 import { useCrm } from "@/lib/crm-store";
 import { formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
 import type { MailingStatus, NewsletterMailing } from "@/lib/newsletter/mailings";
-import { templateIdForMailing } from "@/lib/newsletter/templates";
+import {
+  copyTemplateDisplayName,
+  templateIdForMailing,
+} from "@/lib/newsletter/templates";
 
 type Template = {
   id: string;
@@ -144,6 +151,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLIFrameElement>(null);
   const [previewHeight, setPreviewHeight] = useState(640);
+  /** Locked iframe HTML — only refresh when editorKey changes so edits don't remount. */
+  const [frameSrcDoc, setFrameSrcDoc] = useState("");
   const [bodyDirty, setBodyDirty] = useState(false);
   const [saveChoicesOpen, setSaveChoicesOpen] = useState(false);
   const [templateNameDraft, setTemplateNameDraft] = useState("");
@@ -238,7 +247,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           html: tpl?.html || "<p></p>",
           status: "draft",
           recipientTag: "",
-          templateId: tpl?.id || "",
+          // Prefill content only — do not link a template until the user picks or duplicates.
+          templateId: "",
           responsible: "Team",
         });
         setEditorKey(`new-${Date.now()}`);
@@ -251,6 +261,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!bodyDirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [bodyDirty]);
 
   const audienceCount = useMemo(() => {
     if (!form.recipientTag) return subscribers.length;
@@ -382,8 +402,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     const editable = bodyMode === "edit" && !contentLocked;
     doc.body.contentEditable = editable ? "true" : "false";
     doc.body.style.caretColor = "#017e84";
+    doc.body.style.outline = editable ? "none" : "";
     if (editable) {
-      doc.body.focus();
+      doc.body.style.cursor = "text";
     }
 
     const onInput = () => {
@@ -412,8 +433,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     if (tab !== "body") return;
     const id = window.setTimeout(() => wirePreviewClicks(), 50);
     return () => window.clearTimeout(id);
+    // Do not depend on form.html — flushing HTML while editing must not rewire/focus.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bodyMode, tab, form.html, editorKey, contentLocked]);
+  }, [bodyMode, tab, editorKey, contentLocked]);
+
+  useEffect(() => {
+    const empty = `<p style="padding:24px;font-family:sans-serif;color:#666">${t("pages.emailMarketing.emptyBody")}</p>`;
+    setFrameSrcDoc(form.html?.trim() ? form.html : empty);
+    // Refresh iframe document only when the editor is intentionally remounted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorKey]);
 
   function enterEditMode() {
     if (contentLocked) return;
@@ -426,6 +455,18 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     }
     setEditorKey(`preview-${Date.now()}`);
     setBodyMode("design");
+  }
+
+  function onPreviewFormatChange() {
+    // Sync React state from the live iframe DOM without remounting the frame.
+    setBodyDirty(true);
+    flushPreviewHtml();
+    resizePreview();
+  }
+
+  function ensureEditThenFormat() {
+    if (contentLocked) return;
+    if (bodyMode !== "edit") enterEditMode();
   }
 
   function openSaveChoices() {
@@ -792,9 +833,11 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       form.name.trim() ||
       subject
     ).trim();
-    const name = baseName.endsWith(suffix.trim())
-      ? baseName
-      : `${baseName}${suffix}`;
+    const name = copyTemplateDisplayName(
+      baseName,
+      suffix,
+      templates.map((item) => item.name),
+    );
     setDuplicating(true);
     setDuplicateNotice(null);
     try {
@@ -853,6 +896,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         tone: "success",
         ms: 10000,
       });
+      setBodyDirty(false);
       router.push(
         `/email-marketing/${encodeURIComponent(mailJson.mailing.id)}`,
       );
@@ -973,8 +1017,17 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           className={`${btnToolbar} gap-1.5`}
           disabled={saving || savingTemplate}
           onClick={() => {
-            if (bodyMode === "edit" || bodyDirty) openSaveChoices();
-            else void saveMailing();
+            // Existing mailing with a custom template/copy → auto-save mailing + template.
+            // Edits on a new draft (or no template) → prompt how to save.
+            if (updateTemplateId && !isNew) {
+              void saveTemplateChoice("update");
+              return;
+            }
+            if (bodyMode === "edit" || bodyDirty) {
+              openSaveChoices();
+              return;
+            }
+            void saveMailing();
           }}
         >
           <FaSave className="h-3.5 w-3.5" />
@@ -1385,28 +1438,43 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     </div>
                   </>
                 ) : sideTab === "style" ? (
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="space-y-3">
                     <p className="text-xs text-[#9a9a9a]">
                       {t("pages.emailMarketing.styleHint")}
                     </p>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded border border-white/15 bg-[#3a3a3a] px-3 py-2 text-sm text-white hover:border-[#017e84]"
-                      disabled={contentLocked}
-                      onClick={() => enterEditMode()}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded border border-white/15 bg-[#3a3a3a] px-3 py-2 text-sm text-white hover:border-[#017e84]"
+                        disabled={contentLocked}
+                        onClick={() => enterEditMode()}
+                      >
+                        <FaPencil className="h-3.5 w-3.5" />
+                        {t("pages.emailMarketing.modeEdit")}
+                      </button>
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 rounded border border-white/15 bg-[#3a3a3a] px-3 py-2 text-sm text-white hover:border-[#017e84]"
+                        disabled={contentLocked}
+                        onClick={() => openReplaceImage(null)}
+                      >
+                        <FaPlus className="h-3.5 w-3.5" />
+                        {t("pages.emailMarketing.addImage")}
+                      </button>
+                    </div>
+                    <div
+                      onPointerDown={() => ensureEditThenFormat()}
+                      className="rounded border border-white/10 bg-[#2f2f2f] p-2"
                     >
-                      <FaPencil className="h-3.5 w-3.5" />
-                      {t("pages.emailMarketing.modeEdit")}
-                    </button>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded border border-white/15 bg-[#3a3a3a] px-3 py-2 text-sm text-white hover:border-[#017e84]"
-                      disabled={contentLocked}
-                      onClick={() => openReplaceImage(null)}
-                    >
-                      <FaPlus className="h-3.5 w-3.5" />
-                      {t("pages.emailMarketing.addImage")}
-                    </button>
+                      <RichTextToolbar
+                        tone="dark"
+                        disabled={contentLocked}
+                        getDocument={() =>
+                          previewRef.current?.contentDocument ?? null
+                        }
+                        onChange={onPreviewFormatChange}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <div className="flex flex-wrap items-end gap-3">
@@ -1440,32 +1508,41 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
 
             <div className="flex flex-col">
               {bodyMode === "edit" ? (
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-ash/30 px-3 py-2 sm:px-4">
-                  <p className="text-xs text-mute">
-                    {t("pages.emailMarketing.editVisualHint")}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className={btnSecondary}
-                      onClick={() => enterPreviewMode()}
-                    >
-                      <span className="inline-flex items-center gap-1.5">
-                        <FaDesktop className="h-3.5 w-3.5" />
-                        {t("pages.emailMarketing.modeDesign")}
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className={btnPrimary}
-                      disabled={saving || savingTemplate || contentLocked}
-                      onClick={() => openSaveChoices()}
-                    >
-                      {saving || savingTemplate
-                        ? t("common.saving")
-                        : t("common.save")}
-                    </button>
+                <div className="space-y-2 border-b border-line bg-ash/30 px-3 py-2 sm:px-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs text-mute">
+                      {t("pages.emailMarketing.editVisualHint")}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={btnSecondary}
+                        onClick={() => enterPreviewMode()}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <FaDesktop className="h-3.5 w-3.5" />
+                          {t("pages.emailMarketing.modeDesign")}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className={btnPrimary}
+                        disabled={saving || savingTemplate || contentLocked}
+                        onClick={() => openSaveChoices()}
+                      >
+                        {saving || savingTemplate
+                          ? t("common.saving")
+                          : t("common.save")}
+                      </button>
+                    </div>
                   </div>
+                  <RichTextToolbar
+                    disabled={contentLocked}
+                    getDocument={() =>
+                      previewRef.current?.contentDocument ?? null
+                    }
+                    onChange={onPreviewFormatChange}
+                  />
                 </div>
               ) : null}
               <div
@@ -1482,15 +1559,19 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     style={{ height: previewHeight, overflow: "hidden" }}
                     scrolling="no"
                     sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-                    srcDoc={
-                      form.html?.trim()
-                        ? form.html
-                        : `<p style="padding:24px;font-family:sans-serif;color:#666">${t("pages.emailMarketing.emptyBody")}</p>`
-                    }
+                    srcDoc={frameSrcDoc || undefined}
                     onLoad={() => wirePreviewClicks()}
                   />
                 </div>
               </div>
+              <FloatingSelectionToolbar
+                active={bodyMode === "edit" && !contentLocked}
+                disabled={contentLocked}
+                iframeRef={previewRef}
+                getDocument={() => previewRef.current?.contentDocument ?? null}
+                getFrameElement={() => previewRef.current}
+                onChange={onPreviewFormatChange}
+              />
             </div>
           </div>
         )}

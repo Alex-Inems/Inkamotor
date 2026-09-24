@@ -181,8 +181,8 @@ export default function EmailMarketingPage() {
       const draftRank = (status: MailingStatus) => (status === "draft" ? 0 : 1);
       const byStatus = draftRank(a.status) - draftRank(b.status);
       if (byStatus !== 0) return byStatus;
-      const ta = new Date(mailingWhen(a)).getTime() || 0;
-      const tb = new Date(mailingWhen(b)).getTime() || 0;
+      const ta = new Date(a.updatedAt || mailingWhen(a)).getTime() || 0;
+      const tb = new Date(b.updatedAt || mailingWhen(b)).getTime() || 0;
       return tb - ta;
     });
   }, [mailings, query, filter]);

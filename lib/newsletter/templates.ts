@@ -81,3 +81,48 @@ export function mailingIdFromTemplateId(templateId: string) {
     ? templateId.slice("tpl_mailing_".length)
     : null;
 }
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Always save duplicates as `[name] (copy)` (or localized suffix).
+ * Strips an existing copy/copie/copia suffix first so re-duplicating stays clean.
+ * If `existingNames` already has that title, uses `(copy 2)`, `(copy 3)`, …
+ */
+export function copyTemplateDisplayName(
+  baseName: string,
+  suffix = " (copy)",
+  existingNames: string[] = [],
+): string {
+  const trimmed = baseName.trim() || "Template";
+  const normalizedSuffix = suffix.startsWith(" ") ? suffix : ` ${suffix}`;
+  const word = normalizedSuffix.trim().replace(/^\(|\)$/g, "") || "copy";
+  const without = trimmed
+    .replace(
+      new RegExp(
+        `(?:\\s*\\(${escapeRegExp(word)}(?:\\s+\\d+)?\\))+\\s*$`,
+        "i",
+      ),
+      "",
+    )
+    .replace(/(?:\s*\((?:copy|copie|copia)(?:\s+\d+)?\))+\s*$/i, "")
+    .trim();
+  const root = without || trimmed;
+  let candidate = `${root}${normalizedSuffix}`;
+  if (!existingNames.length) return candidate;
+
+  const taken = new Set(
+    existingNames.map((n) => n.trim().toLowerCase()).filter(Boolean),
+  );
+  if (!taken.has(candidate.toLowerCase())) return candidate;
+  let n = 2;
+  while (taken.has(`${root} (${word} ${n})`.toLowerCase())) n += 1;
+  return `${root} (${word} ${n})`;
+}
+
+/** Alias kept for older call sites. */
+export function nextTemplateCopyName(baseName: string, copySuffix = " (copy)") {
+  return copyTemplateDisplayName(baseName, copySuffix);
+}
