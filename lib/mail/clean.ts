@@ -57,6 +57,8 @@ const QUOTE_MARKERS = [
   /^-{2,}\s*Original Message\s*-{2,}/im,
   /^\s*-{2,}\s*Forwarded message\s*-{2,}/im,
   /^\s*From:\s.+\nSent:\s/im,
+  /^\s*De\s*:[\s\S]{0,160}?\n\s*Envoy[ée]\s*:/im,
+  /^\s*De\s*:[\s\S]{0,160}?\n\s*Sent\s*:/im,
   /^\s*_{10,}\s*$/m,
 ];
 
@@ -112,8 +114,11 @@ const MESSAGE_LABELS = new Set([
 function decode(input: string) {
   let out = input.replace(/\r\n?/g, "\n");
   for (const [re, to] of ENTITIES) out = out.replace(re, to);
-  // Zero-width and non-breaking padding used by bulk senders
-  return out.replace(/[\u200b-\u200d\u2060\ufeff\u00a0]/g, " ");
+  // Zero-width / Outlook tracking padding (U+034F etc.) that otherwise
+  // renders as hundreds of blank lines in chat bubbles.
+  return out
+    .replace(/[\u200b-\u200d\u2060\ufeff\u00ad\u034f\u180e]/g, "")
+    .replace(/\u00a0/g, " ");
 }
 
 function stripLinks(input: string) {
@@ -139,8 +144,11 @@ function tidy(input: string) {
       .replace(/[-]{5,}/g, "")
       // Image alt-text noise from marketing templates
       .replace(/^[ \t]*(?:Description de l['’]image|Image description)\s*:.*$/gim, "")
+      // Lone "." lines Outlook leaves between signature and quote
+      .replace(/^[ \t]*\.[ \t]*$/gm, "")
       .split("\n")
       .map((line) => line.replace(/[ \t]+/g, " ").trimEnd())
+      .filter((line, i, arr) => line.trim() !== "" || (arr[i - 1]?.trim() ?? "") !== "")
       .join("\n")
       .replace(/\n{3,}/g, "\n\n")
       .trim()

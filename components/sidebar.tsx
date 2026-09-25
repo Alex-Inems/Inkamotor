@@ -16,6 +16,7 @@ const nav = [
   { href: "/sales", key: "nav.sales", icon: SalesIcon, tour: "sales" },
   { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
   { href: "/email-marketing", key: "nav.newsletter", icon: NewsletterIcon, tour: "newsletter" },
+  { href: "/settings", key: "nav.settings", icon: SettingsIcon },
 ];
 
 export function Sidebar({
@@ -344,6 +345,28 @@ function NewsletterIcon({ active }: { active?: boolean }) {
         stroke="currentColor"
         strokeWidth="1.4"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SettingsIcon({ active }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <circle
+        cx="8"
+        cy="8"
+        r="2.2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        opacity={active === false ? 0.85 : 1}
+      />
+      <path
+        d="M8 1.5v1.4M8 13.1V14.5M1.5 8h1.4M13.1 8H14.5M3.2 3.2l1 1M11.8 11.8l1 1M12.8 3.2l-1 1M4.2 11.8l-1 1"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        opacity={active === false ? 0.85 : 1}
       />
     </svg>
   );

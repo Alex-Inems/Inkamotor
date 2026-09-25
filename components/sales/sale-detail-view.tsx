@@ -48,7 +48,23 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
   const [deleting, setDeleting] = useState(false);
   const [moving, setMoving] = useState(false);
 
-  const raw = sales.find((row) => row.id === saleId) ?? null;
+  const orderedSales = useMemo(
+    () =>
+      [...sales].sort((a, b) => {
+        const byDate = b.createdAt.localeCompare(a.createdAt);
+        if (byDate !== 0) return byDate;
+        return b.number.localeCompare(a.number, undefined, { numeric: true });
+      }),
+    [sales],
+  );
+  const saleIndex = orderedSales.findIndex((row) => row.id === saleId);
+  const prevSale = saleIndex > 0 ? orderedSales[saleIndex - 1] : null;
+  const nextSale =
+    saleIndex >= 0 && saleIndex < orderedSales.length - 1
+      ? orderedSales[saleIndex + 1]
+      : null;
+
+  const raw = saleIndex >= 0 ? orderedSales[saleIndex] : null;
   const sale = useMemo(() => (raw ? enrichSale(raw) : null), [raw]);
   const documentLines = useMemo(
     () => (sale ? orderQuotationDocumentLines(sale.lines) : []),
@@ -112,17 +128,79 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
   }
 
   return (
-    <div className="flex min-h-[calc(100dvh-9rem)] flex-col">
-      <SalesSubnav />
-
-      <div className="mb-3 mt-4 text-xs text-mute">
-        <Link href="/sales?tab=bookings" className="hover:text-ink">
-          {t("pages.sales.menuOrders")}
-        </Link>
-        <span className="mx-1">/</span>
-        <span className="text-ink">{sale.number}</span>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden px-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
+      <div className="shrink-0">
+        <SalesSubnav />
       </div>
 
+      <div className="mb-3 mt-4 flex shrink-0 items-center justify-between gap-3 text-xs text-mute">
+        <div>
+          <Link href="/sales?tab=bookings" className="hover:text-ink">
+            {t("pages.sales.menuOrders")}
+          </Link>
+          <span className="mx-1">/</span>
+          <span className="text-ink">{sale.number}</span>
+        </div>
+        {orderedSales.length > 1 && saleIndex >= 0 ? (
+          <div
+            className="inline-flex items-center gap-0.5 rounded border border-line bg-panel"
+            role="navigation"
+            aria-label={t("pages.sales.recordOf", {
+              current: saleIndex + 1,
+              total: orderedSales.length,
+            })}
+          >
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center text-mute transition hover:bg-line/40 hover:text-ink disabled:cursor-default disabled:opacity-30"
+              disabled={!prevSale}
+              aria-label={t("pages.sales.prevSale")}
+              title={t("pages.sales.prevSale")}
+              onClick={() => {
+                if (prevSale) router.push(`/sales/${prevSale.id}`);
+              }}
+            >
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+                <path
+                  d="M10 3.5 5.5 8 10 12.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+            <span className="min-w-[4.5rem] px-1 text-center tabular-nums text-ink">
+              {t("pages.sales.recordOf", {
+                current: saleIndex + 1,
+                total: orderedSales.length,
+              })}
+            </span>
+            <button
+              type="button"
+              className="inline-flex h-7 w-7 items-center justify-center text-mute transition hover:bg-line/40 hover:text-ink disabled:cursor-default disabled:opacity-30"
+              disabled={!nextSale}
+              aria-label={t("pages.sales.nextSale")}
+              title={t("pages.sales.nextSale")}
+              onClick={() => {
+                if (nextSale) router.push(`/sales/${nextSale.id}`);
+              }}
+            >
+              <svg viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" aria-hidden>
+                <path
+                  d="M6 3.5 10.5 8 6 12.5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="shrink-0">
       <OdooFormToolbar>
         {sale.status === "pending" ? (
           <>
@@ -216,9 +294,10 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
           {deleting ? t("common.deleting") : t("pages.sales.deleteSale")}
         </button>
       </OdooFormToolbar>
+      </div>
 
-      <div className="grid min-h-0 flex-1 border border-line bg-panel lg:grid-cols-[minmax(0,1fr)_minmax(300px,38%)]">
-        <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
+      <div className="grid min-h-0 flex-1 overflow-hidden border border-line bg-panel max-lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(300px,38%)]">
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
           <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl tracking-wide text-ink">{sale.number}</h1>
@@ -332,7 +411,9 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
           ) : null}
         </div>
 
-        <SaleChatPanel email={sale.email} customerName={sale.customer} />
+        <div className="flex min-h-0 flex-col overflow-hidden border-t border-line lg:border-t-0">
+          <SaleChatPanel email={sale.email} customerName={sale.customer} />
+        </div>
       </div>
 
       <Modal

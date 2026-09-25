@@ -2,10 +2,18 @@ import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { missingEnv } from "@/lib/api";
 import { autoSubscribe } from "@/lib/mail/auto-subscribe";
+import { listAttachmentsByReplyIds } from "@/lib/mail/attachments";
 import { isOwnAddress, messageContact } from "@/lib/mail/extract";
 import { getSupabase } from "@/lib/supabase/server";
 
 const IMAP_KEYS = ["IMAP_HOST", "IMAP_USER", "IMAP_PASSWORD"] as const;
+
+export type MailMessageAttachment = {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+};
 
 export type MailMessage = {
   id: string;
@@ -18,13 +26,17 @@ export type MailMessage = {
   bodyText: string | null;
   receivedAt: string;
   isRead: boolean;
+  attachments?: MailMessageAttachment[];
 };
 
 export function missingImapEnv(): string[] {
   return missingEnv(IMAP_KEYS);
 }
 
-function mapRow(row: Record<string, unknown>): MailMessage {
+function mapRow(
+  row: Record<string, unknown>,
+  attachments: MailMessageAttachment[] = [],
+): MailMessage {
   return {
     id: String(row.id),
     messageId: (row.message_id as string) || null,
@@ -36,7 +48,23 @@ function mapRow(row: Record<string, unknown>): MailMessage {
     bodyText: (row.body_text as string) || null,
     receivedAt: String(row.received_at),
     isRead: Boolean(row.is_read),
+    attachments: attachments.length ? attachments : undefined,
   };
+}
+
+async function withMessageAttachments(
+  rows: MailMessage[],
+): Promise<MailMessage[]> {
+  const attachmentMap = await listAttachmentsByReplyIds(rows.map((r) => r.id));
+  return rows.map((row) => {
+    const files = (attachmentMap.get(row.id) ?? []).map((file) => ({
+      id: file.id,
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      byteSize: file.byteSize,
+    }));
+    return files.length ? { ...row, attachments: files } : row;
+  });
 }
 
 export async function listMailMessages(limit = 150): Promise<MailMessage[]> {
@@ -49,7 +77,8 @@ export async function listMailMessages(limit = 150): Promise<MailMessage[]> {
     .order("received_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  return withMessageAttachments(rows);
 }
 
 /** Full conversation for one client email (inbox + sent), newest first. */
@@ -69,7 +98,8 @@ export async function listMailMessagesForEmail(
     .order("received_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+  return withMessageAttachments(rows);
 }
 
 export async function listUnreadInbox(limit = 12): Promise<{

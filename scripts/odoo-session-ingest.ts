@@ -38,8 +38,11 @@ loadEnv();
 const PORT = Number(process.env.ODOO_INGEST_PORT || 8765);
 const OWN_HINTS = [
   "inkamototours.com",
+  "inkamoto-tours.odoo.com",
   "inkamoto",
   "contact@inkamototours",
+  "notifications@",
+  "catchall@",
 ];
 
 type Partner = { id: number; name: string; email: string | false | null };
@@ -53,6 +56,8 @@ type Msg = {
   partner_ids: number[];
   model: string | false;
   res_id: number | false;
+  /** Pre-resolved client address from lead/sale/partner lookup in the browser export. */
+  client_email?: string | null;
 };
 
 const stats = {
@@ -78,6 +83,9 @@ function stripHtml(html: string) {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
+    .replace(/[\u200b-\u200d\u2060\ufeff\u00ad\u034f\u180e]/g, "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\r\n?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -135,12 +143,18 @@ async function ingest(partners: Partner[], messages: Msg[]) {
 
   for (const msg of messages) {
     try {
-      let clientEmail: string | null = null;
-      for (const pid of msg.partner_ids || []) {
-        const partner = byId.get(pid);
-        if (partner && !isOwnEmail(partner.email, ownEmails)) {
-          clientEmail = partner.email;
-          break;
+      let clientEmail: string | null =
+        extractEmail(msg.client_email ?? null) &&
+        !isOwnEmail(extractEmail(msg.client_email ?? null), ownEmails)
+          ? extractEmail(msg.client_email ?? null)
+          : null;
+      if (!clientEmail) {
+        for (const pid of msg.partner_ids || []) {
+          const partner = byId.get(pid);
+          if (partner && !isOwnEmail(partner.email, ownEmails)) {
+            clientEmail = partner.email;
+            break;
+          }
         }
       }
       if (

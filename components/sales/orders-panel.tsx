@@ -104,8 +104,8 @@ function groupSales(
     let label: string;
     switch (groupBy) {
       case "salesperson":
-        key = "jorge";
-        label = "Jorge";
+        key = sale.salesperson.trim() || "—";
+        label = key;
         break;
       case "customer":
         key = sale.customer.trim() || "—";
@@ -145,7 +145,7 @@ export function OrdersPanel() {
   const router = useRouter();
   const { sales } = useCrm();
   const { t, locale } = useLocale();
-  const [view, setView] = useState<ViewMode>("kanban");
+  const [view, setView] = useState<ViewMode>("list");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<SaleFilter>("all");
   const [groupBy, setGroupBy] = useState<GroupByKey | null>(null);
@@ -184,7 +184,11 @@ export function OrdersPanel() {
           .toLowerCase()
           .includes(q);
       })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .sort((a, b) => {
+        const byDate = b.createdAt.localeCompare(a.createdAt);
+        if (byDate !== 0) return byDate;
+        return b.number.localeCompare(a.number, undefined, { numeric: true });
+      });
   }, [sales, query, filter]);
 
   const groups = useMemo(
@@ -360,7 +364,7 @@ export function OrdersPanel() {
                               {formatDate(s.createdAt, locale)}
                             </td>
                             <td className="text-mute">
-                              {t("pages.sales.defaultSalesperson")}
+                              {s.salesperson || t("pages.sales.defaultSalesperson")}
                             </td>
                             <td className="whitespace-nowrap font-medium">
                               <SalesAmount amount={s.amount} locale={locale} />

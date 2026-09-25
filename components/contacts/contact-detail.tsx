@@ -191,8 +191,8 @@ export function ContactDetail({ contactId }: { contactId: string }) {
   const subtitle = [chatEmail, form.phone.trim()].filter(Boolean).join(" · ");
 
   return (
-    <div className="flex min-h-[calc(100dvh-9rem)] flex-col">
-      <div className="mb-3 text-xs text-mute">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden px-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
+      <div className="mb-3 shrink-0 text-xs text-mute">
         <Link href="/contacts" className="hover:text-ink">
           {t("pages.contacts.title")}
         </Link>
@@ -200,6 +200,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
         <span className="text-ink">{title}</span>
       </div>
 
+      <div className="shrink-0">
       <OdooFormToolbar>
         <button
           type="submit"
@@ -230,15 +231,16 @@ export function ContactDetail({ contactId }: { contactId: string }) {
           {t("common.cancel")}
         </Link>
       </OdooFormToolbar>
+      </div>
 
       {formError ? (
-        <p className="mb-3 border border-wine/40 bg-wine/10 px-3 py-2 text-sm text-pink">
+        <p className="mb-3 shrink-0 border border-wine/40 bg-wine/10 px-3 py-2 text-sm text-pink">
           {formError}
         </p>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 overflow-hidden border border-line bg-panel lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-        <div className="min-h-0 overflow-y-auto">
+      <div className="grid min-h-0 flex-1 overflow-hidden border border-line bg-panel max-lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+        <div className="min-h-0 overflow-y-auto overscroll-contain">
           <header className="border-b border-line bg-gradient-to-b from-ash/30 to-transparent px-5 py-5 sm:px-6">
             <div className="flex items-start gap-4">
               <span
@@ -308,7 +310,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
           />
         </div>
 
-        <div className="flex min-h-[28rem] flex-col border-t border-line lg:min-h-0 lg:border-t-0">
+        <div className="flex min-h-0 flex-col overflow-hidden border-t border-line lg:border-t-0">
           <SaleChatPanel
             email={chatEmail}
             customerName={chatName}

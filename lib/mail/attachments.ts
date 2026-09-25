@@ -19,16 +19,34 @@ function mapMeta(row: Record<string, unknown>): MailAttachmentMeta {
   };
 }
 
+/**
+ * Save a file on a mail_reply OR mail_message row.
+ * `reply_id` has no FK — we reuse it for mail_messages.id for Odoo chatter docs.
+ */
 export async function saveReplyAttachment(input: {
   replyId: string;
   fileName: string;
   mimeType?: string;
   base64: string;
+  /** Skip insert when same file already linked to this message/reply. */
+  dedupe?: boolean;
 }): Promise<MailAttachmentMeta | null> {
   if (missingSupabaseEnv().length > 0) return null;
 
   const bytes = Buffer.from(input.base64, "base64");
   const supabase = getSupabase();
+
+  if (input.dedupe !== false) {
+    const { data: existing } = await supabase
+      .from("mail_reply_attachments")
+      .select("id, reply_id, file_name, mime_type, byte_size")
+      .eq("reply_id", input.replyId)
+      .eq("file_name", input.fileName)
+      .eq("byte_size", bytes.length)
+      .maybeSingle();
+    if (existing) return mapMeta(existing as Record<string, unknown>);
+  }
+
   const { data, error } = await supabase
     .from("mail_reply_attachments")
     .insert({
@@ -52,19 +70,24 @@ export async function listAttachmentsByReplyIds(
   if (replyIds.length === 0 || missingSupabaseEnv().length > 0) return map;
 
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("mail_reply_attachments")
-    .select("id, reply_id, file_name, mime_type, byte_size")
-    .in("reply_id", replyIds)
-    .order("created_at", { ascending: true });
+  // PostgREST .in() caps; chunk large conversation fetches.
+  const chunk = 100;
+  for (let i = 0; i < replyIds.length; i += chunk) {
+    const slice = replyIds.slice(i, i + chunk);
+    const { data, error } = await supabase
+      .from("mail_reply_attachments")
+      .select("id, reply_id, file_name, mime_type, byte_size")
+      .in("reply_id", slice)
+      .order("created_at", { ascending: true });
 
-  if (error || !data) return map;
+    if (error || !data) continue;
 
-  for (const row of data) {
-    const meta = mapMeta(row as Record<string, unknown>);
-    const bucket = map.get(meta.replyId) ?? [];
-    bucket.push(meta);
-    map.set(meta.replyId, bucket);
+    for (const row of data) {
+      const meta = mapMeta(row as Record<string, unknown>);
+      const bucket = map.get(meta.replyId) ?? [];
+      bucket.push(meta);
+      map.set(meta.replyId, bucket);
+    }
   }
   return map;
 }

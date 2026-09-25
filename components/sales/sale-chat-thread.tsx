@@ -11,7 +11,7 @@ import { EmptyHint } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
 import { previewOf } from "@/lib/mail/clean";
 import { displayContactName, groupMailRooms, type RoomMessage } from "@/lib/mail/rooms";
-import { formatDate } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
 
 type MailMessage = {
@@ -24,6 +24,12 @@ type MailMessage = {
   bodyText: string | null;
   receivedAt: string;
   isRead: boolean;
+  attachments?: {
+    id: string;
+    fileName: string;
+    mimeType: string;
+    byteSize: number;
+  }[];
 };
 
 type MailReply = {
@@ -42,38 +48,105 @@ type MailReply = {
   }[];
 };
 
+const AVATAR_TONES = [
+  "bg-[#714B67]",
+  "bg-[#017e84]",
+  "bg-[#5a7aa8]",
+  "bg-[#c47a3a]",
+  "bg-[#6b8f3a]",
+  "bg-[#a85a5a]",
+];
+
+function avatarTone(seed: string) {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) % 9973;
+  }
+  return AVATAR_TONES[hash % AVATAR_TONES.length]!;
+}
+
+function initialsOf(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[1]![0] ?? ""}`.toUpperCase();
+}
+
 function isClientEmail(email: string) {
   const trimmed = email.trim().toLowerCase();
   return trimmed.includes("@") && !trimmed.endsWith("@inkamototours.local");
 }
 
-function SaleChatBubble({ message }: { message: RoomMessage }) {
+function SaleChatBubble({
+  message,
+  youLabel,
+}: {
+  message: RoomMessage;
+  youLabel: string;
+}) {
   const { t, locale } = useLocale();
   const text =
     message.clean.text?.trim() ||
-    previewOf(message.clean, message.raw?.trim() || t("pages.inbox.emptyMessage"));
+    previewOf(message.clean, message.raw?.trim() || "");
+  const hasText = text.length > 0;
+  const hasAtt = (message.attachments?.length ?? 0) > 0;
+  if (!hasText && !hasAtt) return null;
+
+  const author = message.mine
+    ? message.authorName.trim() || youLabel
+    : message.authorName.trim() || message.subject || youLabel;
+  const showSubject =
+    !message.mine &&
+    message.subject.trim() &&
+    !/^note$/i.test(message.subject) &&
+    !/^update$/i.test(message.subject);
 
   return (
-    <div
-      className={`max-w-[88%] rounded-md px-3 py-2 text-sm ${message.mine
-          ? "ml-auto bg-accent/15 text-ink"
-          : "mr-auto border border-line bg-panel text-ink"
-        }`}
-    >
-      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-mute">
-        {message.mine ? t("pages.inbox.youPrefix").replace(/:\s*$/, "") : message.subject}
-        {" · "}
-        {formatDate(message.at.slice(0, 10), locale)}
-      </p>
-      <LinkifiedText
-        text={text}
-        className="whitespace-pre-wrap wrap-break-word leading-relaxed"
-        linkClassName="font-medium underline underline-offset-2"
-      />
-      {message.attachments?.length ? (
-        <MessageAttachments attachments={message.attachments} mine={message.mine} />
-      ) : null}
-    </div>
+    <article className="flex gap-2.5 px-1 py-1.5" role="group" aria-label={author}>
+      <span
+        className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-[11px] font-bold text-white ${avatarTone(author)}`}
+        aria-hidden
+      >
+        {initialsOf(author)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <header className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-none">
+          <strong className="text-[13px] font-semibold text-ink">{author}</strong>
+          <time
+            className="text-[11px] text-mute"
+            dateTime={message.at}
+            title={message.at}
+          >
+            {formatDateTime(message.at, locale)}
+          </time>
+        </header>
+        <div
+          className={`relative max-w-[min(100%,36rem)] rounded-md rounded-tl-sm px-3 py-2 text-[13px] leading-relaxed ${
+            message.mine ? "odoo-mail-bubble-out" : "odoo-mail-bubble-in"
+          }`}
+        >
+          {showSubject ? (
+            <p className="mb-1.5 text-[12px] font-medium text-white/70">
+              {t("common.subject")}: {message.subject}
+            </p>
+          ) : null}
+          {hasText ? (
+            <LinkifiedText
+              text={text}
+              className="whitespace-pre-wrap wrap-break-word text-white"
+              linkClassName="font-medium underline underline-offset-2"
+            />
+          ) : null}
+          {hasAtt ? (
+            <MessageAttachments
+              attachments={message.attachments!}
+              mine={message.mine}
+              tone="light"
+            />
+          ) : null}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -97,6 +170,7 @@ export function SaleChatPanel({
   const threadRef = useRef<HTMLDivElement>(null);
 
   const canLoad = isClientEmail(email);
+  const youLabel = t("pages.inbox.youPrefix").replace(/:\s*$/, "").trim() || "You";
 
   const loadConversation = useCallback(async () => {
     if (!canLoad) {
@@ -170,7 +244,17 @@ export function SaleChatPanel({
 
   useEffect(() => {
     const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    let cancelled = false;
+    const stick = () => {
+      if (!cancelled) el.scrollTop = el.scrollHeight;
+    };
+    stick();
+    const timers = [400, 1200, 2800].map((ms) => window.setTimeout(stick, ms));
+    return () => {
+      cancelled = true;
+      for (const id of timers) window.clearTimeout(id);
+    };
   }, [messages.length, email]);
 
   async function sendMessage(payload: MessageComposePayload) {
@@ -204,39 +288,26 @@ export function SaleChatPanel({
   const displayName = displayContactName(customerName, email);
 
   return (
-    <aside className="flex h-full min-h-[420px] min-w-0 flex-col border-l-0 bg-ash/60 lg:min-h-0 lg:border-l lg:border-line">
-      <header className="shrink-0 border-b border-line/80 px-4 py-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gold/90">
+    <aside className="flex h-full min-h-0 min-w-0 flex-col border-l-0 bg-panel lg:border-l lg:border-line">
+      <header className="shrink-0 border-b border-line px-4 py-2.5">
+        <p className="text-[13px] font-semibold text-ink">
           {title || t("pages.sales.clientMessages")}
         </p>
         {email ? (
-          <p className="mt-1 truncate text-xs text-mute">{email}</p>
+          <p className="mt-0.5 truncate text-xs text-mute">{email}</p>
         ) : null}
       </header>
 
-      <div ref={threadRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-4 sm:px-4">
+      <div
+        ref={threadRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 sm:px-3"
+      >
         {!canLoad ? (
           <EmptyHint>{t("pages.sales.clientEmailMissing")}</EmptyHint>
         ) : loading ? (
-          <p className="text-sm text-mute">{t("common.loading")}</p>
+          <p className="px-2 py-4 text-sm text-mute">{t("common.loading")}</p>
         ) : messages.length === 0 ? (
           <div className="flex h-full min-h-[12rem] flex-col items-center justify-center px-4 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full border border-line bg-panel text-mute">
-              <svg
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                aria-hidden
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 6.5h16v11H4zM4 7l8 6 8-6"
-                />
-              </svg>
-            </div>
             <p className="text-sm font-medium text-ink">
               {t("pages.sales.noClientMessages")}
             </p>
@@ -246,16 +317,22 @@ export function SaleChatPanel({
           </div>
         ) : (
           messages.map((message) => (
-            <SaleChatBubble key={message.key} message={message} />
+            <SaleChatBubble
+              key={message.key}
+              message={message}
+              youLabel={youLabel}
+            />
           ))
         )}
       </div>
 
-      <footer className="shrink-0 border-t border-line/80 bg-panel/80 p-3 sm:p-4">
+      <footer className="shrink-0 border-t border-line bg-ash/40 p-3 sm:p-4">
         {canLoad && brevoReady ? (
           <MessageCompose
             placeholder={t("pages.inbox.messagePlaceholder", { name: displayName })}
             sending={sending}
+            variant="chatter"
+            sendTone="danger"
             onSend={sendMessage}
           />
         ) : canLoad ? (

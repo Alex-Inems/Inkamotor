@@ -35,6 +35,8 @@ export async function GET(request: Request, { params }: Params) {
         download ? "attachment" : "inline"
       }; filename="${safeName}"`,
       "Cache-Control": "private, max-age=86400",
+      "X-Content-Type-Options": "nosniff",
+      Accept: "*/*",
     },
   });
 }

@@ -30,8 +30,11 @@ type OdooMailMessage = {
 
 const OWN_HINTS = [
   "inkamototours.com",
+  "inkamoto-tours.odoo.com",
   "inkamoto",
   "contact@inkamototours",
+  "notifications@",
+  "catchall@",
 ];
 
 function stripHtml(html: string) {

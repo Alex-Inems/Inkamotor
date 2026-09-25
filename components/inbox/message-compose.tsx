@@ -22,12 +22,15 @@ export function MessageCompose({
   sending,
   disabled,
   variant = "default",
+  sendTone = "accent",
   onSend,
 }: {
   placeholder: string;
   sending: boolean;
   disabled?: boolean;
-  variant?: "inbox" | "default";
+  variant?: "inbox" | "default" | "chatter";
+  /** Sale chatter uses brand red; inbox keeps teal. */
+  sendTone?: "accent" | "danger";
   onSend: (payload: MessageComposePayload) => Promise<void>;
 }) {
   const { t } = useLocale();
@@ -119,12 +122,18 @@ export function MessageCompose({
   const textareaClass =
     variant === "inbox"
       ? "max-h-32 min-h-11 flex-1 resize-none rounded-[22px] border border-line bg-ash px-3.5 py-2.5 text-sm leading-snug outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none"
-      : "min-h-11 flex-1 resize-none border border-line bg-canvas px-3 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold";
+      : variant === "chatter"
+        ? "max-h-32 min-h-11 w-full min-w-0 flex-1 resize-none rounded-full border border-line bg-canvas px-4 py-2.5 text-sm leading-snug outline-none placeholder:text-mute/70 focus:border-gold"
+        : "min-h-11 flex-1 resize-none border border-line bg-canvas px-3 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold";
 
   const sendButtonClass =
     variant === "inbox"
       ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-chat-out text-chat-out-text transition-colors hover:bg-accent-deep disabled:opacity-40 sm:w-auto sm:rounded-none sm:bg-accent sm:px-4 sm:text-sm sm:font-semibold sm:text-cream"
-      : "inline-flex min-h-11 shrink-0 items-center justify-center bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50";
+      : variant === "chatter"
+        ? "flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sale text-white transition-colors hover:bg-pink-deep disabled:opacity-40"
+        : sendTone === "danger"
+          ? "inline-flex min-h-11 shrink-0 items-center justify-center bg-sale px-4 text-sm font-semibold text-white hover:bg-pink-deep disabled:opacity-50"
+          : "inline-flex min-h-11 shrink-0 items-center justify-center bg-accent px-4 text-sm font-semibold text-white hover:bg-accent-deep disabled:opacity-50";
 
   return (
     <div className="space-y-2">
@@ -194,7 +203,11 @@ export function MessageCompose({
               type="button"
               onClick={insertLink}
               disabled={!linkUrl.trim()}
-              className="bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-deep disabled:opacity-50"
+              className={`px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${
+                sendTone === "danger"
+                  ? "bg-sale hover:bg-pink-deep"
+                  : "bg-accent hover:bg-accent-deep"
+              }`}
             >
               {t("pages.inbox.insertLink")}
             </button>
@@ -203,54 +216,60 @@ export function MessageCompose({
       ) : null}
 
       <div className="flex items-end gap-2">
-        <div className="flex shrink-0 items-center gap-0.5 self-end pb-0.5">
-          <input
-            id={fileInputId}
-            type="file"
-            multiple
-            className="sr-only"
-            onChange={(e) => {
-              addFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          <label
-            htmlFor={fileInputId}
-            className="flex h-10 w-10 cursor-pointer items-center justify-center text-mute transition-colors hover:bg-panel hover:text-ink"
-            title={t("pages.inbox.attachFiles")}
-            aria-label={t("pages.inbox.attachFiles")}
-          >
-            <AttachIcon />
-          </label>
-          <button
-            type="button"
-            onClick={() => setLinkOpen((open) => !open)}
-            className="flex h-10 w-10 items-center justify-center text-mute transition-colors hover:bg-panel hover:text-ink"
-            title={t("pages.inbox.addLink")}
-            aria-label={t("pages.inbox.addLink")}
-          >
-            <LinkIcon />
-          </button>
-        </div>
+        <div className="flex min-w-0 flex-1 items-end gap-1.5">
+          <div className="flex shrink-0 items-center gap-0.5 self-end pb-0.5">
+            <input
+              id={fileInputId}
+              type="file"
+              multiple
+              className="sr-only"
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            <label
+              htmlFor={fileInputId}
+              className={`flex h-10 w-10 cursor-pointer items-center justify-center text-mute transition-colors hover:bg-panel hover:text-ink ${
+                variant === "chatter" ? "rounded-full" : ""
+              }`}
+              title={t("pages.inbox.attachFiles")}
+              aria-label={t("pages.inbox.attachFiles")}
+            >
+              <AttachIcon />
+            </label>
+            {variant === "chatter" ? null : (
+              <button
+                type="button"
+                onClick={() => setLinkOpen((open) => !open)}
+                className="flex h-10 w-10 items-center justify-center text-mute transition-colors hover:bg-panel hover:text-ink"
+                title={t("pages.inbox.addLink")}
+                aria-label={t("pages.inbox.addLink")}
+              >
+                <LinkIcon />
+              </button>
+            )}
+          </div>
 
-        <textarea
-          ref={textareaRef}
-          rows={variant === "inbox" ? 1 : 2}
-          value={draft}
-          disabled={disabled || sending}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            resizeTextarea(e.target);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              if (canSend) void handleSend();
-            }
-          }}
-          placeholder={placeholder}
-          className={textareaClass}
-        />
+          <textarea
+            ref={textareaRef}
+            rows={variant === "default" ? 2 : 1}
+            value={draft}
+            disabled={disabled || sending}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              resizeTextarea(e.target);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (canSend) void handleSend();
+              }
+            }}
+            placeholder={placeholder}
+            className={textareaClass}
+          />
+        </div>
 
         <button
           type="button"
@@ -259,7 +278,9 @@ export function MessageCompose({
           aria-label={t("pages.inbox.send")}
           className={sendButtonClass}
         >
-          {variant === "inbox" ? (
+          {variant === "chatter" ? (
+            sending ? "…" : <SendIcon />
+          ) : variant === "inbox" ? (
             <>
               <span className="sm:hidden">{sending ? "…" : <SendIcon />}</span>
               <span className="hidden sm:inline">

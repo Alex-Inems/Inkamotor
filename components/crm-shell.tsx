@@ -33,6 +33,7 @@ const pageKeys: Record<string, string> = {
   "/newsletter": "nav.newsletter",
   "/email-marketing": "nav.newsletter",
   "/setup": "nav.setup",
+  "/settings": "nav.settings",
 };
 
 export function CrmShell({
@@ -77,7 +78,8 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
           ? "pages.contacts.title"
           : "brand.crm"),
   );
-  const fullBleed = pathname === "/inbox";
+  const fullBleed =
+    pathname === "/inbox" || isSaleDetail || isContactDetail;
   const wideMain = isSaleDetail || isContactDetail;
   const [navOpen, setNavOpen] = useState(false);
 

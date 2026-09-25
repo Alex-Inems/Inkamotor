@@ -23,6 +23,7 @@ export type MailItem = {
   bodyText: string | null;
   receivedAt: string;
   isRead: boolean;
+  attachments?: ReplyAttachment[];
 };
 
 export type ReplyAttachment = {
@@ -48,6 +49,7 @@ export type RoomMessage = {
   mine: boolean;
   at: string;
   subject: string;
+  authorName: string;
   clean: CleanBody;
   raw: string;
   mailId?: string;
@@ -142,14 +144,20 @@ export function groupMailRooms(input: {
             ]);
       if (!recipient || isOwnAddress(recipient, ownAddresses)) continue;
       const room = ensure(recipient, null);
-      if (hasNearDuplicate(room, true, raw, m.receivedAt)) continue;
+      const dup = findNearDuplicate(room, true, raw, m.receivedAt);
+      if (dup) {
+        if (m.attachments?.length) dup.attachments = m.attachments;
+        continue;
+      }
       room.messages.push({
         key: `out-mail-${m.id}`,
         mine: true,
         at: m.receivedAt,
         subject: m.subject,
+        authorName: m.fromName?.trim() || m.fromEmail,
         clean: cleanBody(raw),
         raw,
+        attachments: m.attachments?.length ? m.attachments : undefined,
       });
       continue;
     }
@@ -168,14 +176,35 @@ export function groupMailRooms(input: {
       formContact.email ?? contact.email,
       formContact.name ?? (fromForm ? contact.name : m.fromName),
     );
+    const inboundDup = findNearDuplicate(room, false, raw, m.receivedAt);
+    if (inboundDup) {
+      // Prefer the copy that carries attachments (sale-import vs mail-import).
+      if (m.attachments?.length) {
+        const existing = inboundDup.attachments?.length ?? 0;
+        if (m.attachments.length >= existing) {
+          inboundDup.attachments = m.attachments;
+        }
+        if (raw.length > inboundDup.raw.length) {
+          inboundDup.raw = raw;
+          inboundDup.clean = clean;
+        }
+      }
+      continue;
+    }
     room.messages.push({
       key: `in-${m.id}`,
       mine: false,
       at: m.receivedAt,
       subject: m.subject,
+      authorName:
+        formContact.name?.trim() ||
+        contact.name?.trim() ||
+        m.fromName?.trim() ||
+        m.fromEmail,
       clean,
       raw,
       mailId: m.id,
+      attachments: m.attachments?.length ? m.attachments : undefined,
     });
     if (clean.fields.length > 0) room.fields = clean.fields;
     if (!m.isRead && !opened.includes(room.email)) room.unread += 1;
@@ -205,6 +234,7 @@ export function groupMailRooms(input: {
       mine: true,
       at: r.sentAt,
       subject: r.subject,
+      authorName: "",
       clean: cleanBody(r.bodyText),
       raw: r.bodyText,
       attachments: r.attachments?.length ? r.attachments : undefined,

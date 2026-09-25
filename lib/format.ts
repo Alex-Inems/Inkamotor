@@ -56,6 +56,16 @@ export function formatDate(iso: string, locale?: Locale) {
   }).format(new Date(iso));
 }
 
+export function formatDateTime(iso: string, locale?: Locale) {
+  return new Intl.DateTimeFormat(tag(locale), {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  }).format(new Date(iso));
+}
+
 export function formatPercent(n: number, digits = 1) {
   return `${n.toFixed(digits)}%`;
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { InkamotoLogo } from "@/components/brand";
 import { UserAvatar } from "@/components/user-avatar";
 import { LanguageSwitcher, localeMeta, useLocale, type Locale } from "@/lib/i18n";
@@ -21,6 +22,7 @@ export function Topbar({
   menuOpen: boolean;
   onMenu: () => void;
 }) {
+  const router = useRouter();
   const { pushToast } = useCrm();
   const { t, locale } = useLocale();
   const currentUser = useSessionUser();
@@ -349,20 +351,21 @@ export function Topbar({
                     label={t("topbar.accountSettings")}
                     onClick={() => {
                       setUserOpen(false);
-                      pushToast(t("topbar.openingAccount"));
+                      router.push("/settings");
                     }}
                   />
                   <MenuItem
                     label={t("topbar.workspacePrefs")}
                     onClick={() => {
                       setUserOpen(false);
-                      pushToast(t("topbar.openingWorkspace"));
+                      router.push("/settings");
                     }}
                   />
                   <MenuItem
                     label={t("topbar.billing")}
                     onClick={() => {
                       setUserOpen(false);
+                      router.push("/settings");
                       pushToast(
                         t("topbar.manageBilling", { plan: currentWorkspace.plan }),
                       );
