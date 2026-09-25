@@ -133,7 +133,7 @@ function PdfCanvasPreview({
           const ctx = canvas.getContext("2d");
           if (!ctx) continue;
           host.appendChild(canvas);
-          await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+          await page.render({ canvasContext: ctx, viewport }).promise;
           if (cancelled) break;
         }
 
