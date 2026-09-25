@@ -1,12 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { InkamotoLogo } from "@/components/brand";
-import { UserAvatar } from "@/components/user-avatar";
-import { currentWorkspace } from "@/lib/session";
-import { useSessionUser } from "@/lib/session-user";
-import { useT } from "@/lib/i18n";
 import { useInboxNotifications } from "@/lib/inbox-notifications";
+import { useT } from "@/lib/i18n";
 
 const nav = [
   { href: "/", key: "nav.overview", icon: OverviewIcon, tour: "overview" },
@@ -15,10 +11,109 @@ const nav = [
   { href: "/contacts", key: "nav.contacts", icon: ContactsIcon },
   { href: "/sales", key: "nav.sales", icon: SalesIcon, tour: "sales" },
   { href: "/search-console", key: "nav.searchConsole", icon: SearchConsoleIcon },
-  { href: "/email-marketing", key: "nav.newsletter", icon: NewsletterIcon, tour: "newsletter" },
+  {
+    href: "/email-marketing",
+    key: "nav.newsletter",
+    icon: NewsletterIcon,
+    tour: "newsletter",
+  },
   { href: "/settings", key: "nav.settings", icon: SettingsIcon },
 ];
 
+function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  if (href === "/email-marketing") {
+    return (
+      pathname === "/email-marketing" ||
+      pathname.startsWith("/email-marketing/") ||
+      pathname === "/newsletter" ||
+      pathname.startsWith("/newsletter/")
+    );
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function AppNavLinks({
+  pathname,
+  onNavigate,
+  layout = "horizontal",
+  navId,
+}: {
+  pathname: string;
+  onNavigate?: () => void;
+  layout?: "horizontal" | "stack";
+  navId?: string;
+}) {
+  const t = useT();
+  const { unread } = useInboxNotifications();
+  const stack = layout === "stack";
+  const items = nav;
+
+  return (
+    <nav
+      id={navId}
+      aria-label={t("brand.crm")}
+      className={
+        stack
+          ? "flex flex-col gap-1 p-3"
+          : "flex min-w-0 items-stretch gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      }
+    >
+      {items.map((item) => {
+        const active = isActive(pathname, item.href);
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            data-tour={item.tour}
+            suppressHydrationWarning
+            onClick={onNavigate}
+            className={
+              stack
+                ? `group relative flex min-h-12 items-center gap-3 px-3.5 text-[15px] font-semibold tracking-[0.02em] transition-colors ${
+                    active
+                      ? "bg-accent text-white"
+                      : "text-mute hover:bg-panel hover:text-ink"
+                  }`
+                : `group relative flex shrink-0 items-center gap-2 px-3 py-2.5 text-[14px] font-semibold tracking-[0.02em] transition-colors xl:gap-2.5 xl:px-3.5 xl:text-[15px] ${
+                    active
+                      ? "text-ink"
+                      : "text-mute hover:text-ink"
+                  }`
+            }
+          >
+            <span className={stack ? "" : "inline-flex"}>
+              <Icon active={active} />
+            </span>
+            <span className="whitespace-nowrap">{t(item.key)}</span>
+            {item.href === "/inbox" && unread > 0 ? (
+              <span
+                className={`flex h-5 min-w-5 items-center justify-center px-1.5 text-[11px] font-bold leading-none text-white ${
+                  stack && active ? "bg-pink/90" : "bg-pink"
+                }`}
+              >
+                {unread > 9 ? "9+" : unread}
+              </span>
+            ) : null}
+            {!stack ? (
+              <span
+                aria-hidden
+                className={`pointer-events-none absolute inset-x-2.5 bottom-0 h-[2.5px] origin-left transition-transform duration-200 ${
+                  active
+                    ? "scale-x-100 bg-gold"
+                    : "scale-x-0 bg-sand/70 group-hover:scale-x-100"
+                }`}
+              />
+            ) : null}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+/** @deprecated Prefer AppNavLinks — kept for any residual imports. */
 export function Sidebar({
   pathname,
   open,
@@ -28,154 +123,28 @@ export function Sidebar({
   open: boolean;
   onClose: () => void;
 }) {
-  const t = useT();
-  const currentUser = useSessionUser();
-  const { unread } = useInboxNotifications();
-  const visibleNav = nav;
-
+  if (!open) return null;
   return (
-    <aside
-      id="app-nav"
-      className={`fixed inset-y-0 left-0 z-[45] flex w-[min(var(--crm-sidebar),calc(100vw-2.75rem))] flex-col border-r border-line bg-ash pt-[6px] shadow-xl transition-transform duration-200 ease-out pl-[env(safe-area-inset-left)] lg:bottom-0 lg:top-[6px] lg:z-40 lg:w-[var(--crm-sidebar)] lg:translate-x-0 lg:pt-0 lg:shadow-none ${open ? "translate-x-0" : "pointer-events-none -translate-x-full lg:pointer-events-auto lg:translate-x-0"
-        }`}
-    >
-      <div className="flex items-start justify-between gap-2 px-3 py-3">
-        <div className="min-w-0">
-          <InkamotoLogo className="h-6 w-auto" />
-        </div>
-        <button
-          type="button"
-          aria-label={t("nav.closeMenu")}
-          onClick={onClose}
-          className="flex h-11 w-11 shrink-0 items-center justify-center text-mute transition-colors hover:bg-panel hover:text-ink lg:hidden"
-        >
-          <CloseIcon />
-        </button>
-      </div>
-
-      <div className="mx-2 mb-2 border border-line bg-panel px-2.5 py-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-mute">
-          {t("brand.workspace")}
-        </p>
-        <p className="mt-0.5 truncate text-[13px] font-semibold text-ink">
-          {currentWorkspace.name}
-        </p>
-        <p className="text-[11px] leading-snug text-mute">
-          {currentWorkspace.plan} · {currentWorkspace.region}
-        </p>
-      </div>
-
-      <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-2">
-        {visibleNav.map((item) => {
-          const active =
-            item.href === "/"
-              ? pathname === "/"
-              : item.href === "/email-marketing"
-                ? pathname === "/email-marketing" ||
-                  pathname.startsWith("/email-marketing/") ||
-                  pathname === "/newsletter" ||
-                  pathname.startsWith("/newsletter/")
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              data-tour={item.tour}
-              suppressHydrationWarning
-              className={`flex min-h-10 shrink-0 items-center gap-2 px-2.5 py-2 text-[12px] font-medium uppercase tracking-[0.04em] transition-colors sm:text-[13px] ${active
-                  ? "bg-accent text-white"
-                  : "text-mute hover:bg-panel hover:text-ink"
-                }`}
-            >
-              <Icon active={active} />
-              <span className="min-w-0 flex-1 truncate">{t(item.key)}</span>
-              {item.href === "/inbox" && unread > 0 ? (
-                <span className="ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center bg-pink px-1.5 text-[10px] font-bold leading-none text-white">
-                  {unread > 9 ? "9+" : unread}
-                </span>
-              ) : null}
-            </Link>
-          );
-        })}
-      </nav>
-
-      <div className="mt-auto border-t border-line px-2 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <div className="border border-line bg-panel px-2.5 py-2.5">
-          <div className="flex items-start gap-2.5">
-            <div className="relative shrink-0">
-              <UserAvatar
-                user={currentUser}
-                className="h-9 w-9 text-[11px]"
-              />
-              <span
-                className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-green ring-2 ring-panel"
-                title={t("common.online")}
-              />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold leading-tight text-ink">
-                {currentUser.name}
-              </p>
-              <p className="mt-0.5 truncate text-[10px] leading-snug text-mute">
-                {currentUser.email}
-              </p>
-              <p className="mt-1 text-[9px] font-semibold uppercase tracking-[0.1em] text-sand">
-                {t("common.admin")}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="mt-2.5 w-full border border-line px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-mute transition-colors hover:border-pink hover:bg-wine/15 hover:text-pink"
-            onClick={() => {
-              void (async () => {
-                await fetch("/api/auth/logout", { method: "POST" });
-                window.location.href = "/login";
-              })();
-            }}
-          >
-            {t("topbar.signOut")}
-          </button>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
-      <path
-        d="M4 4l10 10M14 4 4 14"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
+    <div className="border-t border-line bg-ash lg:hidden">
+      <AppNavLinks pathname={pathname} onNavigate={onClose} layout="stack" />
+    </div>
   );
 }
 
 function OverviewIcon({ active }: { active: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <rect x="1.5" y="1.5" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.4" />
       <rect x="9" y="1.5" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.4" />
       <rect x="1.5" y="9" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.4" />
-      <rect x="9" y="9" width="5.5" height="5.5" stroke="currentColor" strokeWidth="1.4" opacity={active ? 1 : 0.95} />
-    </svg>
-  );
-}
-
-function AnalyticsIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M2 13V8.5M6 13V3.5M10 13V6.5M14 13V5"
+      <rect
+        x="9"
+        y="9"
+        width="5.5"
+        height="5.5"
         stroke="currentColor"
         strokeWidth="1.4"
-        strokeLinecap="round"
-        opacity={active === false ? 0.85 : 1}
+        opacity={active ? 1 : 0.95}
       />
     </svg>
   );
@@ -183,7 +152,7 @@ function AnalyticsIcon({ active }: { active?: boolean }) {
 
 function InboxIcon({ active }: { active?: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <path
         d="M2 4.5h12v8H2z"
         stroke="currentColor"
@@ -202,7 +171,7 @@ function InboxIcon({ active }: { active?: boolean }) {
 
 function SalesIcon({ active }: { active?: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <rect
         x="2"
         y="3.2"
@@ -219,19 +188,13 @@ function SalesIcon({ active }: { active?: boolean }) {
         strokeWidth="1.4"
         strokeLinecap="round"
       />
-      <path
-        d="M5.2 9.2h1.2M7.4 9.2h1.2M9.6 9.2h1.2M5.2 11.4h1.2M7.4 11.4h1.2"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
     </svg>
   );
 }
 
 function LeadsIcon({ active }: { active: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <circle cx="8" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.4" />
       <path
         d="M2.5 13.5c1.2-2.4 3-3.5 5.5-3.5s4.3 1.1 5.5 3.5"
@@ -246,7 +209,7 @@ function LeadsIcon({ active }: { active: boolean }) {
 
 function ContactsIcon({ active }: { active?: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <circle cx="5.5" cy="5" r="2.2" stroke="currentColor" strokeWidth="1.4" />
       <circle
         cx="10.5"
@@ -275,7 +238,7 @@ function ContactsIcon({ active }: { active?: boolean }) {
 
 function SearchConsoleIcon({ active }: { active?: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <circle
         cx="7"
         cy="7"
@@ -294,43 +257,9 @@ function SearchConsoleIcon({ active }: { active?: boolean }) {
   );
 }
 
-function MetaIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M2 10.5c1.2-3.5 2.8-5.5 4.2-5.5 1.2 0 1.9 1.4 2.8 3.5.9 2.1 1.6 3.5 2.8 3.5 1.4 0 3-2 4.2-5.5"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        opacity={active === false ? 0.85 : 1}
-      />
-    </svg>
-  );
-}
-
-function InvoiceIcon({ active }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <path
-        d="M4 1.5h8v13l-1.5-1-1.5 1-1.5-1-1.5 1-1.5-1-1.5 1v-13Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-        opacity={active === false ? 0.85 : 1}
-      />
-      <path
-        d="M6 5h4M6 8h4"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function NewsletterIcon({ active }: { active?: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <rect
         x="1.5"
         y="3"
@@ -352,7 +281,7 @@ function NewsletterIcon({ active }: { active?: boolean }) {
 
 function SettingsIcon({ active }: { active?: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+    <svg width="17" height="17" viewBox="0 0 16 16" fill="none" aria-hidden>
       <circle
         cx="8"
         cy="8"

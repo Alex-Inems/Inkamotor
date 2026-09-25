@@ -10,14 +10,15 @@ export function UserAvatar({
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={user.picture}
-        alt=""
-        className={`${className} object-cover`}
+        alt={user.name}
+        referrerPolicy="no-referrer"
+        className={`block shrink-0 rounded-full object-cover ${className}`}
       />
     );
   }
   return (
     <span
-      className={`flex items-center justify-center font-bold text-white ${className}`}
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${className}`}
       style={{ background: user.avatarHue }}
       aria-hidden
     >

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { btnGhost, btnSecondary } from "@/components/modal";
@@ -8,9 +9,8 @@ import { BulkQuoteByTagModal } from "@/components/sales/bulk-quote-by-tag-modal"
 import { OdooControlPanel } from "@/components/sales/odoo-control-panel";
 import { useCrm } from "@/lib/crm-store";
 import { type Sale, type SaleStatus } from "@/lib/demo-data";
-import { enrichSale } from "@/lib/sale-quote";
 import { SalesAmount } from "@/components/sales/sales-amount";
-import { formatDate, formatNumber, formatSalesMoney } from "@/lib/format";
+import { formatDate, formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
 import { saleTone } from "@/lib/status";
 
@@ -169,8 +169,10 @@ export function OrdersPanel() {
   }, []);
 
   const openSale = (sale: Sale) => {
-    router.push(`/sales/${sale.id}`);
+    router.push(`/sales/${encodeURIComponent(sale.id)}`);
   };
+
+  const saleHref = (sale: Sale) => `/sales/${encodeURIComponent(sale.id)}`;
 
   const stageLabel = (id: SaleStatus) => t(`saleStages.${id}`);
 
@@ -313,7 +315,7 @@ export function OrdersPanel() {
                           sale={sale}
                           busy={false}
                           stageLabel={stageLabel(sale.status)}
-                          onOpen={() => openSale(enrichSale(sale))}
+                          href={saleHref(sale)}
                         />
                       ))}
                     </div>
@@ -354,8 +356,29 @@ export function OrdersPanel() {
                       </thead>
                       <tbody>
                         {group.items.map((s) => (
-                          <tr key={s.id}>
-                            <td className="font-medium">{s.number}</td>
+                          <tr
+                            key={s.id}
+                            className="cursor-pointer"
+                            onClick={() => openSale(s)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                openSale(s);
+                              }
+                            }}
+                            tabIndex={0}
+                            role="link"
+                            aria-label={`${s.number} · ${s.customer}`}
+                          >
+                            <td className="font-medium">
+                              <Link
+                                href={saleHref(s)}
+                                className="text-ink underline-offset-2 hover:underline"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {s.number}
+                              </Link>
+                            </td>
                             <td>
                               <p>{s.customer}</p>
                               <p className="text-xs text-mute">{s.email}</p>
@@ -375,13 +398,13 @@ export function OrdersPanel() {
                               </StatusBadge>
                             </td>
                             <td>
-                              <button
-                                type="button"
+                              <Link
+                                href={saleHref(s)}
                                 className={btnGhost}
-                                onClick={() => openSale(enrichSale(s))}
+                                onClick={(e) => e.stopPropagation()}
                               >
                                 {t("common.open")}
-                              </button>
+                              </Link>
                             </td>
                           </tr>
                         ))}
@@ -408,12 +431,12 @@ function SaleKanbanCard({
   sale,
   busy,
   stageLabel,
-  onOpen,
+  href,
 }: {
   sale: Sale;
   busy: boolean;
   stageLabel: string;
-  onOpen: () => void;
+  href: string;
 }) {
   const { locale } = useLocale();
   const initials = customerInitials(sale.customer, sale.email);
@@ -425,11 +448,13 @@ function SaleKanbanCard({
         busy ? "opacity-50" : ""
       }`}
     >
-      <button
-        type="button"
-        disabled={busy}
-        onClick={onOpen}
-        className="w-full px-3 py-2.5 text-left hover:bg-ash/60 disabled:opacity-50"
+      <Link
+        href={href}
+        aria-disabled={busy || undefined}
+        tabIndex={busy ? -1 : undefined}
+        className={`block w-full px-3 py-2.5 text-left hover:bg-ash/60 ${
+          busy ? "pointer-events-none opacity-50" : ""
+        }`}
       >
         <div className="flex items-start gap-2.5">
           <span
@@ -461,7 +486,7 @@ function SaleKanbanCard({
             </div>
           </div>
         </div>
-      </button>
+      </Link>
     </article>
   );
 }

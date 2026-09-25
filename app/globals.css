@@ -35,7 +35,7 @@
   --chat-out-text: #0f1f1e;
   --background: var(--canvas);
   --foreground: var(--ink);
-  --crm-sidebar: 12rem;
+  --crm-topnav: 3.75rem;
   --crm-gutter: max(0.75rem, env(safe-area-inset-left));
 }
 

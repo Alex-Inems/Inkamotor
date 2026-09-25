@@ -82,10 +82,9 @@ export function FirstRunTour({
 
   useEffect(() => {
     if (!active || !step) return;
-    const desktop = window.matchMedia("(min-width: 1024px)").matches;
-    if (step.target && !desktop) onNeedNav();
+    if (step.target) onNeedNav();
     if (!step.target) onCloseNav();
-    const wait = step.target && !desktop ? 260 : 50;
+    const wait = step.target ? 260 : 50;
     const id = window.setTimeout(() => measure(step), wait);
     return () => window.clearTimeout(id);
   }, [active, step, measure, onNeedNav, onCloseNav]);

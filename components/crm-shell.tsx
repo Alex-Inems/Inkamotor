@@ -1,40 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { AppSwitcher } from "./app-switcher";
 import { ColorStripe } from "./brand";
-import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { ToastStack } from "./toast-stack";
 import { FirstRunTour } from "./first-run-tour";
 import { CrmProvider } from "@/lib/crm-store";
 import { QuoteTemplatesProvider } from "@/lib/quote-templates-store";
-import { LocaleProvider, useT, type Locale } from "@/lib/i18n";
+import { LocaleProvider, type Locale } from "@/lib/i18n";
 import { InboxNotificationsProvider } from "@/lib/inbox-notifications";
 import { SessionUserProvider } from "@/lib/session-user";
 import type { SessionUser } from "@/lib/session";
-
-const pageKeys: Record<string, string> = {
-  "/": "nav.overview",
-  "/inbox": "nav.inbox",
-  "/follow-ups": "nav.followUps",
-  "/analytics": "nav.searchConsole",
-  "/leads": "pages.leads.title",
-  "/contacts": "pages.contacts.title",
-  "/sales": "nav.sales",
-  "/sales/new": "nav.sales",
-  "/sales/new/preview": "nav.sales",
-  "/sales/new/catalogue": "nav.sales",
-  "/sales/quote-templates": "nav.sales",
-  "/products": "nav.sales",
-  "/bookings": "nav.sales",
-  "/search-console": "nav.searchConsole",
-  "/invoices": "nav.sales",
-  "/newsletter": "nav.newsletter",
-  "/email-marketing": "nav.newsletter",
-  "/setup": "nav.setup",
-  "/settings": "nav.settings",
-};
 
 export function CrmShell({
   children,
@@ -67,17 +45,8 @@ export function CrmShell({
 
 function CrmShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const t = useT();
   const isSaleDetail = /^\/sales\/(?!new)[^/]+$/.test(pathname);
   const isContactDetail = /^\/contacts\/[^/]+$/.test(pathname);
-  const title = t(
-    pageKeys[pathname] ??
-      (isSaleDetail
-        ? "nav.sales"
-        : isContactDetail
-          ? "pages.contacts.title"
-          : "brand.crm"),
-  );
   const fullBleed =
     pathname === "/inbox" || isSaleDetail || isContactDetail;
   const wideMain = isSaleDetail || isContactDetail;
@@ -92,7 +61,10 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
     const vv = window.visualViewport;
     const set = () => {
       const h = vv?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty("--crm-vvh", `${Math.round(h)}px`);
+      document.documentElement.style.setProperty(
+        "--crm-vvh",
+        `${Math.round(h)}px`,
+      );
     };
     set();
     vv?.addEventListener("resize", set);
@@ -122,36 +94,30 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`bg-canvas pt-[6px] text-ink ${fullBleed
+      className={`bg-canvas pt-[6px] text-ink ${
+        fullBleed
           ? "h-[var(--crm-vvh,100dvh)] overflow-hidden"
           : "min-h-svh"
-        }`}
+      }`}
     >
       <ColorStripe className="fixed inset-x-0 top-0 z-50" />
-      {navOpen ? (
-        <button
-          type="button"
-          aria-label={t("nav.closeMenu")}
-          className="fixed inset-0 z-40 bg-ash/70 lg:hidden"
-          onClick={() => setNavOpen(false)}
-        />
-      ) : null}
-      <Sidebar
-        pathname={pathname}
-        open={navOpen}
-        onClose={() => setNavOpen(false)}
-      />
       <div
-        className={`min-w-0 lg:pl-[var(--crm-sidebar)] ${fullBleed
+        className={`relative z-30 min-w-0 ${
+          fullBleed
             ? "flex h-[calc(var(--crm-vvh,100dvh)-6px)] flex-col"
             : ""
-          }`}
+        }`}
       >
-        <Topbar
-          title={title}
-          menuOpen={navOpen}
-          onMenu={() => setNavOpen((v) => !v)}
-        />
+        <Suspense
+          fallback={
+            <div className="h-12 border-b border-line bg-ash" aria-hidden />
+          }
+        >
+          <Topbar
+            menuOpen={navOpen}
+            onMenu={() => setNavOpen((v) => !v)}
+          />
+        </Suspense>
         <main
           className={
             fullBleed
@@ -165,6 +131,7 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <ToastStack />
+      <AppSwitcher open={navOpen} onClose={() => setNavOpen(false)} />
       <FirstRunTour
         onNeedNav={() => setNavOpen(true)}
         onCloseNav={() => setNavOpen(false)}
