@@ -1,9 +1,9 @@
 /**
- * Import Odoo sale.order chatter messages + PDF/docs into CRM mail_messages
- * (attachments stored on mail_reply_attachments keyed by mail_messages.id).
+ * Catch up every missing Odoo sale.order mail.message (+ attachments)
+ * into CRM. Serves ingest on :8767 and a browser runner page.
  *
- *   npx tsx scripts/import-odoo-sale-messages-session.ts
- * Then run the browser export (agent CDP or bookmarklet on Odoo).
+ *   npx tsx scripts/catchup-odoo-sale-messages.ts
+ * Then from an authenticated Odoo tab, evaluate /runner.js (agent does this).
  */
 import { createServer } from "node:http";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
@@ -37,9 +37,7 @@ loadEnv();
 
 const PORT = Number(process.env.ODOO_SALE_MSG_INGEST_PORT || 8767);
 const MAX_ATTACH_BYTES = 15 * 1024 * 1024;
-const OUT = resolve(process.cwd(), "data", "odoo-sale-messages-stats.json");
-
-type M2O = [number, string] | false;
+const OUT = resolve(process.cwd(), "data", "odoo-sale-messages-catchup-stats.json");
 
 type InMsg = {
   id: number;
@@ -145,6 +143,7 @@ const companyFrom =
   "contact@inkamototours.com";
 const companyName = process.env.BREVO_SENDER_NAME?.trim() || "Inkamoto Tours";
 
+const emailByOrderId = new Map<number, { email: string; name: string; orderName: string }>();
 const emailByOrderNumber = new Map<string, { email: string; name: string }>();
 
 async function loadCrmSaleEmails() {
@@ -172,9 +171,26 @@ async function loadCrmSaleEmails() {
   }
 }
 
-void loadCrmSaleEmails().catch((e) =>
-  console.error("[sale-msg] CRM email map failed", e),
-);
+async function loadCrmSaleMsgNums() {
+  const nums = new Set<number>();
+  let from = 0;
+  for (;;) {
+    const { data, error } = await sb
+      .from("mail_messages")
+      .select("message_id")
+      .like("message_id", "odoo-sale-msg-%")
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const r of rows) {
+      const n = Number(String(r.message_id).replace(/^odoo-sale-msg-/, ""));
+      if (Number.isFinite(n) && n < 900000000) nums.add(n);
+    }
+    if (rows.length < 1000) break;
+    from += 1000;
+  }
+  return nums;
+}
 
 async function saveAttachment(
   messageUuid: string,
@@ -203,7 +219,7 @@ async function saveAttachment(
   const { error } = await sb.from("mail_reply_attachments").insert({
     reply_id: messageUuid,
     file_name: fileName,
-    mime_type: mimeType || "application/pdf",
+    mime_type: mimeType || "application/octet-stream",
     file_data: encodeByteaHex(bytes),
     byte_size: bytes.length,
   });
@@ -234,22 +250,31 @@ async function ingest(messages: InMsg[]) {
         }
       }
 
+      if (!clientEmail && typeof msg.res_id === "number") {
+        const hit = emailByOrderId.get(msg.res_id);
+        if (hit) {
+          clientEmail = hit.email;
+          if (!msg.client_name) msg.client_name = hit.name;
+          if (!msg.order_name) msg.order_name = hit.orderName;
+        }
+      }
+
       if (!clientEmail) {
         const from = extractEmail(msg.email_from);
         if (from && !isOwnEmail(from, ownEmails)) clientEmail = from;
       }
 
       if (!clientEmail && orderName) {
-        // last resort so documents still land on a conversation keyed by order
         clientEmail = `order+${orderName.toLowerCase()}@import.inkamototours.local`;
+      }
+      if (!clientEmail && typeof msg.res_id === "number") {
+        clientEmail = `order+${msg.res_id}@import.inkamototours.local`;
       }
 
       const bodyHtml = typeof msg.body === "string" ? msg.body : "";
       const bodyText = stripHtml(bodyHtml).slice(0, 20000);
       const subjectRaw =
         (typeof msg.subject === "string" && msg.subject.trim()) || "";
-      const hasAtt = (msg.attachments?.length ?? 0) > 0;
-      // Always keep the row — empty system notifications still belong in history.
 
       const fromEmail = extractEmail(msg.email_from);
       const outbound = isOwnEmail(fromEmail, ownEmails) || !fromEmail;
@@ -270,8 +295,8 @@ async function ingest(messages: InMsg[]) {
         message_id: `odoo-sale-msg-${msg.id}`,
         folder: outbound ? "SENT" : "INBOX",
         from_name: outbound ? companyName : clientName || fromEmail || null,
-        from_email: outbound ? companyFrom : fromEmail || clientEmail,
-        to_email: outbound ? clientEmail : companyFrom,
+        from_email: outbound ? companyFrom : fromEmail || clientEmail!,
+        to_email: outbound ? clientEmail! : companyFrom,
         subject,
         preview,
         body_text: bodyText || subject,
@@ -316,9 +341,9 @@ async function ingest(messages: InMsg[]) {
   }
 }
 
-const BOOKMARKLET = `
+const RUNNER = `
 (async () => {
-  const ENDPOINT = 'http://127.0.0.1:${PORT}/ingest';
+  const ENDPOINT = 'http://127.0.0.1:${PORT}';
   async function rpc(model, method, args, kwargs) {
     const res = await fetch('/web/dataset/call_kw/' + model + '/' + method, {
       method: 'POST',
@@ -334,46 +359,67 @@ const BOOKMARKLET = `
     if (json.error) throw new Error(JSON.stringify(json.error.data?.message || json.error));
     return json.result;
   }
+
+  const status = await fetch(ENDPOINT + '/status').then(r => r.json());
+  console.log('[catchup] start', status);
+
+  // Build order client map
   const orderIds = await rpc('sale.order', 'search', [[]]);
   const orders = [];
   for (let i = 0; i < orderIds.length; i += 80) {
-    const slice = orderIds.slice(i, i + 80);
-    const rows = await rpc('sale.order', 'read', [slice], { fields: ['id','name','partner_id','create_date'] });
-    orders.push(...rows);
+    orders.push(...await rpc('sale.order', 'read', [orderIds.slice(i, i + 80)], {
+      fields: ['id','name','partner_id']
+    }));
   }
   const partnerIds = [...new Set(orders.map(o => Array.isArray(o.partner_id) ? o.partner_id[0] : null).filter(Boolean))];
   const partners = [];
   for (let i = 0; i < partnerIds.length; i += 80) {
-    partners.push(...await rpc('res.partner', 'read', [partnerIds.slice(i, i + 80)], { fields: ['id','name','email'] }));
+    partners.push(...await rpc('res.partner', 'read', [partnerIds.slice(i, i + 80)], {
+      fields: ['id','name','email']
+    }));
   }
-  const emailByPartner = new Map(partners.map(p => [p.id, { email: (p.email||'').toLowerCase() || null, name: p.name || null }]));
+  const emailByPartner = new Map(partners.map(p => [p.id, {
+    email: (p.email || '').toLowerCase() || null,
+    name: p.name || null
+  }]));
   const clientByOrder = new Map(orders.map(o => {
     const pid = Array.isArray(o.partner_id) ? o.partner_id[0] : null;
     const p = emailByPartner.get(pid) || { email: null, name: null };
     return [o.id, { email: p.email, name: p.name, orderName: o.name }];
   }));
-  const msgIds = await rpc('mail.message', 'search', [[
+
+  // All Odoo sale messages vs CRM
+  const allIds = await rpc('mail.message', 'search', [[
     ['model','=','sale.order'],
     ['message_type','in',['email','comment','notification']],
   ]], { order: 'id asc' });
-  console.log('sale messages', msgIds.length);
-  const batchSize = 20;
-  for (let i = 0; i < msgIds.length; i += batchSize) {
-    const slice = msgIds.slice(i, i + batchSize);
+  await fetch(ENDPOINT + '/register-odoo-ids', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: allIds })
+  });
+  const { missing } = await fetch(ENDPOINT + '/missing').then(r => r.json());
+  console.log('[catchup] odoo', allIds.length, 'missing', missing.length);
+
+  const batchSize = 12;
+  for (let i = 0; i < missing.length; i += batchSize) {
+    const slice = missing.slice(i, i + batchSize);
     const msgs = await rpc('mail.message', 'read', [slice], {
       fields: ['id','date','subject','body','email_from','message_type','partner_ids','model','res_id','attachment_ids']
     });
     const attIds = [...new Set(msgs.flatMap(m => m.attachment_ids || []))];
     let atts = [];
     if (attIds.length) {
-      // read without datas first for size filter, then datas in chunks
-      const meta = await rpc('ir.attachment', 'read', [attIds], { fields: ['id','name','mimetype','file_size'] });
-      const loadIds = meta.filter(a => (a.file_size||0) > 0 && (a.file_size||0) <= 15*1024*1024).map(a => a.id);
-      for (let j = 0; j < loadIds.length; j += 8) {
-        const part = await rpc('ir.attachment', 'read', [loadIds.slice(j, j + 8)], {
+      const meta = await rpc('ir.attachment', 'read', [attIds], {
+        fields: ['id','name','mimetype','file_size']
+      });
+      const loadIds = meta
+        .filter(a => (a.file_size || 0) > 0 && (a.file_size || 0) <= 15 * 1024 * 1024)
+        .map(a => a.id);
+      for (let j = 0; j < loadIds.length; j += 6) {
+        atts.push(...await rpc('ir.attachment', 'read', [loadIds.slice(j, j + 6)], {
           fields: ['id','name','mimetype','file_size','datas']
-        });
-        atts.push(...part);
+        }));
       }
     }
     const attById = new Map(atts.map(a => [a.id, a]));
@@ -388,36 +434,33 @@ const BOOKMARKLET = `
           id: a.id, name: a.name, mimetype: a.mimetype, file_size: a.file_size, datas: a.datas
         })),
       };
-    }).filter(m => {
-      const body = typeof m.body === 'string' ? m.body.replace(/<[^>]+>/g,' ').trim() : '';
-      const subject = typeof m.subject === 'string' ? m.subject.trim() : '';
-      const hasAtt = (m.attachments||[]).length > 0;
-      if (m.message_type === 'notification' && !body && !subject && !hasAtt) return false;
-      return true;
     });
-    const res = await fetch(ENDPOINT, {
+    const res = await fetch(ENDPOINT + '/ingest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: payload }),
     });
-    console.log('batch', i, '/', msgIds.length, await res.text());
+    const text = await res.text();
+    console.log('[catchup] batch', i, '/', missing.length, text.slice(0, 200));
   }
-  // Orphan documents on sale.order not already linked via message attachment_ids
-  console.log('importing orphan sale attachments…');
-  for (let i = 0; i < orders.length; i += 10) {
-    const slice = orders.slice(i, i + 10);
+
+  // Orphan sale.order attachments not already on a message
+  console.log('[catchup] orphan attachments…');
+  for (let i = 0; i < orders.length; i += 8) {
+    const slice = orders.slice(i, i + 8);
     const orphans = [];
     for (const o of slice) {
-      const rows = await rpc('ir.attachment', 'search_read', [[['res_model','=','sale.order'],['res_id','=',o.id]]], {
-        fields: ['id','name','mimetype','file_size','create_date'],
-        limit: 80
-      });
+      const rows = await rpc('ir.attachment', 'search_read', [[
+        ['res_model','=','sale.order'],['res_id','=',o.id]
+      ]], { fields: ['id','name','mimetype','file_size','create_date'], limit: 120 });
       const client = clientByOrder.get(o.id) || { email: null, name: null, orderName: o.name };
-      const loadIds = rows.filter(a => (a.file_size||0) > 0 && (a.file_size||0) <= 15*1024*1024).map(a => a.id);
+      const loadIds = rows
+        .filter(a => (a.file_size || 0) > 0 && (a.file_size || 0) <= 15 * 1024 * 1024)
+        .map(a => a.id);
       if (!loadIds.length) continue;
       const withData = [];
-      for (let j = 0; j < loadIds.length; j += 6) {
-        withData.push(...await rpc('ir.attachment', 'read', [loadIds.slice(j, j + 6)], {
+      for (let j = 0; j < loadIds.length; j += 5) {
+        withData.push(...await rpc('ir.attachment', 'read', [loadIds.slice(j, j + 5)], {
           fields: ['id','name','mimetype','file_size','datas']
         }));
       }
@@ -440,18 +483,31 @@ const BOOKMARKLET = `
       });
     }
     if (!orphans.length) continue;
-    const res = await fetch(ENDPOINT, {
+    const res = await fetch(ENDPOINT + '/ingest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: orphans }),
     });
-    console.log('orphans', i, await res.text());
+    console.log('[catchup] orphans', i, await res.text());
   }
-  alert('Sale messages import done: ' + msgIds.length);
-})();
+
+  const finalStats = await fetch(ENDPOINT + '/stats').then(r => r.json());
+  console.log('[catchup] DONE', JSON.stringify(finalStats));
+  return finalStats;
+})()
 `.trim();
 
-const server = createServer(async (req, res) => {
+let latestOdooIds: number[] = [];
+let missingCache: number[] = [];
+const crmNums = new Set<number>();
+
+async function main() {
+  await loadCrmSaleEmails();
+  const loaded = await loadCrmSaleMsgNums();
+  for (const n of loaded) crmNums.add(n);
+  console.log("[catchup] CRM already has", crmNums.size, "sale messages");
+
+  const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS, GET");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -460,16 +516,74 @@ const server = createServer(async (req, res) => {
     res.end();
     return;
   }
+
+  if (req.method === "GET" && req.url === "/status") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        ok: true,
+        crmSaleMsgs: crmNums.size,
+        odooIds: latestOdooIds.length,
+        missing: missingCache.length,
+      }),
+    );
+    return;
+  }
+
   if (req.method === "GET" && req.url === "/stats") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(stats));
     return;
   }
-  if (req.method === "GET" && req.url === "/bookmarklet") {
-    res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-    res.end(BOOKMARKLET);
+
+  if (req.method === "GET" && req.url === "/runner.js") {
+    res.writeHead(200, { "Content-Type": "application/javascript; charset=utf-8" });
+    res.end(RUNNER);
     return;
   }
+
+  if (req.method === "GET" && req.url === "/missing") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ missing: missingCache }));
+    return;
+  }
+
+  if (req.method === "POST" && req.url === "/register-odoo-ids") {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk as Buffer);
+    try {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as {
+        ids?: number[];
+      };
+      latestOdooIds = body.ids ?? [];
+      missingCache = latestOdooIds.filter((id) => !crmNums.has(id));
+      mkdirSync(resolve(process.cwd(), "data"), { recursive: true });
+      writeFileSync(
+        resolve(process.cwd(), "data", "odoo-sale-msg-ids.json"),
+        JSON.stringify(latestOdooIds),
+      );
+      writeFileSync(
+        resolve(process.cwd(), "data", "odoo-sale-msg-missing-ids.json"),
+        JSON.stringify(missingCache),
+      );
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          odoo: latestOdooIds.length,
+          missing: missingCache.length,
+        }),
+      );
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify({
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+    return;
+  }
+
   if (req.method !== "POST" || req.url !== "/ingest") {
     res.writeHead(404);
     res.end("not found");
@@ -484,22 +598,32 @@ const server = createServer(async (req, res) => {
     const messages = body.messages ?? [];
     stats.batches += 1;
     await ingest(messages);
+    for (const m of messages) {
+      if (typeof m.id === "number" && m.id < 900000000) crmNums.add(m.id);
+    }
     mkdirSync(resolve(process.cwd(), "data"), { recursive: true });
     writeFileSync(OUT, JSON.stringify(stats, null, 2));
     console.log(
-      `[sale-msg] batch=${stats.batches} +${messages.length} upserted=${stats.upserted} skipped=${stats.skipped} atts=${stats.attachmentsSaved}`,
+      `[catchup] batch=${stats.batches} +${messages.length} upserted=${stats.upserted} skipped=${stats.skipped} atts=${stats.attachmentsSaved}`,
     );
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true, stats }));
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     stats.errors.push(msg);
-    console.error("[sale-msg]", msg);
+    console.error("[catchup]", msg);
     res.writeHead(500, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: false, error: msg }));
   }
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`Sale message ingest on http://127.0.0.1:${PORT}/ingest`);
+    console.log(`Catch-up ingest on http://127.0.0.1:${PORT}`);
+    console.log(`Runner: http://127.0.0.1:${PORT}/runner.js`);
+  });
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
 });
