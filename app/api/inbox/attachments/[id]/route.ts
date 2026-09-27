@@ -26,10 +26,34 @@ export async function GET(request: Request, { params }: Params) {
   const download = url.searchParams.get("download") === "1";
   const safeName = file.meta.fileName.replace(/[^\w.\-()+ ]/g, "_");
   const body = new Uint8Array(file.data);
+  const lowerName = file.meta.fileName.toLowerCase();
+  const storedMime = (file.meta.mimeType || "").trim().toLowerCase();
+  // Force a previewable type when the filename is clearly a PDF/image — some
+  // uploads land as octet-stream and browsers then refuse inline preview.
+  let contentType = storedMime || "application/octet-stream";
+  if (lowerName.endsWith(".pdf") && !contentType.includes("pdf")) {
+    contentType = "application/pdf";
+  } else if (
+    /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(lowerName) &&
+    !contentType.startsWith("image/")
+  ) {
+    const ext = lowerName.slice(lowerName.lastIndexOf(".") + 1);
+    contentType =
+      ext === "jpg" || ext === "jpeg"
+        ? "image/jpeg"
+        : ext === "svg"
+          ? "image/svg+xml"
+          : `image/${ext}`;
+  } else if (
+    (!contentType || contentType === "application/octet-stream") &&
+    lowerName.endsWith(".pdf")
+  ) {
+    contentType = "application/pdf";
+  }
 
   return new Response(body, {
     headers: {
-      "Content-Type": file.meta.mimeType || "application/pdf",
+      "Content-Type": contentType,
       "Content-Length": String(body.byteLength),
       "Content-Disposition": `${
         download ? "attachment" : "inline"

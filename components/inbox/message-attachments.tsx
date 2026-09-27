@@ -219,6 +219,34 @@ function TextFilePreview({ url, fileName }: { url: string; fileName: string }) {
   );
 }
 
+/** Always show something — browser embed for docs the canvas preview can't paint. */
+function DocumentEmbedPreview({
+  url,
+  fileName,
+  mimeType,
+}: {
+  url: string;
+  fileName: string;
+  mimeType: string;
+}) {
+  return (
+    <div className="border-t border-line/60 bg-[#f4f1ea]">
+      <object
+        data={url}
+        type={mimeType || "application/pdf"}
+        aria-label={fileName}
+        className="block h-[20rem] w-full bg-white"
+      >
+        <iframe
+          src={url}
+          title={fileName}
+          className="block h-[20rem] w-full border-0 bg-white"
+        />
+      </object>
+    </div>
+  );
+}
+
 export function MessageAttachments({
   attachments,
   mine,
@@ -300,7 +328,13 @@ export function MessageAttachments({
               />
             ) : text ? (
               <TextFilePreview url={previewUrl} fileName={file.fileName} />
-            ) : null}
+            ) : (
+              <DocumentEmbedPreview
+                url={previewUrl}
+                fileName={file.fileName}
+                mimeType={file.mimeType}
+              />
+            )}
           </div>
         );
       })}
