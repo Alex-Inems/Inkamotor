@@ -1823,8 +1823,12 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     patch?: {
       status?: MailingStatus;
       scheduledAt?: string | null;
+      emails?: string[];
+      recipientTag?: string | null;
+      sentCount?: number;
     },
     htmlOverride?: string,
+    opts?: { quiet?: boolean },
   ) {
     const html = (htmlOverride ?? form.html).trim();
     if (!form.subject.trim() && !html) {
@@ -1834,6 +1838,23 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       });
       return null;
     }
+    const explicitEmails = patch?.emails;
+    const usePicked =
+      explicitEmails !== undefined
+        ? explicitEmails.length > 0
+        : pickingPeople || form.recipientEmails.length > 0;
+    const emails =
+      explicitEmails ??
+      (usePicked
+        ? form.recipientEmails.map((e) => e.trim().toLowerCase())
+        : []);
+    const recipientTag =
+      patch && "recipientTag" in patch
+        ? patch.recipientTag
+        : usePicked
+          ? null
+          : form.recipientTag || null;
+
     setSaving(true);
     try {
       const id = isNew ? undefined : mailingId;
@@ -1847,14 +1868,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           preview: form.preview.trim(),
           html,
           status: patch?.status ?? form.status,
-          recipientTag:
-            pickingPeople || form.recipientEmails.length > 0
-              ? null
-              : form.recipientTag || null,
-          emails:
-            pickingPeople || form.recipientEmails.length > 0
-              ? form.recipientEmails.map((e) => e.trim().toLowerCase())
-              : [],
+          recipientTag,
+          emails,
+          sentCount: patch?.sentCount,
           templateId: form.templateId || null,
           responsible: form.responsible,
           scheduledAt:
@@ -1893,10 +1909,12 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       setPickingPeople((json.mailing!.emails?.length ?? 0) > 0);
       setEditorKey(`saved-${json.mailing.id}-${Date.now()}`);
       clearEditHistory();
-      pushToast({
-        message: t("pages.emailMarketing.saved"),
-        tone: "success",
-      });
+      if (!opts?.quiet) {
+        pushToast({
+          message: t("pages.emailMarketing.saved"),
+          tone: "success",
+        });
+      }
       if (isNew) {
         router.replace(`/email-marketing/${encodeURIComponent(json.mailing.id)}`);
       }
@@ -1904,6 +1922,38 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function resolveAudienceEmails(): string[] {
+    if (pickingPeople || form.recipientEmails.length > 0) {
+      return [
+        ...new Set(
+          form.recipientEmails
+            .map((e) => e.trim().toLowerCase())
+            .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
+        ),
+      ];
+    }
+    if (form.recipientTag) {
+      const tag = form.recipientTag.toLowerCase();
+      return [
+        ...new Set(
+          subscribers
+            .filter((s) =>
+              (s.tags ?? []).some((x) => x.toLowerCase() === tag),
+            )
+            .map((s) => s.email.trim().toLowerCase())
+            .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
+        ),
+      ];
+    }
+    return [
+      ...new Set(
+        subscribers
+          .map((s) => s.email.trim().toLowerCase())
+          .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
+      ),
+    ];
   }
 
   async function deleteMailing() {
@@ -1925,18 +1975,95 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   }
 
   async function sendNow() {
-    const saved = await saveMailing({ status: "draft" });
-    if (!saved) return;
-    const qs = new URLSearchParams({
-      compose: "1",
-      draft: saved.id,
-    });
-    if (pickingPeople || form.recipientEmails.length > 0) {
-      // Selection is stored on the draft as mailing.emails
-    } else if (form.recipientTag) {
-      qs.set("tag", form.recipientTag);
+    const emails = resolveAudienceEmails();
+    if (emails.length === 0) {
+      pushToast({
+        message: t("pages.emailMarketing.needRecipients"),
+        tone: "error",
+      });
+      return;
     }
-    router.push(`/newsletter?${qs.toString()}`);
+    const html = bodyMode === "edit" ? flushPreviewHtml() : undefined;
+    const saved = await saveMailing(
+      {
+        status: "sending",
+        emails,
+        recipientTag:
+          pickingPeople || form.recipientEmails.length > 0
+            ? null
+            : form.recipientTag || null,
+      },
+      html,
+      { quiet: true },
+    );
+    if (!saved) return;
+
+    pushToast({
+      message: t("pages.emailMarketing.sendingNow").replace(
+        "{n}",
+        String(emails.length),
+      ),
+      tone: "info",
+    });
+
+    try {
+      const res = await fetch("/api/newsletter/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: saved.name,
+          subject: saved.subject,
+          previewText: saved.preview,
+          htmlContent: saved.html,
+          emails,
+        }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        recipients?: number;
+      };
+      if (!res.ok) {
+        await saveMailing(
+          { status: "draft", emails, recipientTag: saved.recipientTag },
+          saved.html,
+          { quiet: true },
+        );
+        pushToast({
+          message: json.error || t("pages.emailMarketing.sendFailed"),
+          tone: "error",
+        });
+        return;
+      }
+      const n = Number(json.recipients ?? emails.length);
+      await saveMailing(
+        {
+          status: "sent",
+          emails,
+          recipientTag: null,
+          sentCount: n,
+          scheduledAt: null,
+        },
+        saved.html,
+        { quiet: true },
+      );
+      pushToast({
+        message: t("pages.emailMarketing.sentOk").replace("{n}", String(n)),
+        tone: "success",
+      });
+    } catch (err) {
+      await saveMailing(
+        { status: "draft", emails, recipientTag: saved.recipientTag },
+        saved.html,
+        { quiet: true },
+      );
+      pushToast({
+        message:
+          err instanceof Error
+            ? err.message
+            : t("pages.emailMarketing.sendFailed"),
+        tone: "error",
+      });
+    }
   }
 
   async function scheduleMailing() {
@@ -1955,23 +2082,92 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       });
       return;
     }
-    const saved = await saveMailing({
-      status: "in_queue",
-      scheduledAt: d.toISOString(),
-    });
-    if (!saved) return;
-    setScheduleOpen(false);
-    // Hand off to campaigns composer with schedule prefilled via draft
-    const qs = new URLSearchParams({
-      compose: "1",
-      draft: saved.id,
-    });
-    if (pickingPeople || form.recipientEmails.length > 0) {
-      // Selection is stored on the draft as mailing.emails
-    } else if (form.recipientTag) {
-      qs.set("tag", form.recipientTag);
+    const emails = resolveAudienceEmails();
+    if (emails.length === 0) {
+      pushToast({
+        message: t("pages.emailMarketing.needRecipients"),
+        tone: "error",
+      });
+      return;
     }
-    router.push(`/newsletter?${qs.toString()}`);
+    const html = bodyMode === "edit" ? flushPreviewHtml() : undefined;
+    const saved = await saveMailing(
+      {
+        status: "in_queue",
+        scheduledAt: d.toISOString(),
+        emails,
+        recipientTag:
+          pickingPeople || form.recipientEmails.length > 0
+            ? null
+            : form.recipientTag || null,
+      },
+      html,
+      { quiet: true },
+    );
+    if (!saved) return;
+
+    try {
+      const res = await fetch("/api/newsletter/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: saved.name,
+          subject: saved.subject,
+          previewText: saved.preview,
+          htmlContent: saved.html,
+          emails,
+          scheduledAt,
+        }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        recipients?: number;
+      };
+      if (!res.ok) {
+        await saveMailing(
+          {
+            status: "draft",
+            emails,
+            recipientTag: saved.recipientTag,
+            scheduledAt: null,
+          },
+          saved.html,
+          { quiet: true },
+        );
+        pushToast({
+          message: json.error || t("pages.emailMarketing.sendFailed"),
+          tone: "error",
+        });
+        return;
+      }
+      setScheduleOpen(false);
+      const n = Number(json.recipients ?? emails.length);
+      pushToast({
+        message: t("pages.emailMarketing.scheduledOk").replace(
+          "{n}",
+          String(n),
+        ),
+        tone: "success",
+      });
+    } catch (err) {
+      await saveMailing(
+        {
+          status: "draft",
+          emails,
+          recipientTag: saved.recipientTag,
+          scheduledAt: null,
+        },
+        saved.html,
+        { quiet: true },
+      );
+      pushToast({
+        message:
+          err instanceof Error
+            ? err.message
+            : t("pages.emailMarketing.sendFailed"),
+        tone: "error",
+      });
+    }
   }
 
   async function sendTest() {

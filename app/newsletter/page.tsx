@@ -228,12 +228,12 @@ function NewsletterPageInner() {
     const draftId = searchParams.get("draft")?.trim();
     if (compose !== "1" || !draftId) return;
     if (draftLoadedRef.current === draftId) return;
-    draftLoadedRef.current = draftId;
 
     let cancelled = false;
     void (async () => {
       try {
         if (subscribers.length === 0) await loadSubscribers();
+        if (cancelled) return;
         const res = await fetch(
           `/api/newsletter/mailings?id=${encodeURIComponent(draftId)}`,
         );
@@ -247,6 +247,7 @@ function NewsletterPageInner() {
           );
         }
         if (cancelled) return;
+        draftLoadedRef.current = draftId;
         const mailing = json.mailing;
         setForm({
           name: mailing.name,
@@ -256,25 +257,26 @@ function NewsletterPageInner() {
         });
         setTemplateId(mailing.templateId ?? "");
         setEditorKey(`draft-${mailing.id}-${Date.now()}`);
-        if (mailing.recipientTag) {
-          setRecipientTag(mailing.recipientTag);
-          pendingAudienceRef.current = mailing.recipientTag;
-        }
         const tagParam = searchParams.get("tag")?.trim();
-        if (tagParam) {
-          setRecipientTag(tagParam);
-          pendingAudienceRef.current = tagParam;
-        }
         const emailParam = searchParams.get("email")?.trim().toLowerCase();
         const mailingEmails = (mailing.emails ?? [])
           .map((e) => e.trim().toLowerCase())
           .filter(Boolean);
         if (emailParam) {
+          setRecipientTag("all");
           setSelectedEmails([emailParam]);
           pendingAudienceRef.current = null;
         } else if (mailingEmails.length > 0) {
+          setRecipientTag("all");
           setSelectedEmails(mailingEmails);
           pendingAudienceRef.current = null;
+        } else if (tagParam || mailing.recipientTag) {
+          const tag = tagParam || mailing.recipientTag || "";
+          setRecipientTag(tag);
+          pendingAudienceRef.current = tag;
+        } else {
+          setRecipientTag("all");
+          pendingAudienceRef.current = "all";
         }
         if (mailing.scheduledAt) {
           const d = new Date(mailing.scheduledAt);
@@ -294,6 +296,7 @@ function NewsletterPageInner() {
         });
       } catch (err) {
         if (!cancelled) {
+          draftLoadedRef.current = null;
           pushToast({
             message:
               err instanceof Error
@@ -313,6 +316,13 @@ function NewsletterPageInner() {
   useEffect(() => {
     const tag = pendingAudienceRef.current;
     if (!openAdd || !tag || subscribers.length === 0) return;
+    if (tag === "all") {
+      setSelectedEmails(
+        subscribers.filter((s) => !s.blocked).map((s) => s.email),
+      );
+      pendingAudienceRef.current = null;
+      return;
+    }
     const want = tag.toLowerCase();
     const emails = subscribers
       .filter(

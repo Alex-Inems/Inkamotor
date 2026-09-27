@@ -79,6 +79,7 @@ export async function POST(req: Request) {
         status: body.status,
         recipientTag: body.recipientTag,
         emails: body.emails,
+        sentCount: body.sentCount,
         scheduledAt: body.scheduledAt,
         responsible: body.responsible,
         templateId: body.templateId,
@@ -125,6 +126,7 @@ export async function PATCH(req: Request) {
         recipientTag:
           body.recipientTag !== undefined ? body.recipientTag : prev.recipientTag,
         emails: body.emails ?? prev.emails,
+        sentCount: body.sentCount ?? prev.sentCount,
         scheduledAt:
           body.scheduledAt !== undefined ? body.scheduledAt : prev.scheduledAt,
         responsible: body.responsible ?? prev.responsible,
