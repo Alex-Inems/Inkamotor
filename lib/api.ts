@@ -4,7 +4,13 @@ export function missingEnv(keys: readonly string[]): string[] {
 
 export type ApiErrorBody = {
   error: string;
-  code: "missing_credentials" | "sync_failed" | "send_failed" | "db_error";
+  code:
+    | "missing_credentials"
+    | "sync_failed"
+    | "send_failed"
+    | "db_error"
+    | "unauthorized"
+    | "bad_request";
   missing?: string[];
 };
 

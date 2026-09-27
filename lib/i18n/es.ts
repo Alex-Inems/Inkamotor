@@ -462,6 +462,11 @@ export const es: Messages = {
       messageDeleted: "Mensaje eliminado",
       conversationDeleted: "Conversación eliminada",
       deleteFailed: "No se pudo eliminar",
+      deliverySent: "Enviado",
+      deliveryDelivered: "Entregado",
+      deliveryOpened: "Abierto",
+      deliveryBounced: "Rebotado",
+      deliveryError: "Error",
     },
     followUps: {
       title: "Seguimientos",

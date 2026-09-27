@@ -677,8 +677,18 @@ export async function sendTransactionalEmail(input: {
   textContent?: string;
   tags?: string[];
   attachments?: { name: string; content: string }[];
-}) {
-  await brevo("/smtp/email", {
+}): Promise<{ messageId: string | null }> {
+  const tags = (input.tags ?? [])
+    .map((tag) =>
+      tag
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 50),
+    )
+    .filter(Boolean);
+
+  const result = await brevo<{ messageId?: string }>("/smtp/email", {
     method: "POST",
     body: JSON.stringify({
       sender: sender(),
@@ -686,13 +696,18 @@ export async function sendTransactionalEmail(input: {
       subject: input.subject,
       htmlContent: input.htmlContent,
       textContent: input.textContent,
-      tags: input.tags,
+      tags: tags.length ? tags : undefined,
       attachment: input.attachments?.map((file) => ({
         name: file.name,
         content: file.content,
       })),
     }),
   });
+  const messageId =
+    typeof result?.messageId === "string" && result.messageId.trim()
+      ? result.messageId.trim()
+      : null;
+  return { messageId };
 }
 
 export function mapBrevoCampaign(c: BrevoCampaign) {

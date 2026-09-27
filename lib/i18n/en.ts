@@ -458,6 +458,11 @@ export const en = {
       messageDeleted: "Message deleted",
       conversationDeleted: "Conversation deleted",
       deleteFailed: "Could not delete",
+      deliverySent: "Sent",
+      deliveryDelivered: "Delivered",
+      deliveryOpened: "Opened",
+      deliveryBounced: "Bounced",
+      deliveryError: "Failed",
     },
     followUps: {
       title: "Follow-ups",

@@ -17,6 +17,7 @@ import { LinkifiedText } from "@/components/inbox/linkified-text";
 import { useCrm } from "@/lib/crm-store";
 import { quickSaleInput } from "@/lib/quotation-form-data";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
+import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { localeMeta, useLocale } from "@/lib/i18n";
 
 type MailMessage = {
@@ -29,6 +30,9 @@ type MailMessage = {
   bodyText: string | null;
   receivedAt: string;
   isRead: boolean;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
 };
 
 type MailReply = {
@@ -39,6 +43,9 @@ type MailReply = {
   bodyText: string;
   relatedMailId: string | null;
   sentAt: string;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
   attachments?: {
     id: string;
     fileName: string;
@@ -1036,7 +1043,27 @@ function MessageBody({
   const stampEl = (
     <span className="wa-time">
       {clockTime(message.at, locale)}
-      {mine ? <CheckIcon /> : null}
+      {mine ? (
+        <>
+          <CheckIcon />
+          <span
+            className="ml-1 opacity-80"
+            title={
+              message.openedAt || message.deliveredAt || message.at
+            }
+          >
+            {message.deliveryStatus === "opened"
+              ? t("pages.inbox.deliveryOpened")
+              : message.deliveryStatus === "delivered"
+                ? t("pages.inbox.deliveryDelivered")
+                : message.deliveryStatus === "bounced"
+                  ? t("pages.inbox.deliveryBounced")
+                  : message.deliveryStatus === "error"
+                    ? t("pages.inbox.deliveryError")
+                    : t("pages.inbox.deliverySent")}
+          </span>
+        </>
+      ) : null}
     </span>
   );
 

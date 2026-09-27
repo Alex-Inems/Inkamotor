@@ -117,18 +117,21 @@ export async function POST(request: Request) {
     <p style="margin-top:1.5rem;color:#666;font-size:13px">— Inkamoto Tours<br/>contact@inkamototours.com</p>
   </div>`;
 
+  let providerMessageId: string | null = null;
   try {
-    await sendTransactionalEmail({
+    const sent = await sendTransactionalEmail({
       toEmail: to,
       toName: body.toName,
       subject,
       htmlContent: html,
       textContent: bodyText,
+      tags: ["inbox-reply"],
       attachments: attachments.map((file) => ({
         name: file.fileName,
         content: file.base64,
       })),
     });
+    providerMessageId = sent.messageId;
   } catch (err) {
     return jsonError(502, {
       error: err instanceof Error ? err.message : "Could not send reply",
@@ -146,6 +149,8 @@ export async function POST(request: Request) {
         bodyText,
         relatedMailId: body.relatedMailId,
         relatedInquiryId: body.relatedInquiryId,
+        providerMessageId,
+        deliveryStatus: "sent",
       });
 
       const savedAttachments = [];
@@ -178,6 +183,10 @@ export async function POST(request: Request) {
         relatedMailId: body.relatedMailId ?? null,
         relatedInquiryId: body.relatedInquiryId ?? null,
         sentAt: new Date().toISOString(),
+        providerMessageId,
+        deliveryStatus: "sent" as const,
+        deliveredAt: null,
+        openedAt: null,
         attachments: [],
       };
     }

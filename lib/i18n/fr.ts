@@ -462,6 +462,11 @@ export const fr: Messages = {
       messageDeleted: "Message supprimé",
       conversationDeleted: "Conversation supprimée",
       deleteFailed: "Suppression impossible",
+      deliverySent: "Envoyé",
+      deliveryDelivered: "Distribué",
+      deliveryOpened: "Ouvert",
+      deliveryBounced: "Rejeté",
+      deliveryError: "Échec",
     },
     followUps: {
       title: "Relances",

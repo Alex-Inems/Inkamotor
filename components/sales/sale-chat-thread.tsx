@@ -9,6 +9,7 @@ import {
 import { LinkifiedText } from "@/components/inbox/linkified-text";
 import { EmptyHint } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
+import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { previewOf } from "@/lib/mail/clean";
 import { displayContactName, groupMailRooms, type RoomMessage } from "@/lib/mail/rooms";
 import { formatDateTime } from "@/lib/format";
@@ -24,6 +25,9 @@ type MailMessage = {
   bodyText: string | null;
   receivedAt: string;
   isRead: boolean;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
   attachments?: {
     id: string;
     fileName: string;
@@ -40,6 +44,9 @@ type MailReply = {
   bodyText: string;
   relatedMailId: string | null;
   sentAt: string;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
   attachments?: {
     id: string;
     fileName: string;
@@ -77,6 +84,62 @@ function isClientEmail(email: string) {
   return trimmed.includes("@") && !trimmed.endsWith("@inkamototours.local");
 }
 
+function deliveryLabel(
+  status: DeliveryStatus | null | undefined,
+  t: (key: string) => string,
+) {
+  if (status === "opened") return t("pages.inbox.deliveryOpened");
+  if (status === "delivered") return t("pages.inbox.deliveryDelivered");
+  if (status === "bounced") return t("pages.inbox.deliveryBounced");
+  if (status === "error") return t("pages.inbox.deliveryError");
+  return t("pages.inbox.deliverySent");
+}
+
+function deliveryIconClass(status: DeliveryStatus | null | undefined) {
+  if (status === "opened") return "text-[#2f6b3a]";
+  if (status === "delivered") return "text-[#017e84]";
+  if (status === "bounced" || status === "error") return "text-[#c43c3c]";
+  return "text-mute";
+}
+
+function MailTrackingIcon({ message }: { message: RoomMessage }) {
+  const { t, locale } = useLocale();
+  if (!message.mine) return null;
+  const status = message.deliveryStatus ?? "sent";
+  const tipAt =
+    status === "opened"
+      ? message.openedAt
+      : status === "delivered"
+        ? message.deliveredAt
+        : message.at;
+  const label = deliveryLabel(status, t);
+  const title = tipAt
+    ? `${label} · ${formatDateTime(tipAt, locale)}`
+    : label;
+
+  return (
+    <span
+      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center ${deliveryIconClass(status)}`}
+      title={title}
+      aria-label={label}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        className="h-[14px] w-[14px]"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <path d="m3 7 9 7 9-7" />
+      </svg>
+    </span>
+  );
+}
+
 function SaleChatBubble({
   message,
   youLabel,
@@ -110,8 +173,9 @@ function SaleChatBubble({
         {initialsOf(author)}
       </span>
       <div className="min-w-0 flex-1">
-        <header className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 leading-none">
+        <header className="mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 leading-none">
           <strong className="text-[13px] font-semibold text-ink">{author}</strong>
+          <MailTrackingIcon message={message} />
           <time
             className="text-[11px] text-mute"
             dateTime={message.at}
@@ -265,7 +329,7 @@ export function SaleChatPanel({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          toEmail: email.trim(),
+          toEmail: email.trim().toLowerCase(),
           toName: customerName.trim() || undefined,
           inReplyToSubject: room?.lastSubject,
           message: payload.message,
@@ -273,9 +337,18 @@ export function SaleChatPanel({
           attachments: payload.attachments,
         }),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json()) as {
+        error?: string;
+        reply?: MailReply | null;
+      };
       if (!res.ok) {
         throw new Error(json.error || t("pages.inbox.sendFailed"));
+      }
+      const saved = json.reply;
+      if (saved) {
+        setReplies((prev) =>
+          prev.some((row) => row.id === saved.id) ? prev : [saved, ...prev],
+        );
       }
       await loadConversation();
     } catch (err) {

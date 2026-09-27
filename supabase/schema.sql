@@ -25,11 +25,30 @@ create table if not exists mail_messages (
   body_text text,
   received_at timestamptz not null,
   is_read boolean not null default false,
-  synced_at timestamptz not null default now()
+  synced_at timestamptz not null default now(),
+  provider_message_id text,
+  delivery_status text
+    check (
+      delivery_status is null
+      or delivery_status in (
+        'queued',
+        'sent',
+        'delivered',
+        'opened',
+        'bounced',
+        'error'
+      )
+    ),
+  delivered_at timestamptz,
+  opened_at timestamptz
 );
 
 create index if not exists mail_messages_received_idx
   on mail_messages (received_at desc);
+
+create unique index if not exists mail_messages_provider_message_id_uidx
+  on mail_messages (provider_message_id)
+  where provider_message_id is not null;
 
 -- Outbound replies sent via Brevo from the CRM Inbox
 create table if not exists mail_replies (
@@ -40,11 +59,30 @@ create table if not exists mail_replies (
   body_text text not null default '',
   related_mail_id uuid,
   related_inquiry_id text,
-  sent_at timestamptz not null default now()
+  sent_at timestamptz not null default now(),
+  provider_message_id text,
+  delivery_status text
+    check (
+      delivery_status is null
+      or delivery_status in (
+        'queued',
+        'sent',
+        'delivered',
+        'opened',
+        'bounced',
+        'error'
+      )
+    ),
+  delivered_at timestamptz,
+  opened_at timestamptz
 );
 
 create index if not exists mail_replies_sent_idx
   on mail_replies (sent_at desc);
+
+create unique index if not exists mail_replies_provider_message_id_uidx
+  on mail_replies (provider_message_id)
+  where provider_message_id is not null;
 
 create table if not exists site_inquiries (
   id text primary key,

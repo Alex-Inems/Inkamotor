@@ -7,6 +7,10 @@ import {
   type FormField,
 } from "@/lib/mail/clean";
 import {
+  shouldAdvanceDelivery,
+  type DeliveryStatus,
+} from "@/lib/mail/delivery";
+import {
   extractEmailFromBody,
   isOwnAddress,
   isSystemSender,
@@ -23,6 +27,9 @@ export type MailItem = {
   bodyText: string | null;
   receivedAt: string;
   isRead: boolean;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
   attachments?: ReplyAttachment[];
 };
 
@@ -41,6 +48,9 @@ export type ReplyItem = {
   bodyText: string;
   relatedMailId: string | null;
   sentAt: string;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
   attachments: ReplyAttachment[];
 };
 
@@ -53,6 +63,9 @@ export type RoomMessage = {
   clean: CleanBody;
   raw: string;
   mailId?: string;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
   attachments?: ReplyAttachment[];
 };
 
@@ -80,6 +93,29 @@ export function phoneFromFields(fields: FormField[]) {
   return (
     fields.find((f) => /phone|tel|mobile|whatsapp/i.test(f.label))?.value ?? ""
   );
+}
+
+function mergeDelivery(
+  target: RoomMessage,
+  next: {
+    deliveryStatus?: DeliveryStatus | null;
+    deliveredAt?: string | null;
+    openedAt?: string | null;
+  },
+) {
+  const incoming = next.deliveryStatus ?? null;
+  if (
+    incoming &&
+    shouldAdvanceDelivery(target.deliveryStatus ?? null, incoming)
+  ) {
+    target.deliveryStatus = incoming;
+  }
+  if (next.deliveredAt && !target.deliveredAt) {
+    target.deliveredAt = next.deliveredAt;
+  }
+  if (next.openedAt && !target.openedAt) {
+    target.openedAt = next.openedAt;
+  }
 }
 
 /** One conversation per person: forms + real mail, plus your sent replies. */
@@ -119,13 +155,6 @@ export function groupMailRooms(input: {
     return fresh;
   };
 
-  const hasNearDuplicate = (
-    room: MailRoom,
-    mine: boolean,
-    raw: string,
-    at: string,
-  ) => findNearDuplicate(room, mine, raw, at) !== undefined;
-
   for (const m of mail) {
     const raw = m.bodyText || m.preview || "";
     const clean = cleanBody(raw, m.subject);
@@ -147,6 +176,7 @@ export function groupMailRooms(input: {
       const dup = findNearDuplicate(room, true, raw, m.receivedAt);
       if (dup) {
         if (m.attachments?.length) dup.attachments = m.attachments;
+        mergeDelivery(dup, m);
         continue;
       }
       room.messages.push({
@@ -157,6 +187,9 @@ export function groupMailRooms(input: {
         authorName: m.fromName?.trim() || m.fromEmail,
         clean: cleanBody(raw),
         raw,
+        deliveryStatus: m.deliveryStatus ?? null,
+        deliveredAt: m.deliveredAt ?? null,
+        openedAt: m.openedAt ?? null,
         attachments: m.attachments?.length ? m.attachments : undefined,
       });
       continue;
@@ -227,6 +260,7 @@ export function groupMailRooms(input: {
     const duplicate = findNearDuplicate(room, true, r.bodyText, r.sentAt);
     if (duplicate) {
       if (r.attachments?.length) duplicate.attachments = r.attachments;
+      mergeDelivery(duplicate, r);
       continue;
     }
     room.messages.push({
@@ -237,6 +271,9 @@ export function groupMailRooms(input: {
       authorName: "",
       clean: cleanBody(r.bodyText),
       raw: r.bodyText,
+      deliveryStatus: r.deliveryStatus ?? null,
+      deliveredAt: r.deliveredAt ?? null,
+      openedAt: r.openedAt ?? null,
       attachments: r.attachments?.length ? r.attachments : undefined,
     });
   }

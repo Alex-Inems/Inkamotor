@@ -61,6 +61,7 @@ Copy from `.env.example`. Never commit `.env.local`.
 | `BREVO_SENDER_EMAIL` | Verified sender, e.g. `contact@inkamototours.com` |
 | `BREVO_SENDER_NAME` | Display name |
 | `BREVO_LIST_ID` | Newsletter list ID in Brevo |
+| `BREVO_WEBHOOK_SECRET` | Optional shared secret for `POST /api/webhooks/brevo` (Sent/Delivered/Opened) |
 | `IMAP_HOST` | Usually `mail.privateemail.com` |
 | `IMAP_PORT` | `993` |
 | `IMAP_USER` | Mailbox user, e.g. `contact@inkamototours.com` |
@@ -97,6 +98,15 @@ Check status in the app at **/setup** (after login).
 4. **Invoices** → Email to client (your own address).
 5. **Newsletter** → Send a campaign (add yourself to the Brevo list first).
 
+### Delivery / open tracking (Odoo-like)
+
+1. Run `supabase/mail_delivery_tracking.sql` in Supabase.
+2. In Brevo → Transactional → Settings → Webhook, add your CRM URL:
+   `https://<your-crm-host>/api/webhooks/brevo`
+3. Enable events: delivered, opened / unique_opened, hardBounce, softBounce.
+4. Optional: set the same value in Brevo’s webhook auth header and `BREVO_WEBHOOK_SECRET`
+   (accepted as `x-brevo-secret`, `x-webhook-secret`, Bearer token, or `?secret=`).
+5. Send a reply or quotation — chatter shows Sent → Delivered → Opened as events arrive.
 ## Website forms
 
 No webhook or extra setup. Point the Webflow form notification at

@@ -3,10 +3,17 @@ import { simpleParser } from "mailparser";
 import { missingEnv } from "@/lib/api";
 import { autoSubscribe } from "@/lib/mail/auto-subscribe";
 import { listAttachmentsByReplyIds } from "@/lib/mail/attachments";
+import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { isOwnAddress, messageContact } from "@/lib/mail/extract";
+import { isMissingColumnError } from "@/lib/mail/schema-compat";
 import { getSupabase } from "@/lib/supabase/server";
 
 const IMAP_KEYS = ["IMAP_HOST", "IMAP_USER", "IMAP_PASSWORD"] as const;
+
+const MAIL_SELECT_BASE =
+  "id, message_id, from_name, from_email, to_email, subject, preview, body_text, received_at, is_read";
+
+const MAIL_SELECT = `${MAIL_SELECT_BASE}, provider_message_id, delivery_status, delivered_at, opened_at`;
 
 export type MailMessageAttachment = {
   id: string;
@@ -26,6 +33,10 @@ export type MailMessage = {
   bodyText: string | null;
   receivedAt: string;
   isRead: boolean;
+  providerMessageId?: string | null;
+  deliveryStatus?: DeliveryStatus | null;
+  deliveredAt?: string | null;
+  openedAt?: string | null;
   attachments?: MailMessageAttachment[];
 };
 
@@ -37,6 +48,7 @@ function mapRow(
   row: Record<string, unknown>,
   attachments: MailMessageAttachment[] = [],
 ): MailMessage {
+  const status = row.delivery_status;
   return {
     id: String(row.id),
     messageId: (row.message_id as string) || null,
@@ -48,6 +60,13 @@ function mapRow(
     bodyText: (row.body_text as string) || null,
     receivedAt: String(row.received_at),
     isRead: Boolean(row.is_read),
+    providerMessageId: (row.provider_message_id as string) || null,
+    deliveryStatus:
+      typeof status === "string" && status
+        ? (status as DeliveryStatus)
+        : null,
+    deliveredAt: (row.delivered_at as string) || null,
+    openedAt: (row.opened_at as string) || null,
     attachments: attachments.length ? attachments : undefined,
   };
 }
@@ -67,15 +86,26 @@ async function withMessageAttachments(
   });
 }
 
+async function selectMail(
+  build: (
+    select: string,
+  ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+) {
+  const withDelivery = await build(MAIL_SELECT);
+  if (!withDelivery.error) return withDelivery;
+  if (!isMissingColumnError(withDelivery.error)) return withDelivery;
+  return build(MAIL_SELECT_BASE);
+}
+
 export async function listMailMessages(limit = 150): Promise<MailMessage[]> {
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("mail_messages")
-    .select(
-      "id, message_id, from_name, from_email, to_email, subject, preview, body_text, received_at, is_read",
-    )
-    .order("received_at", { ascending: false })
-    .limit(limit);
+  const { data, error } = await selectMail((select) =>
+    supabase
+      .from("mail_messages")
+      .select(select)
+      .order("received_at", { ascending: false })
+      .limit(limit),
+  );
   if (error) throw new Error(error.message);
   const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
   return withMessageAttachments(rows);
@@ -89,14 +119,14 @@ export async function listMailMessagesForEmail(
   const key = email.trim().toLowerCase();
   if (!key.includes("@")) return [];
   const supabase = getSupabase();
-  const { data, error } = await supabase
-    .from("mail_messages")
-    .select(
-      "id, message_id, from_name, from_email, to_email, subject, preview, body_text, received_at, is_read",
-    )
-    .or(`from_email.eq."${key}",to_email.eq."${key}"`)
-    .order("received_at", { ascending: false })
-    .limit(limit);
+  const { data, error } = await selectMail((select) =>
+    supabase
+      .from("mail_messages")
+      .select(select)
+      .or(`from_email.ilike."${key}",to_email.ilike."${key}"`)
+      .order("received_at", { ascending: false })
+      .limit(limit),
+  );
   if (error) throw new Error(error.message);
   const rows = (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
   return withMessageAttachments(rows);
@@ -112,22 +142,24 @@ export async function listUnreadInbox(limit = 12): Promise<{
     .select("id", { count: "exact", head: true })
     .eq("is_read", false)
     .eq("folder", "INBOX");
-  const listQuery = supabase
-    .from("mail_messages")
-    .select(
-      "id, message_id, from_name, from_email, to_email, subject, preview, body_text, received_at, is_read",
-    )
-    .eq("is_read", false)
-    .eq("folder", "INBOX")
-    .order("received_at", { ascending: false })
-    .limit(limit);
+  const listRes = await selectMail((select) =>
+    supabase
+      .from("mail_messages")
+      .select(select)
+      .eq("is_read", false)
+      .eq("folder", "INBOX")
+      .order("received_at", { ascending: false })
+      .limit(limit),
+  );
 
-  const [countRes, listRes] = await Promise.all([unreadQuery, listQuery]);
+  const countRes = await unreadQuery;
   if (countRes.error) throw new Error(countRes.error.message);
   if (listRes.error) throw new Error(listRes.error.message);
   return {
     unread: countRes.count ?? 0,
-    messages: (listRes.data ?? []).map((row) => mapRow(row as Record<string, unknown>)),
+    messages: (listRes.data ?? []).map((row) =>
+      mapRow(row as Record<string, unknown>),
+    ),
   };
 }
 
