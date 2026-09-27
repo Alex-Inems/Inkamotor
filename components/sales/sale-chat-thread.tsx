@@ -79,14 +79,15 @@ export function SaleChatPanel({
   const canLoad = isClientEmail(email);
   const youLabel = t("pages.inbox.youPrefix").replace(/:\s*$/, "").trim() || "You";
 
-  const loadConversation = useCallback(async () => {
+  const loadConversation = useCallback(async (opts?: { silent?: boolean }) => {
     if (!canLoad) {
       setMail([]);
       setReplies([]);
       return;
     }
 
-    setLoading(true);
+    const silent = !!opts?.silent;
+    if (!silent) setLoading(true);
     try {
       const emailParam = encodeURIComponent(email.trim());
       const [statusRes, mailRes, repliesRes] = await Promise.all([
@@ -110,21 +111,23 @@ export function SaleChatPanel({
       if (mailRes.ok) {
         const json = (await mailRes.json()) as { messages?: MailMessage[] };
         setMail(json.messages ?? []);
-      } else {
+      } else if (!silent) {
         setMail([]);
       }
 
       if (repliesRes.ok) {
         const json = (await repliesRes.json()) as { replies?: MailReply[] };
         setReplies(json.replies ?? []);
-      } else {
+      } else if (!silent) {
         setReplies([]);
       }
     } catch {
-      setMail([]);
-      setReplies([]);
+      if (!silent) {
+        setMail([]);
+        setReplies([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [canLoad, email, locale]);
 
@@ -132,12 +135,12 @@ export function SaleChatPanel({
     void loadConversation();
   }, [loadConversation]);
 
-  // Refresh delivery status while the panel is open (Brevo webhooks update DB).
+  // Quietly refresh delivery status — never flip back to the loading skeleton.
   useEffect(() => {
     if (!canLoad) return;
     const id = window.setInterval(() => {
-      void loadConversation();
-    }, 12_000);
+      void loadConversation({ silent: true });
+    }, 20_000);
     return () => window.clearInterval(id);
   }, [canLoad, loadConversation]);
 
@@ -203,7 +206,7 @@ export function SaleChatPanel({
           prev.some((row) => row.id === saved.id) ? prev : [saved, ...prev],
         );
       }
-      await loadConversation();
+      await loadConversation({ silent: true });
     } catch (err) {
       pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
     } finally {
