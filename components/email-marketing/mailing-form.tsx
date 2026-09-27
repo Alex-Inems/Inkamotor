@@ -347,10 +347,10 @@ function placeImageInFlow(
 
   let width = Math.round(
     opts?.width ??
-      (parsePx(img.style.width) ||
-        parsePx(img.getAttribute("width")) ||
-        img.getBoundingClientRect().width ||
-        320),
+    (parsePx(img.style.width) ||
+      parsePx(img.getAttribute("width")) ||
+      img.getBoundingClientRect().width ||
+      320),
   );
   width = clamp(width, 40, Math.max(40, main.clientWidth));
 
@@ -587,9 +587,13 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     html: "",
     status: "draft" as MailingStatus,
     recipientTag: "",
+    recipientEmails: [] as string[],
     templateId: "",
     responsible: "Team",
   });
+  /** Explicit “choose people” mode even when the checklist is still empty. */
+  const [pickingPeople, setPickingPeople] = useState(false);
+  const [peopleQuery, setPeopleQuery] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -601,8 +605,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         isNew
           ? Promise.resolve(null)
           : fetch(
-              `/api/newsletter/mailings?id=${encodeURIComponent(mailingId)}`,
-            ),
+            `/api/newsletter/mailings?id=${encodeURIComponent(mailingId)}`,
+          ),
       ]);
 
       let loadedTemplates: Template[] = [];
@@ -645,10 +649,14 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           preview: row.preview,
           html: pullOrphansIntoMainContent(row.html || ""),
           status: row.status,
-          recipientTag: row.recipientTag ?? "",
+          recipientTag: row.emails?.length ? "" : row.recipientTag ?? "",
+          recipientEmails: (row.emails ?? [])
+            .map((e) => e.trim().toLowerCase())
+            .filter(Boolean),
           templateId: row.templateId ?? "",
           responsible: row.responsible || "Team",
         });
+        setPickingPeople((row.emails?.length ?? 0) > 0);
         setEditorKey(`${row.id}-${Date.now()}`);
         if (row.scheduledAt) {
           const d = new Date(row.scheduledAt);
@@ -668,10 +676,12 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           html: tpl?.html || "<p></p>",
           status: "draft",
           recipientTag: "",
+          recipientEmails: [],
           // Prefill content only — do not link a template until the user picks or duplicates.
           templateId: "",
           responsible: "Team",
         });
+        setPickingPeople(false);
         setEditorKey(`new-${Date.now()}`);
       }
     } finally {
@@ -694,12 +704,41 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   }, [bodyDirty]);
 
   const audienceCount = useMemo(() => {
+    if (pickingPeople || form.recipientEmails.length > 0) {
+      return form.recipientEmails.length;
+    }
     if (!form.recipientTag) return subscribers.length;
     const tag = form.recipientTag.toLowerCase();
     return subscribers.filter((s) =>
       (s.tags ?? []).some((x) => x.toLowerCase() === tag),
     ).length;
-  }, [subscribers, form.recipientTag]);
+  }, [
+    subscribers,
+    form.recipientTag,
+    form.recipientEmails,
+    pickingPeople,
+  ]);
+
+  const sortedSubscribers = useMemo(
+    () =>
+      [...subscribers].sort((a, b) =>
+        a.email.localeCompare(b.email, undefined, { sensitivity: "base" }),
+      ),
+    [subscribers],
+  );
+
+  const visiblePeople = useMemo(() => {
+    const q = peopleQuery.trim().toLowerCase();
+    if (!q) return sortedSubscribers;
+    return sortedSubscribers.filter((s) =>
+      `${s.email} ${(s.tags ?? []).join(" ")}`.toLowerCase().includes(q),
+    );
+  }, [sortedSubscribers, peopleQuery]);
+
+  const selectedEmailSet = useMemo(
+    () => new Set(form.recipientEmails.map((e) => e.toLowerCase())),
+    [form.recipientEmails],
+  );
 
   const imageSrcs = useMemo(() => collectImageSrcs(form.html), [form.html]);
 
@@ -797,7 +836,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           settled = hadHtml
             ? `${parsed.doctype ? `<!DOCTYPE ${parsed.doctype.name}>\n` : "<!DOCTYPE html>\n"}${parsed.documentElement.outerHTML}`
             : parsed.getElementById("__root")?.innerHTML ||
-              parsed.body.innerHTML;
+            parsed.body.innerHTML;
         }
         setForm((prev) => ({ ...prev, html: settled }));
       }
@@ -1187,8 +1226,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       toolbar.setAttribute("data-crm-img-chrome", "toolbar");
       const widthLabel = Math.round(
         parsePx(img.style.width) ||
-          parsePx(img.getAttribute("width")) ||
-          rect.width,
+        parsePx(img.getAttribute("width")) ||
+        rect.width,
       );
       toolbar.setAttribute(
         "style",
@@ -1237,8 +1276,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       const currentWidth = () =>
         Math.round(
           parsePx(img.style.width) ||
-            parsePx(img.getAttribute("width")) ||
-            280,
+          parsePx(img.getAttribute("width")) ||
+          280,
         );
 
       const applyWidth = (width: number) => {
@@ -1369,8 +1408,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       if (sizePill) {
         const w = Math.round(
           parsePx(selectedImg.style.width) ||
-            parsePx(selectedImg.getAttribute("width")) ||
-            rect.width,
+          parsePx(selectedImg.getAttribute("width")) ||
+          rect.width,
         );
         sizePill.textContent = `${w}px`;
       }
@@ -1396,9 +1435,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       const imgRect = img.getBoundingClientRect();
       startWidth = Math.round(
         parsePx(img.style.width) ||
-          parsePx(img.getAttribute("width")) ||
-          imgRect.width ||
-          320,
+        parsePx(img.getAttribute("width")) ||
+        imgRect.width ||
+        320,
       );
       startHeight = Math.round(imgRect.height || startWidth * 0.66);
       grabOffsetX = clientX - imgRect.left;
@@ -1725,25 +1764,25 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         mode === "update"
           ? updateTemplateId
             ? {
-                id: updateTemplateId,
-                name,
-                subject: saved.subject,
-                preview: saved.preview,
-                html: saved.html,
-              }
-            : {
-                mailingId: saved.id,
-                name,
-                subject: saved.subject,
-                preview: saved.preview,
-                html: saved.html,
-              }
-          : {
+              id: updateTemplateId,
               name,
               subject: saved.subject,
               preview: saved.preview,
               html: saved.html,
-            };
+            }
+            : {
+              mailingId: saved.id,
+              name,
+              subject: saved.subject,
+              preview: saved.preview,
+              html: saved.html,
+            }
+          : {
+            name,
+            subject: saved.subject,
+            preview: saved.preview,
+            html: saved.html,
+          };
       const res = await fetch("/api/newsletter/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1808,7 +1847,14 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           preview: form.preview.trim(),
           html,
           status: patch?.status ?? form.status,
-          recipientTag: form.recipientTag || null,
+          recipientTag:
+            pickingPeople || form.recipientEmails.length > 0
+              ? null
+              : form.recipientTag || null,
+          emails:
+            pickingPeople || form.recipientEmails.length > 0
+              ? form.recipientEmails.map((e) => e.trim().toLowerCase())
+              : [],
           templateId: form.templateId || null,
           responsible: form.responsible,
           scheduledAt:
@@ -1836,9 +1882,15 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         subject: json.mailing!.subject,
         preview: json.mailing!.preview,
         html: json.mailing!.html,
-        recipientTag: json.mailing!.recipientTag ?? "",
+        recipientTag: json.mailing!.emails?.length
+          ? ""
+          : json.mailing!.recipientTag ?? "",
+        recipientEmails: (json.mailing!.emails ?? [])
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean),
         responsible: json.mailing!.responsible || prev.responsible,
       }));
+      setPickingPeople((json.mailing!.emails?.length ?? 0) > 0);
       setEditorKey(`saved-${json.mailing.id}-${Date.now()}`);
       clearEditHistory();
       pushToast({
@@ -1875,13 +1927,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   async function sendNow() {
     const saved = await saveMailing({ status: "draft" });
     if (!saved) return;
-    router.push(
-      `/newsletter?compose=1&draft=${encodeURIComponent(saved.id)}${
-        form.recipientTag
-          ? `&tag=${encodeURIComponent(form.recipientTag)}`
-          : ""
-      }`,
-    );
+    const qs = new URLSearchParams({
+      compose: "1",
+      draft: saved.id,
+    });
+    if (pickingPeople || form.recipientEmails.length > 0) {
+      // Selection is stored on the draft as mailing.emails
+    } else if (form.recipientTag) {
+      qs.set("tag", form.recipientTag);
+    }
+    router.push(`/newsletter?${qs.toString()}`);
   }
 
   async function scheduleMailing() {
@@ -1907,13 +1962,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     if (!saved) return;
     setScheduleOpen(false);
     // Hand off to campaigns composer with schedule prefilled via draft
-    router.push(
-      `/newsletter?compose=1&draft=${encodeURIComponent(saved.id)}${
-        form.recipientTag
-          ? `&tag=${encodeURIComponent(form.recipientTag)}`
-          : ""
-      }`,
-    );
+    const qs = new URLSearchParams({
+      compose: "1",
+      draft: saved.id,
+    });
+    if (pickingPeople || form.recipientEmails.length > 0) {
+      // Selection is stored on the draft as mailing.emails
+    } else if (form.recipientTag) {
+      qs.set("tag", form.recipientTag);
+    }
+    router.push(`/newsletter?${qs.toString()}`);
   }
 
   async function sendTest() {
@@ -2092,7 +2150,14 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           preview,
           html,
           status: "draft",
-          recipientTag: form.recipientTag || null,
+          recipientTag:
+            pickingPeople || form.recipientEmails.length > 0
+              ? null
+              : form.recipientTag || null,
+          emails:
+            pickingPeople || form.recipientEmails.length > 0
+              ? form.recipientEmails.map((e) => e.trim().toLowerCase())
+              : [],
           templateId: tplJson.id,
           responsible: form.responsible,
           scheduledAt: null,
@@ -2281,26 +2346,25 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             return (
               <span
                 key={stage}
-                className={`relative px-4 py-1.5 text-xs font-semibold ${
-                  active
+                className={`relative px-4 py-1.5 text-xs font-semibold ${active
                     ? "bg-[#017e84] text-white"
                     : reached
                       ? "bg-[#e7e9ed] text-[#1f1f1f]"
                       : "bg-[#f8f9fa] text-[#6c757d]"
-                } ${index > 0 ? "ml-1" : ""}`}
+                  } ${index > 0 ? "ml-1" : ""}`}
                 style={
                   index < PIPELINE.length - 1
                     ? {
-                        clipPath:
-                          "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
-                        paddingLeft: index === 0 ? "12px" : "18px",
-                        paddingRight: "18px",
-                      }
+                      clipPath:
+                        "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
+                      paddingLeft: index === 0 ? "12px" : "18px",
+                      paddingRight: "18px",
+                    }
                     : {
-                        clipPath:
-                          "polygon(0 0, 100% 0, 100% 100%, 0 100%, 10px 50%)",
-                        paddingLeft: "18px",
-                      }
+                      clipPath:
+                        "polygon(0 0, 100% 0, 100% 100%, 0 100%, 10px 50%)",
+                      paddingLeft: "18px",
+                    }
                 }
               >
                 {t(`pages.emailMarketing.stage.${stage}`)}
@@ -2345,28 +2409,162 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           <span className="pt-2 text-sm font-medium text-mute">
             {t("pages.emailMarketing.fieldRecipients")}
           </span>
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              className={`${inputClass} max-w-xs`}
-              value={form.recipientTag}
-              disabled={contentLocked}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, recipientTag: e.target.value }))
-              }
-            >
-              <option value="">{t("pages.emailMarketing.allRecipients")}</option>
-              {tags.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <select
+                className={`${inputClass} min-w-[14rem] max-w-full`}
+                value={
+                  pickingPeople || form.recipientEmails.length > 0
+                    ? "pick"
+                    : form.recipientTag
+                      ? `tag:${form.recipientTag}`
+                      : "all"
+                }
+                disabled={contentLocked}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === "all") {
+                    setPickingPeople(false);
+                    setPeopleQuery("");
+                    setForm((prev) => ({
+                      ...prev,
+                      recipientTag: "",
+                      recipientEmails: [],
+                    }));
+                    return;
+                  }
+                  if (raw === "pick") {
+                    setPickingPeople(true);
+                    setForm((prev) => ({
+                      ...prev,
+                      recipientTag: "",
+                    }));
+                    return;
+                  }
+                  if (raw.startsWith("tag:")) {
+                    setPickingPeople(false);
+                    setPeopleQuery("");
+                    setForm((prev) => ({
+                      ...prev,
+                      recipientTag: raw.slice(4),
+                      recipientEmails: [],
+                    }));
+                  }
+                }}
+              >
+                <option value="all">
+                  {t("pages.emailMarketing.allRecipients")}
                 </option>
-              ))}
-            </select>
-            <span className="text-sm text-mute">
-              {t("pages.emailMarketing.recordCount").replace(
-                "{count}",
-                formatNumber(audienceCount, false, locale),
-              )}
-            </span>
+                {tags.length > 0 ? (
+                  <optgroup label={t("pages.emailMarketing.recipientsByTag")}>
+                    {tags.map((tag) => (
+                      <option key={`tag-${tag}`} value={`tag:${tag}`}>
+                        {tag}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                <option value="pick">
+                  {t("pages.emailMarketing.recipientsChoose")}
+                </option>
+              </select>
+              <span className="text-sm text-mute">
+                {t("pages.emailMarketing.recordCount").replace(
+                  "{count}",
+                  formatNumber(audienceCount, false, locale),
+                )}
+              </span>
+            </div>
+
+            {pickingPeople || form.recipientEmails.length > 0 ? (
+              <div className="min-w-0 space-y-2 rounded-md border border-line bg-ash/30 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    className={`${inputClass} min-w-[12rem] flex-1`}
+                    placeholder={t("pages.emailMarketing.recipientsSearch")}
+                    value={peopleQuery}
+                    disabled={contentLocked}
+                    onChange={(e) => setPeopleQuery(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-mute underline-offset-2 hover:text-ink hover:underline disabled:opacity-40"
+                    disabled={contentLocked || visiblePeople.length === 0}
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        recipientEmails: [
+                          ...new Set([
+                            ...prev.recipientEmails,
+                            ...visiblePeople.map((s) =>
+                              s.email.trim().toLowerCase(),
+                            ),
+                          ]),
+                        ],
+                      }))
+                    }
+                  >
+                    {t("pages.emailMarketing.recipientsSelectVisible")}
+                  </button>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-mute underline-offset-2 hover:text-ink hover:underline disabled:opacity-40"
+                    disabled={
+                      contentLocked || form.recipientEmails.length === 0
+                    }
+                    onClick={() =>
+                      setForm((prev) => ({ ...prev, recipientEmails: [] }))
+                    }
+                  >
+                    {t("pages.emailMarketing.recipientsClear")}
+                  </button>
+                </div>
+                <div className="max-h-48 overflow-y-auto overscroll-contain rounded border border-line/80 bg-panel">
+                  {visiblePeople.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-sm text-mute">
+                      {t("pages.emailMarketing.recipientsNone")}
+                    </p>
+                  ) : (
+                    <ul className="divide-y divide-line">
+                      {visiblePeople.map((s) => {
+                        const email = s.email.trim().toLowerCase();
+                        const checked = selectedEmailSet.has(email);
+                        return (
+                          <li key={email}>
+                            <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm text-ink hover:bg-ash/40">
+                              <input
+                                type="checkbox"
+                                className="accent-[#714B67]"
+                                checked={checked}
+                                disabled={contentLocked}
+                                onChange={() => {
+                                  setPickingPeople(true);
+                                  setForm((prev) => {
+                                    const set = new Set(
+                                      prev.recipientEmails.map((e) =>
+                                        e.toLowerCase(),
+                                      ),
+                                    );
+                                    if (set.has(email)) set.delete(email);
+                                    else set.add(email);
+                                    return {
+                                      ...prev,
+                                      recipientTag: "",
+                                      recipientEmails: [...set],
+                                    };
+                                  });
+                                }}
+                              />
+                              <span className="min-w-0 truncate">{s.email}</span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -2413,11 +2611,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             <button
               key={key}
               type="button"
-              className={`border-b-2 px-3 py-2 text-sm font-medium ${
-                tab === key
+              className={`border-b-2 px-3 py-2 text-sm font-medium ${tab === key
                   ? "border-accent text-ink"
                   : "border-transparent text-mute hover:text-ink"
-              }`}
+                }`}
               onClick={() => setTab(key)}
             >
               {label}
@@ -2496,11 +2693,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     key={key}
                     type="button"
                     data-side-tab={key}
-                    className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold ${
-                      sideTab === key
+                    className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-semibold ${sideTab === key
                         ? "border-b-2 border-[#017e84] text-white"
                         : "text-[#9a9a9a] hover:text-white"
-                    }`}
+                      }`}
                     onClick={() => setSideTab(key)}
                   >
                     <Icon className="h-3.5 w-3.5" />
@@ -2520,11 +2716,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                   <button
                     type="button"
                     data-body-mode="edit"
-                    className={`${btnGhost} gap-1.5 ${
-                      bodyMode === "edit"
+                    className={`${btnGhost} gap-1.5 ${bodyMode === "edit"
                         ? "bg-[#017e84] text-white hover:bg-[#016a6f]"
                         : "border border-[#017e84]/50 bg-[#017e84]/20 text-white hover:bg-[#017e84]/35"
-                    }`}
+                      }`}
                     disabled={contentLocked}
                     onClick={() => enterEditMode()}
                   >
@@ -2537,94 +2732,94 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
               <div className="px-3 py-2.5">
                 {sideTab === "blocks" ? (
                   <>
-                  <div className="flex gap-4 overflow-x-auto pb-1">
-                    <div className="min-w-0 shrink-0">
-                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9a9a9a]">
-                        {t("pages.emailMarketing.blockGroupStructure")}
-                      </p>
-                      <div className="flex gap-1.5">
-                        {(
-                          [
-                            ["headers", "blockHeaders", SNIPPET_THUMB.headers],
-                            ["text", "blockText", SNIPPET_THUMB.text],
-                            ["images", "blockImages", SNIPPET_THUMB.images],
-                            ["person", "blockPerson", SNIPPET_THUMB.person],
-                            ["columns", "blockColumns", SNIPPET_THUMB.columns],
-                            ["website", "blockWebsite", SNIPPET_THUMB.website],
-                            ["footer", "blockFooter", SNIPPET_THUMB.footer],
-                          ] as const
-                        ).map(([key, labelKey, thumb]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            data-block-key={key}
-                            disabled={contentLocked}
-                            title={t(`pages.emailMarketing.${labelKey}`)}
-                            className="group flex w-[4.75rem] shrink-0 flex-col items-center gap-1 rounded border border-transparent bg-[#3a3a3a] px-1.5 py-2 text-center hover:border-[#017e84] disabled:opacity-50"
-                            onClick={() =>
-                              key === "images"
-                                ? openReplaceImage(null)
-                                : insertSnippet(key)
-                            }
-                          >
-                            <span
-                              className="h-9 w-full bg-contain bg-center bg-no-repeat opacity-90 group-hover:opacity-100"
-                              style={{ backgroundImage: `url(${thumb})` }}
-                              aria-hidden
-                            />
-                            <span className="line-clamp-2 text-[10px] leading-tight text-[#dedede]">
-                              {t(`pages.emailMarketing.${labelKey}`)}
-                            </span>
-                          </button>
-                        ))}
+                    <div className="flex gap-4 overflow-x-auto pb-1">
+                      <div className="min-w-0 shrink-0">
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9a9a9a]">
+                          {t("pages.emailMarketing.blockGroupStructure")}
+                        </p>
+                        <div className="flex gap-1.5">
+                          {(
+                            [
+                              ["headers", "blockHeaders", SNIPPET_THUMB.headers],
+                              ["text", "blockText", SNIPPET_THUMB.text],
+                              ["images", "blockImages", SNIPPET_THUMB.images],
+                              ["person", "blockPerson", SNIPPET_THUMB.person],
+                              ["columns", "blockColumns", SNIPPET_THUMB.columns],
+                              ["website", "blockWebsite", SNIPPET_THUMB.website],
+                              ["footer", "blockFooter", SNIPPET_THUMB.footer],
+                            ] as const
+                          ).map(([key, labelKey, thumb]) => (
+                            <button
+                              key={key}
+                              type="button"
+                              data-block-key={key}
+                              disabled={contentLocked}
+                              title={t(`pages.emailMarketing.${labelKey}`)}
+                              className="group flex w-[4.75rem] shrink-0 flex-col items-center gap-1 rounded border border-transparent bg-[#3a3a3a] px-1.5 py-2 text-center hover:border-[#017e84] disabled:opacity-50"
+                              onClick={() =>
+                                key === "images"
+                                  ? openReplaceImage(null)
+                                  : insertSnippet(key)
+                              }
+                            >
+                              <span
+                                className="h-9 w-full bg-contain bg-center bg-no-repeat opacity-90 group-hover:opacity-100"
+                                style={{ backgroundImage: `url(${thumb})` }}
+                                aria-hidden
+                              />
+                              <span className="line-clamp-2 text-[10px] leading-tight text-[#dedede]">
+                                {t(`pages.emailMarketing.${labelKey}`)}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="min-w-0 shrink-0 border-l border-white/10 pl-4">
+                        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9a9a9a]">
+                          {t("pages.emailMarketing.blockGroupInner")}
+                        </p>
+                        <div className="flex gap-1.5">
+                          {(
+                            [
+                              ["text", "blockText", SNIPPET_THUMB.text],
+                              ["alert", "blockAlert", SNIPPET_THUMB.alert],
+                              ["separator", "blockSeparator", SNIPPET_THUMB.separator],
+                              ["highlight", "blockHighlight", SNIPPET_THUMB.highlight],
+                              ["rating", "blockRating", SNIPPET_THUMB.rating],
+                              ["button", "blockButton", SNIPPET_THUMB.button],
+                              ["image", "blockImage", SNIPPET_THUMB.image],
+                              ["icon", "blockIcon", SNIPPET_THUMB.icon],
+                              ["video", "blockVideo", SNIPPET_THUMB.video],
+                              ["badge", "blockBadge", SNIPPET_THUMB.badge],
+                              ["ctaBadge", "blockCtaBadge", SNIPPET_THUMB.ctaBadge],
+                            ] as const
+                          ).map(([key, labelKey, thumb]) => (
+                            <button
+                              key={`inner-${key}`}
+                              type="button"
+                              data-block-key={`inner-${key}`}
+                              disabled={contentLocked}
+                              title={t(`pages.emailMarketing.${labelKey}`)}
+                              className="group flex w-[4.75rem] shrink-0 flex-col items-center gap-1 rounded border border-transparent bg-[#3a3a3a] px-1.5 py-2 text-center hover:border-[#017e84] disabled:opacity-50"
+                              onClick={() =>
+                                key === "image"
+                                  ? insertImage()
+                                  : insertSnippet(key)
+                              }
+                            >
+                              <span
+                                className="h-9 w-full bg-contain bg-center bg-no-repeat opacity-90 group-hover:opacity-100"
+                                style={{ backgroundImage: `url(${thumb})` }}
+                                aria-hidden
+                              />
+                              <span className="line-clamp-2 text-[10px] leading-tight text-[#dedede]">
+                                {t(`pages.emailMarketing.${labelKey}`)}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                    <div className="min-w-0 shrink-0 border-l border-white/10 pl-4">
-                      <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-[#9a9a9a]">
-                        {t("pages.emailMarketing.blockGroupInner")}
-                      </p>
-                      <div className="flex gap-1.5">
-                        {(
-                          [
-                            ["text", "blockText", SNIPPET_THUMB.text],
-                            ["alert", "blockAlert", SNIPPET_THUMB.alert],
-                            ["separator", "blockSeparator", SNIPPET_THUMB.separator],
-                            ["highlight", "blockHighlight", SNIPPET_THUMB.highlight],
-                            ["rating", "blockRating", SNIPPET_THUMB.rating],
-                            ["button", "blockButton", SNIPPET_THUMB.button],
-                            ["image", "blockImage", SNIPPET_THUMB.image],
-                            ["icon", "blockIcon", SNIPPET_THUMB.icon],
-                            ["video", "blockVideo", SNIPPET_THUMB.video],
-                            ["badge", "blockBadge", SNIPPET_THUMB.badge],
-                            ["ctaBadge", "blockCtaBadge", SNIPPET_THUMB.ctaBadge],
-                          ] as const
-                        ).map(([key, labelKey, thumb]) => (
-                          <button
-                            key={`inner-${key}`}
-                            type="button"
-                            data-block-key={`inner-${key}`}
-                            disabled={contentLocked}
-                            title={t(`pages.emailMarketing.${labelKey}`)}
-                            className="group flex w-[4.75rem] shrink-0 flex-col items-center gap-1 rounded border border-transparent bg-[#3a3a3a] px-1.5 py-2 text-center hover:border-[#017e84] disabled:opacity-50"
-                            onClick={() =>
-                              key === "image"
-                                ? insertImage()
-                                : insertSnippet(key)
-                            }
-                          >
-                            <span
-                              className="h-9 w-full bg-contain bg-center bg-no-repeat opacity-90 group-hover:opacity-100"
-                              style={{ backgroundImage: `url(${thumb})` }}
-                              aria-hidden
-                            />
-                            <span className="line-clamp-2 text-[10px] leading-tight text-[#dedede]">
-                              {t(`pages.emailMarketing.${labelKey}`)}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
                     <div className="mt-3 border-t border-white/10 pt-2.5">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-[#9a9a9a]">
@@ -2784,9 +2979,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                 </div>
               ) : null}
               <div
-                className={`bg-[#f7f4ee] ${
-                  bodyMode === "edit" ? "ring-2 ring-inset ring-[#017e84]/40" : ""
-                }`}
+                className={`bg-[#f7f4ee] ${bodyMode === "edit" ? "ring-2 ring-inset ring-[#017e84]/40" : ""
+                  }`}
               >
                 <div className="w-full border-y border-line bg-[#f7f4ee]">
                   <iframe
@@ -3034,7 +3228,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                   preset.value === "full"
                     ? imageWidth === "full"
                     : imageWidth !== "full" &&
-                      Number.parseInt(imageWidthCustom, 10) === preset.value;
+                    Number.parseInt(imageWidthCustom, 10) === preset.value;
                 return (
                   <button
                     key={String(preset.value)}

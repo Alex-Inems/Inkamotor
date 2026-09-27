@@ -265,6 +265,17 @@ function NewsletterPageInner() {
           setRecipientTag(tagParam);
           pendingAudienceRef.current = tagParam;
         }
+        const emailParam = searchParams.get("email")?.trim().toLowerCase();
+        const mailingEmails = (mailing.emails ?? [])
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+        if (emailParam) {
+          setSelectedEmails([emailParam]);
+          pendingAudienceRef.current = null;
+        } else if (mailingEmails.length > 0) {
+          setSelectedEmails(mailingEmails);
+          pendingAudienceRef.current = null;
+        }
         if (mailing.scheduledAt) {
           const d = new Date(mailing.scheduledAt);
           if (!Number.isNaN(d.getTime()) && d.getTime() > Date.now()) {

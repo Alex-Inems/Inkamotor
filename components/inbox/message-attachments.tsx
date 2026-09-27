@@ -163,7 +163,7 @@ function PdfCanvasPreview({
       {error ? (
         <p className="px-3 py-3 text-center text-xs text-pink">{error}</p>
       ) : null}
-      <div ref={hostRef} className="max-h-[14rem] overflow-y-auto p-1.5" />
+      <div ref={hostRef} className="max-h-[20rem] overflow-y-auto p-2" />
       {pageCount > 3 ? (
         <p className="px-3 pb-2 text-center text-[11px] text-mute">
           {pageCount} pages · showing first 3
@@ -219,34 +219,6 @@ function TextFilePreview({ url, fileName }: { url: string; fileName: string }) {
   );
 }
 
-/** Always show something — browser embed for docs the canvas preview can't paint. */
-function DocumentEmbedPreview({
-  url,
-  fileName,
-  mimeType,
-}: {
-  url: string;
-  fileName: string;
-  mimeType: string;
-}) {
-  return (
-    <div className="border-t border-line/60 bg-[#f4f1ea]">
-      <object
-        data={url}
-        type={mimeType || "application/pdf"}
-        aria-label={fileName}
-        className="block h-[14rem] w-full bg-white"
-      >
-        <iframe
-          src={url}
-          title={fileName}
-          className="block h-[14rem] w-full border-0 bg-white"
-        />
-      </object>
-    </div>
-  );
-}
-
 export function MessageAttachments({
   attachments,
   mine,
@@ -262,7 +234,7 @@ export function MessageAttachments({
   const light = tone === "light";
 
   return (
-    <div className="mt-1.5 space-y-1.5">
+    <div className="mt-2 space-y-2">
       {visible.map((file) => {
         const previewUrl = `/api/inbox/attachments/${file.id}`;
         const downloadUrl = `${previewUrl}?download=1`;
@@ -323,18 +295,12 @@ export function MessageAttachments({
               <img
                 src={previewUrl}
                 alt={file.fileName}
-                className="max-h-48 w-full bg-white object-contain"
+                className="max-h-64 w-full bg-white object-contain"
                 loading="lazy"
               />
             ) : text ? (
               <TextFilePreview url={previewUrl} fileName={file.fileName} />
-            ) : (
-              <DocumentEmbedPreview
-                url={previewUrl}
-                fileName={file.fileName}
-                mimeType={file.mimeType}
-              />
-            )}
+            ) : null}
           </div>
         );
       })}

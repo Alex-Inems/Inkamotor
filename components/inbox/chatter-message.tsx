@@ -6,8 +6,8 @@ import { LinkifiedText } from "@/components/inbox/linkified-text";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { previewOf } from "@/lib/mail/clean";
 import type { RoomMessage } from "@/lib/mail/rooms";
-import { formatDateTime } from "@/lib/format";
-import { localeMeta, useLocale, type Locale } from "@/lib/i18n";
+import { formatDateTime, formatTime } from "@/lib/format";
+import { useLocale } from "@/lib/i18n";
 
 const AVATAR_TONES = [
   "bg-[#714B67]",
@@ -45,33 +45,26 @@ function deliveryLabel(
   return t("pages.inbox.deliverySent");
 }
 
+/** Strong, distinct colors so status is obvious on the dark CRM chrome. */
 function deliveryTone(status: DeliveryStatus | null | undefined): {
   className: string;
   filled: boolean;
 } {
   if (status === "opened") {
-    return { className: "text-[#1b7a3d]", filled: true };
+    return { className: "text-[#6bdc7a]", filled: true };
   }
   if (status === "delivered") {
-    return { className: "text-[#017e84]", filled: true };
+    return { className: "text-[#3ec4cb]", filled: true };
   }
   if (status === "bounced" || status === "error") {
-    return { className: "text-[#c0392b]", filled: false };
+    return { className: "text-[#f07171]", filled: false };
   }
-  return { className: "text-black/45", filled: false };
-}
-
-function formatBubbleTime(iso: string, locale: Locale) {
-  return new Intl.DateTimeFormat(localeMeta[locale].bcp47, {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
+  return { className: "text-[#a8a39a]", filled: false };
 }
 
 export function MailTrackingIcon({
   message,
   showLabel = false,
-  compact = false,
 }: {
   message: Pick<
     RoomMessage,
@@ -79,8 +72,6 @@ export function MailTrackingIcon({
   >;
   /** When true, show “Sent / Delivered / Opened” next to the icon. */
   showLabel?: boolean;
-  /** Smaller icon for inside WhatsApp-style bubbles. */
-  compact?: boolean;
 }) {
   const { t, locale } = useLocale();
   if (!message.mine) return null;
@@ -96,19 +87,18 @@ export function MailTrackingIcon({
     ? `${label} · ${formatDateTime(tipAt, locale)}`
     : label;
   const tone = deliveryTone(status);
-  const size = compact ? "h-[13px] w-[13px]" : "h-[15px] w-[15px]";
 
   return (
     <span
-      className={`inline-flex items-center gap-0.5 ${tone.className}`}
+      className={`inline-flex items-center gap-1 ${tone.className}`}
       title={title}
       aria-label={label}
       data-delivery-status={status}
     >
-      <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
         <svg
           viewBox="0 0 24 24"
-          className={size}
+          className="h-[15px] w-[15px]"
           fill={tone.filled ? "currentColor" : "none"}
           stroke="currentColor"
           strokeWidth={tone.filled ? "1.5" : "2"}
@@ -120,19 +110,19 @@ export function MailTrackingIcon({
           <path
             d="m3 7 9 7 9-7"
             fill="none"
-            stroke={tone.filled ? "#7eb8b4" : "currentColor"}
+            stroke={tone.filled ? "#0f1f1e" : "currentColor"}
             strokeWidth={tone.filled ? "1.75" : "2"}
           />
         </svg>
       </span>
       {showLabel ? (
-        <span className="text-[10px] font-semibold leading-none">{label}</span>
+        <span className="text-[11px] font-semibold leading-none">{label}</span>
       ) : null}
     </span>
   );
 }
 
-/** WhatsApp-style compact chat bubble (Sales, Contacts, Inbox). */
+/** WhatsApp-style chat bubble used on Sales, Contacts, and Inbox. */
 export function ChatterMessage({
   message,
   youLabel,
@@ -164,140 +154,167 @@ export function ChatterMessage({
     message.subject.trim() &&
     !/^note$/i.test(message.subject) &&
     !/^update$/i.test(message.subject);
-  const mine = message.mine;
-  const bubbleTone = mine ? "light" : "dark";
+  const timeLabel = formatTime(message.at, locale);
 
   return (
     <article
-      className={`flex w-full px-1 py-0.5 ${mine ? "justify-end" : "justify-start"}`}
+      className={`flex w-full gap-2 px-1 py-0.5 ${
+        message.mine ? "justify-end" : "justify-start"
+      }`}
       role="group"
       aria-label={author}
     >
+      {!message.mine ? (
+        <span
+          className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${chatterAvatarTone(author)}`}
+          aria-hidden
+        >
+          {chatterInitials(author)}
+        </span>
+      ) : null}
+
       <div
-        className={`group/msg wa-bubble wa-tail relative w-fit max-w-[min(78%,22rem)] text-[13.5px] leading-[1.35] ${
-          mine ? "wa-bubble-out" : "wa-bubble-in"
+        className={`flex min-w-0 max-w-[min(82%,22rem)] flex-col ${
+          message.mine ? "items-end" : "items-start"
         }`}
       >
-        {onDelete ? (
-          <button
-            type="button"
-            aria-label={t("pages.inbox.deleteMessage")}
-            disabled={deleting}
-            onClick={onDelete}
-            className={`absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[12px] leading-none opacity-0 transition-opacity group-hover/msg:opacity-100 ${
-              mine
-                ? "text-chat-out-text/50 hover:bg-black/10 hover:text-chat-out-text"
-                : "text-ink/40 hover:bg-black/20 hover:text-ink"
-            } ${deleting ? "opacity-40" : ""}`}
-          >
-            ×
-          </button>
+        {!message.mine ? (
+          <header className="mb-0.5 flex max-w-full items-baseline gap-1.5 px-1 leading-none">
+            <strong className="truncate text-[12px] font-semibold text-ink">
+              {author}
+            </strong>
+          </header>
         ) : null}
 
-        {!mine ? (
-          <p className="mb-0.5 truncate pr-4 text-[11px] font-semibold text-[#6bdc7a]">
-            {author}
-          </p>
-        ) : null}
+        <div
+          className={`wa-bubble wa-tail group/msg w-fit max-w-full text-[13.5px] leading-snug ${
+            message.mine ? "wa-bubble-out" : "wa-bubble-in"
+          }`}
+        >
+          {onDelete ? (
+            <button
+              type="button"
+              aria-label={t("pages.inbox.deleteMessage")}
+              disabled={deleting}
+              onClick={onDelete}
+              className={`absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none opacity-70 transition-opacity hover:bg-black/15 hover:opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 ${
+                message.mine ? "text-[#0f1f1e]/70" : "text-white/60"
+              } ${deleting ? "opacity-40" : ""}`}
+            >
+              ×
+            </button>
+          ) : null}
 
-        {showOriginal ? (
-          <pre
-            className={`whitespace-pre-wrap wrap-break-word text-xs ${
-              mine ? "text-chat-out-text" : "text-ink"
-            }`}
-          >
-            {message.raw}
-          </pre>
-        ) : (
-          <>
-            {showSubject ? (
-              <p
-                className={`mb-1 text-[11px] font-medium ${
-                  mine ? "text-chat-out-text/70" : "text-ink/65"
-                }`}
-              >
-                {t("common.subject")}: {message.subject}
-              </p>
-            ) : null}
-
-            {hasFields ? (
-              <dl
-                className={`mb-1 space-y-0.5 border-l pl-2 text-[11px] ${
-                  mine
-                    ? "border-chat-out-text/30 text-chat-out-text/80"
-                    : "border-ink/25 text-ink/80"
-                }`}
-              >
-                {message.clean.fields.map((f) => (
-                  <div key={`${f.label}-${f.value}`} className="flex gap-2">
-                    <dt>{f.label}</dt>
-                    <dd className="min-w-0 wrap-break-word text-inherit">
-                      {f.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            ) : null}
-
-            {hasText ? (
-              <LinkifiedText
-                text={text}
-                className={`whitespace-pre-wrap wrap-break-word ${
-                  mine ? "text-chat-out-text" : "text-ink"
-                }`}
-                linkClassName="font-medium underline underline-offset-2"
-              />
-            ) : !hasFields && !hasAtt ? (
-              <p className={mine ? "text-chat-out-text/80" : "text-ink/80"}>
-                {t("pages.inbox.emptyMessage")}
-              </p>
-            ) : null}
-
-            {message.clean.quoted ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setShowQuoted((v) => !v)}
-                  className={`mt-0.5 text-[11px] font-semibold underline-offset-2 hover:underline ${
-                    mine ? "text-chat-out-text/70" : "text-ink/65"
+          {showOriginal ? (
+            <pre
+              className={`whitespace-pre-wrap wrap-break-word text-xs ${
+                message.mine ? "text-[#0f1f1e]/95" : "text-white/95"
+              }`}
+            >
+              {message.raw}
+            </pre>
+          ) : (
+            <>
+              {showSubject ? (
+                <p
+                  className={`mb-1 text-[12px] font-medium ${
+                    message.mine ? "text-[#0f1f1e]/70" : "text-white/70"
                   }`}
                 >
-                  {showQuoted
-                    ? t("pages.inbox.hideQuoted")
-                    : t("pages.inbox.showQuoted")}
-                </button>
-                {showQuoted ? (
-                  <pre
-                    className={`mt-0.5 max-h-40 overflow-y-auto whitespace-pre-wrap wrap-break-word border-l pl-2 text-[11px] ${
-                      mine
-                        ? "border-chat-out-text/30 text-chat-out-text/75"
-                        : "border-ink/25 text-ink/70"
+                  {t("common.subject")}: {message.subject}
+                </p>
+              ) : null}
+
+              {hasFields ? (
+                <dl
+                  className={`mb-1 space-y-0.5 border-l pl-2 text-xs ${
+                    message.mine
+                      ? "border-[#0f1f1e]/25 text-[#0f1f1e]/80"
+                      : "border-white/25 text-white/80"
+                  }`}
+                >
+                  {message.clean.fields.map((f) => (
+                    <div key={`${f.label}-${f.value}`} className="flex gap-2">
+                      <dt>{f.label}</dt>
+                      <dd className="min-w-0 wrap-break-word text-inherit">
+                        {f.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+
+              {hasText ? (
+                <LinkifiedText
+                  text={text}
+                  className={`whitespace-pre-wrap wrap-break-word ${
+                    message.mine ? "text-[#0f1f1e]" : "text-white"
+                  }`}
+                  linkClassName="font-medium underline underline-offset-2"
+                />
+              ) : !hasFields && !hasAtt ? (
+                <p
+                  className={
+                    message.mine ? "text-[#0f1f1e]/80" : "text-white/80"
+                  }
+                >
+                  {t("pages.inbox.emptyMessage")}
+                </p>
+              ) : null}
+
+              {message.clean.quoted ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowQuoted((v) => !v)}
+                    className={`mt-1 text-[11px] font-semibold underline-offset-2 hover:underline ${
+                      message.mine ? "text-[#0f1f1e]/70" : "text-white/70"
                     }`}
                   >
-                    {message.clean.quoted}
-                  </pre>
-                ) : null}
-              </>
-            ) : null}
+                    {showQuoted
+                      ? t("pages.inbox.hideQuoted")
+                      : t("pages.inbox.showQuoted")}
+                  </button>
+                  {showQuoted ? (
+                    <pre
+                      className={`mt-1 max-h-52 overflow-y-auto whitespace-pre-wrap wrap-break-word border-l pl-2 text-xs ${
+                        message.mine
+                          ? "border-[#0f1f1e]/25 text-[#0f1f1e]/75"
+                          : "border-white/25 text-white/75"
+                      }`}
+                    >
+                      {message.clean.quoted}
+                    </pre>
+                  ) : null}
+                </>
+              ) : null}
 
-            {hasAtt ? (
-              <MessageAttachments
-                attachments={message.attachments!}
-                mine={mine}
-                tone={bubbleTone}
-              />
-            ) : null}
-          </>
-        )}
+              {hasAtt ? (
+                <MessageAttachments
+                  attachments={message.attachments!}
+                  mine={message.mine}
+                  tone={message.mine ? "dark" : "light"}
+                />
+              ) : null}
+            </>
+          )}
 
-        <span
-          className={`wa-time ${mine ? "text-chat-out-text" : "text-ink"}`}
-        >
-          <time dateTime={message.at} title={formatDateTime(message.at, locale)}>
-            {formatBubbleTime(message.at, locale)}
-          </time>
-          {mine ? <MailTrackingIcon message={message} compact /> : null}
-        </span>
+          <span
+            className={`wa-time ${
+              message.mine ? "text-[#0f1f1e]" : "text-white"
+            }`}
+          >
+            <time dateTime={message.at} title={formatDateTime(message.at, locale)}>
+              {timeLabel}
+            </time>
+          </span>
+        </div>
+
+        {message.mine ? (
+          <div className="mt-1 flex justify-end pr-0.5">
+            <MailTrackingIcon message={message} showLabel />
+          </div>
+        ) : null}
       </div>
     </article>
   );
