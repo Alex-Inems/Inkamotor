@@ -229,7 +229,7 @@ export function SaleChatPanel({
 
       <div
         ref={threadRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1.5 sm:px-3"
+        className="wa-chat-camo min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-1.5 sm:px-3"
       >
         {!canLoad ? (
           <EmptyHint>{t("pages.sales.clientEmailMissing")}</EmptyHint>

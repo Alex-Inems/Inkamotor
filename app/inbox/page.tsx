@@ -677,7 +677,7 @@ export default function InboxPage() {
 
             <div
               ref={threadRef}
-              className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-6 sm:py-5"
+              className="wa-chat-camo min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-6 sm:py-5"
             >
               {active.messages.map((message, i) => {
                 const prev = active.messages[i - 1];
