@@ -8,12 +8,11 @@ import {
   useState,
 } from "react";
 import Link from "next/link";
-import { MessageAttachments } from "@/components/inbox/message-attachments";
+import { ChatterMessage } from "@/components/inbox/chatter-message";
 import {
   MessageCompose,
   type MessageComposePayload,
 } from "@/components/inbox/message-compose";
-import { LinkifiedText } from "@/components/inbox/linkified-text";
 import { useCrm } from "@/lib/crm-store";
 import { quickSaleInput } from "@/lib/quotation-form-data";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
@@ -72,13 +71,11 @@ type InboxStatus = {
 };
 
 type Message = RoomMessage;
-type Group = { key: string; mine: boolean; at: string; items: Message[] };
 type Room = MailRoom;
 
 type Filter = "inbox" | "unread" | "starred" | "promos";
 
 const AUTO_SYNC_MS = 60_000;
-const GROUP_WINDOW_MS = 5 * 60_000;
 const STAR_KEY = "inbox.starred";
 
 const AVATAR_TONES = [
@@ -347,25 +344,7 @@ export default function InboxPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [active?.email, active?.messages.length]);
 
-  const groups = useMemo<Group[]>(() => {
-    if (!active) return [];
-    const out: Group[] = [];
-    for (const m of active.messages) {
-      const last = out[out.length - 1];
-      const prev = last?.items[last.items.length - 1];
-      const close =
-        last &&
-        prev &&
-        last.mine === m.mine &&
-        dayLabel(prev.at, loc, t("common.today"), t("common.yesterday")) ===
-          dayLabel(m.at, loc, t("common.today"), t("common.yesterday")) &&
-        new Date(m.at).getTime() - new Date(prev.at).getTime() <
-        GROUP_WINDOW_MS;
-      if (close) last.items.push(m);
-      else out.push({ key: m.key, mine: m.mine, at: m.at, items: [m] });
-    }
-    return out;
-  }, [active, loc, t]);
+  const youLabel = t("pages.inbox.youPrefix").replace(/:\s*$/, "").trim() || "You";
 
   const tabCounts = useMemo(() => {
     const inboxRooms = rooms.filter((r) => !r.bulk);
@@ -678,8 +657,8 @@ export default function InboxPage() {
               ref={threadRef}
               className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-6 sm:py-5"
             >
-              {groups.map((group, i) => {
-                const prev = groups[i - 1];
+              {active.messages.map((message, i) => {
+                const prev = active.messages[i - 1];
                 const newDay =
                   !prev ||
                   dayLabel(
@@ -689,18 +668,18 @@ export default function InboxPage() {
                     t("common.yesterday"),
                   ) !==
                     dayLabel(
-                      group.at,
+                      message.at,
                       loc,
                       t("common.today"),
                       t("common.yesterday"),
                     );
                 return (
-                  <div key={group.key}>
+                  <div key={message.key}>
                     {newDay ? (
                       <div className="flex justify-center py-4">
                         <span className="bg-panel px-3 py-1 text-[11px] font-semibold tracking-wide text-mute">
                           {dayLabel(
-                            group.at,
+                            message.at,
                             loc,
                             t("common.today"),
                             t("common.yesterday"),
@@ -708,14 +687,12 @@ export default function InboxPage() {
                         </span>
                       </div>
                     ) : null}
-                    <MessageGroup
-                      group={group}
-                      contactName={activeName}
-                      contactEmail={active.email}
+                    <ChatterMessage
+                      message={message}
+                      youLabel={youLabel}
                       showOriginal={showOriginal}
-                      locale={loc}
-                      deletingMessageKey={deletingMessageKey}
-                      onDeleteMessage={(key) => void deleteMessage(key)}
+                      deleting={deletingMessageKey === message.key}
+                      onDelete={() => void deleteMessage(message.key)}
                     />
                   </div>
                 );
@@ -725,7 +702,8 @@ export default function InboxPage() {
             <footer className="shrink-0 bg-panel/90 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:border-t sm:border-line sm:bg-panel sm:px-5 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {conn?.brevo.ready ? (
                 <MessageCompose
-                  variant="inbox"
+                  variant="chatter"
+                  sendTone="danger"
                   placeholder={t("pages.inbox.messagePlaceholder", { name: activeName })}
                   sending={sending}
                   onSend={send}
@@ -861,7 +839,7 @@ export default function InboxPage() {
             </div>
           </div>
         </aside>
-      ) : null}
+        ) : null}
     </div>
   );
 }
@@ -960,234 +938,6 @@ function CountBadge({
     >
       {count > 99 ? "99+" : count}
     </span>
-  );
-}
-
-function MessageGroup({
-  group,
-  contactName,
-  contactEmail,
-  showOriginal,
-  locale,
-  deletingMessageKey,
-  onDeleteMessage,
-}: {
-  group: Group;
-  contactName: string;
-  contactEmail: string;
-  showOriginal: boolean;
-  locale: string;
-  deletingMessageKey: string | null;
-  onDeleteMessage: (key: string) => void;
-}) {
-  const last = group.items[group.items.length - 1];
-
-  return (
-    <div
-      className={`mb-1.5 flex items-end gap-2 ${
-        group.mine ? "justify-end" : "justify-start"
-      }`}
-    >
-      {group.mine ? null : (
-        <Avatar name={contactName} email={contactEmail} small />
-      )}
-      <div
-        className={`flex min-w-0 max-w-[88%] flex-col gap-0.5 sm:max-w-[65%] ${
-          group.mine ? "items-end" : "items-start"
-        }`}
-      >
-        {group.items.map((m, i) => (
-          <MessageBody
-            key={m.key}
-            message={m}
-            mine={group.mine}
-            senderName={!group.mine && i === 0 ? contactName : null}
-            tail={m.key === last?.key}
-            showOriginal={showOriginal}
-            locale={locale}
-            deleting={deletingMessageKey === m.key}
-            onDelete={() => onDeleteMessage(m.key)}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MessageBody({
-  message,
-  mine,
-  senderName,
-  tail,
-  showOriginal,
-  locale,
-  deleting,
-  onDelete,
-}: {
-  message: Message;
-  mine: boolean;
-  senderName: string | null;
-  tail: boolean;
-  showOriginal: boolean;
-  locale: string;
-  deleting: boolean;
-  onDelete: () => void;
-}) {
-  const { t } = useLocale();
-  const [showQuoted, setShowQuoted] = useState(false);
-  const { clean } = message;
-  const bubble = `wa-bubble ${mine ? "wa-bubble-out" : "wa-bubble-in"}${
-    tail ? " wa-tail" : ""
-  }`;
-
-  const stampEl = (
-    <span className="wa-time">
-      {clockTime(message.at, locale)}
-      {mine ? (
-        <>
-          <CheckIcon />
-          <span
-            className="ml-1 opacity-80"
-            title={
-              message.openedAt || message.deliveredAt || message.at
-            }
-          >
-            {message.deliveryStatus === "opened"
-              ? t("pages.inbox.deliveryOpened")
-              : message.deliveryStatus === "delivered"
-                ? t("pages.inbox.deliveryDelivered")
-                : message.deliveryStatus === "bounced"
-                  ? t("pages.inbox.deliveryBounced")
-                  : message.deliveryStatus === "error"
-                    ? t("pages.inbox.deliveryError")
-                    : t("pages.inbox.deliverySent")}
-          </span>
-        </>
-      ) : null}
-    </span>
-  );
-
-  if (showOriginal) {
-    return (
-      <div className="relative group/msg max-w-full">
-        <button
-          type="button"
-          aria-label={t("pages.inbox.deleteMessage")}
-          disabled={deleting}
-          onClick={onDelete}
-          className={`absolute top-1 ${mine ? "left-1.5" : "right-1.5"} z-10 flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none opacity-50 transition-opacity hover:bg-black/10 hover:opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-70 ${
-            deleting ? "opacity-40" : ""
-          }`}
-        >
-          ×
-        </button>
-        <pre className={`${bubble} text-xs whitespace-pre-wrap wrap-break-word`}>
-          {message.raw}
-          {stampEl}
-        </pre>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`${bubble} relative text-[14px] leading-[1.4] group/msg`}>
-      <button
-        type="button"
-        aria-label={t("pages.inbox.deleteMessage")}
-        disabled={deleting}
-        onClick={onDelete}
-        className={`absolute top-1 ${mine ? "left-1.5" : "right-1.5"} z-10 flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none opacity-50 transition-opacity hover:bg-black/10 hover:opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-70 ${
-          deleting ? "opacity-40" : ""
-        }`}
-      >
-        ×
-      </button>
-      {senderName ? (
-        <p className="mb-0.5 hidden text-[12.5px] font-semibold text-[#86c5c9] sm:block">
-          {senderName}
-        </p>
-      ) : null}
-      {clean.fields.length > 0 ? (
-        <dl
-          className={`mb-1.5 space-y-0.5 border-l pl-2 text-xs ${
-            mine ? "border-chat-out-text/30 text-chat-out-text/75" : "border-white/15 text-mute"
-          }`}
-        >
-          {clean.fields.map((f) => (
-            <div key={`${f.label}-${f.value}`} className="flex gap-2">
-              <dt>{f.label}</dt>
-              <dd className="min-w-0 wrap-break-word text-inherit">{f.value}</dd>
-            </div>
-          ))}
-        </dl>
-      ) : null}
-
-      {clean.text ? (
-        <LinkifiedText
-          text={clean.text}
-          className="whitespace-pre-wrap wrap-break-word"
-          linkClassName={`font-semibold underline underline-offset-2 ${
-            mine ? "text-chat-out-text" : "text-sand"
-          }`}
-        />
-      ) : clean.fields.length === 0 ? (
-        <p className="opacity-80">{message.raw?.trim() || t("pages.inbox.emptyMessage")}</p>
-      ) : null}
-
-      {clean.quoted ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setShowQuoted((v) => !v)}
-            className={`mt-1 text-[11px] font-semibold underline-offset-2 hover:underline ${
-              mine ? "text-chat-out-text/70" : "text-mute"
-            }`}
-          >
-            {showQuoted ? t("pages.inbox.hideQuoted") : t("pages.inbox.showQuoted")}
-          </button>
-          {showQuoted ? (
-            <pre
-              className={`mt-1 max-h-52 overflow-y-auto whitespace-pre-wrap wrap-break-word border-l pl-2 text-xs opacity-80 ${
-                mine ? "border-chat-out-text/30" : "border-white/15"
-              }`}
-            >
-              {clean.quoted}
-            </pre>
-          ) : null}
-        </>
-        ) : null}
-
-      {message.attachments?.length ? (
-        <MessageAttachments attachments={message.attachments} mine={mine} />
-      ) : null}
-      {stampEl}
-    </div>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      viewBox="0 0 16 11"
-      className="h-[11px] w-[16px]"
-      fill="none"
-      aria-hidden
-    >
-      <path
-        d="M1.5 6.2 3.8 8.5 8.6 1.8"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M6.2 6.2 8.5 8.5 13.8 1.5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

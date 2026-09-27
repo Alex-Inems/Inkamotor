@@ -44,6 +44,11 @@ import {
   copyTemplateDisplayName,
   templateIdForMailing,
 } from "@/lib/newsletter/templates";
+import {
+  insertIntoMainContent,
+  pullOrphansIntoMainContent,
+  findMainContentEl,
+} from "@/lib/newsletter/html";
 
 type Template = {
   id: string;
@@ -68,7 +73,7 @@ const PIPELINE: MailingStatus[] = ["draft", "in_queue", "sending", "sent"];
 const BLOCK_SNIPPETS: Record<string, string> = {
   headers: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:0 0 16px;background:#1a1a1a"><tr><td align="center" style="padding:28px 20px"><img src="https://inkamototours.com/logo.png" alt="Inkamoto" style="max-height:48px" /></td></tr></table>`,
   text: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td style="font-family:Georgia,serif;font-size:16px;line-height:1.6;color:#222;padding:0 16px"><p>Your text here…</p></td></tr></table>`,
-  images: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td align="center" style="padding:0 16px"><img src="https://inkamototours.com/logo.png" alt="" style="max-width:100%;height:auto;display:block" /></td></tr></table>`,
+  images: `<img data-crm-free-img="1" data-crm-float="right" data-crm-wrap="below" src="https://inkamototours.com/logo.png" alt="" width="280" style="display:block;float:none;clear:both;width:280px;max-width:100%;height:auto;border:0;margin:12px 0 16px auto;cursor:move" />`,
   person: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td style="padding:0 16px;font-family:Arial,sans-serif;color:#222"><table><tr><td style="padding-right:12px"><div style="width:56px;height:56px;border-radius:50%;background:#ddd"></div></td><td><strong>Jorge Inkamoto</strong><br/><span style="color:#666;font-size:13px">Guide moto · Pérou</span></td></tr></table></td></tr></table>`,
   columns: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td width="33%" valign="top" style="padding:8px;font-family:Arial,sans-serif;font-size:14px;color:#222">Column 1</td><td width="33%" valign="top" style="padding:8px;font-family:Arial,sans-serif;font-size:14px;color:#222">Column 2</td><td width="33%" valign="top" style="padding:8px;font-family:Arial,sans-serif;font-size:14px;color:#222">Column 3</td></tr></table>`,
   website: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td align="center" style="padding:16px;font-family:Arial,sans-serif"><a href="https://inkamototours.com" style="color:#31595d;font-weight:700">inkamototours.com</a></td></tr></table>`,
@@ -78,7 +83,7 @@ const BLOCK_SNIPPETS: Record<string, string> = {
   highlight: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td style="background:#31595d;color:#fff;padding:18px 16px;font-family:Georgia,serif;font-size:18px;text-align:center">Highlighted text</td></tr></table>`,
   rating: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td align="center" style="font-size:22px;letter-spacing:2px;color:#714B67">★★★★★</td></tr></table>`,
   button: `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:20px auto"><tr><td style="background:#714B67;border-radius:4px"><a href="https://inkamototours.com" style="display:inline-block;padding:12px 22px;color:#fff;font-family:Arial,sans-serif;font-size:14px;font-weight:700;text-decoration:none">Learn more</a></td></tr></table>`,
-  image: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td align="center" style="padding:0 16px"><img src="https://inkamototours.com/logo.png" alt="" style="max-width:100%;height:auto;display:block" /></td></tr></table>`,
+  image: `<img data-crm-free-img="1" data-crm-float="right" data-crm-wrap="below" src="https://inkamototours.com/logo.png" alt="" width="280" style="display:block;float:none;clear:both;width:280px;max-width:100%;height:auto;border:0;margin:12px 0 16px auto;cursor:move" />`,
   icon: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td align="center" style="font-size:32px">🏍️</td></tr></table>`,
   video: `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td align="center" style="padding:24px;background:#111;color:#fff;font-family:Arial,sans-serif"><a href="https://inkamototours.com" style="color:#fff;text-decoration:none">▶ Watch video</a></td></tr></table>`,
   badge: `<table cellpadding="0" cellspacing="0" role="presentation" style="margin:16px auto"><tr><td style="background:#e8f0f0;color:#31595d;border-radius:999px;padding:6px 14px;font-family:Arial,sans-serif;font-size:12px;font-weight:700">New</td></tr></table>`,
@@ -123,6 +128,418 @@ function replaceImageSrc(html: string, from: string, to: string) {
     );
 }
 
+type ImageAlign = "left" | "center" | "right";
+type ImageWidth = number | "full";
+
+const IMAGE_WIDTH_PRESETS: { value: ImageWidth; labelKey: string }[] = [
+  { value: 160, labelKey: "pages.emailMarketing.imageSizeSmall" },
+  { value: 280, labelKey: "pages.emailMarketing.imageSizeMedium" },
+  { value: 400, labelKey: "pages.emailMarketing.imageSizeLarge" },
+  { value: "full", labelKey: "pages.emailMarketing.imageSizeFull" },
+];
+
+function imageCss(width: ImageWidth, marginLeft = 0, marginTop = 0) {
+  const size =
+    width === "full"
+      ? "width:100%;max-width:100%"
+      : `width:${width}px;max-width:100%`;
+  return `${size};height:auto;display:block;border:0;margin:${marginTop}px 0 0 ${marginLeft}px`;
+}
+
+function imageWidthAttr(width: ImageWidth) {
+  return width === "full" ? 'width="100%"' : `width="${width}"`;
+}
+
+function buildImageSnippet(url: string, width: ImageWidth, align: ImageAlign) {
+  const w = width === "full" ? 480 : width;
+  const side: FloatSide =
+    width === "full"
+      ? "block"
+      : align === "left"
+        ? "left"
+        : align === "center"
+          ? "block"
+          : "right";
+  // Text always moves down under the image (not beside it).
+  const wrap: WrapMode = "below";
+  return `<img data-crm-free-img="1" data-crm-float="${side}" data-crm-wrap="${wrap}" src="${url}" alt="" width="${w}" style="${flowImageStyle(w, side, wrap)}" />`;
+}
+
+function parsePx(value: string | null | undefined) {
+  if (!value) return 0;
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+type FloatSide = "left" | "right" | "block";
+type WrapMode = "square" | "below";
+
+function clearImageEditorChrome(doc: Document) {
+  doc.querySelectorAll("[data-crm-img-chrome]").forEach((el) => el.remove());
+  doc.querySelectorAll("img[data-crm-img-selected]").forEach((img) => {
+    img.removeAttribute("data-crm-img-selected");
+    const el = img as HTMLImageElement;
+    el.style.outline = "";
+    el.style.outlineOffset = "";
+    el.style.opacity = "";
+    el.style.filter = "";
+    el.style.cursor = "";
+  });
+}
+
+/**
+ * below (default) = image on its own row; following text stays full width underneath.
+ * square = optional float wrap (text beside, then under).
+ */
+function flowImageStyle(width: number, side: FloatSide, wrap: WrapMode = "below") {
+  if (wrap === "below" || side === "block") {
+    const align =
+      side === "right"
+        ? "margin:12px 0 16px auto"
+        : side === "left"
+          ? "margin:12px auto 16px 0"
+          : "margin:12px auto";
+    return [
+      "display:block",
+      "float:none",
+      "clear:both",
+      `width:${width}px`,
+      "max-width:100%",
+      "height:auto",
+      "border:0",
+      align,
+      "cursor:move",
+    ].join(";");
+  }
+  if (side === "right") {
+    return [
+      "float:right",
+      "clear:none",
+      `width:${width}px`,
+      "max-width:46%",
+      "height:auto",
+      "border:0",
+      "margin:2px 0 12px 18px",
+      "display:block",
+      "cursor:move",
+    ].join(";");
+  }
+  return [
+    "float:left",
+    "clear:none",
+    `width:${width}px`,
+    "max-width:46%",
+    "height:auto",
+    "border:0",
+    "margin:2px 18px 12px 0",
+    "display:block",
+    "cursor:move",
+  ].join(";");
+}
+
+function prepareMainForFlowImages(main: HTMLElement) {
+  main.style.position = "relative";
+  main.style.overflow = "visible";
+  if (main.style.minHeight) main.style.minHeight = "";
+  // Let floated images wrap following paragraphs instead of trapping them.
+  for (const child of [...main.children]) {
+    if (!(child instanceof HTMLElement)) continue;
+    if (child.tagName === "IMG") continue;
+    if (child.hasAttribute("data-crm-img-chrome")) continue;
+    child.style.overflow = "visible";
+  }
+}
+
+function resolveFloatSide(
+  main: HTMLElement,
+  width: number,
+  clientX: number,
+): FloatSide {
+  // Near-full width → own row. Otherwise left/right only so text can wrap under.
+  if (width >= main.clientWidth * 0.9) return "block";
+  const rect = main.getBoundingClientRect();
+  const ratio = (clientX - rect.left) / Math.max(rect.width, 1);
+  return ratio >= 0.5 ? "right" : "left";
+}
+
+function readWrapMode(img: HTMLImageElement): WrapMode {
+  // Default: text moves down under the image (not beside).
+  return img.getAttribute("data-crm-wrap") === "square" ? "square" : "below";
+}
+
+function findFlowInsertBefore(
+  main: HTMLElement,
+  clientY: number,
+  exclude: Element | null,
+): Node | null {
+  const kids = [...main.children].filter((el) => {
+    if (el === exclude) return false;
+    if ((el as HTMLElement).hasAttribute?.("data-crm-img-chrome")) return false;
+    if (el instanceof HTMLElement && el.style.display === "none") return false;
+    return true;
+  }) as HTMLElement[];
+  for (const kid of kids) {
+    const r = kid.getBoundingClientRect();
+    // Midpoint of each block — drag above → insert before, below → after.
+    const cut = r.top + r.height * 0.5;
+    if (clientY < cut) return kid;
+  }
+  return null;
+}
+
+/** Prefer inserting after the first text block (typical newsletter layout). */
+function defaultImageInsertBefore(main: HTMLElement): Node | null {
+  const blocks = [...main.children].filter((el) => {
+    if (!(el instanceof HTMLElement)) return false;
+    if (el.hasAttribute("data-crm-img-chrome")) return false;
+    if (el.tagName === "IMG") return false;
+    return true;
+  });
+  if (blocks.length >= 1) return blocks[0]!.nextSibling;
+  return null;
+}
+
+function unwrapImageIntoMain(img: HTMLImageElement, main: HTMLElement) {
+  if (img.parentElement === main) return;
+  let hoist: Node = img;
+  while (hoist.parentNode && hoist.parentNode !== main) {
+    hoist = hoist.parentNode;
+  }
+  if (hoist.parentNode === main) {
+    main.insertBefore(img, hoist);
+    if (
+      hoist instanceof HTMLElement &&
+      hoist.tagName === "TABLE" &&
+      !hoist.querySelector("img")
+    ) {
+      hoist.remove();
+    } else if (
+      hoist instanceof HTMLElement &&
+      !hoist.querySelector("img") &&
+      !(hoist.textContent || "").trim()
+    ) {
+      hoist.remove();
+    }
+  } else {
+    main.appendChild(img);
+  }
+}
+
+/** Commit image into document flow so text wraps / continues under it. */
+function placeImageInFlow(
+  img: HTMLImageElement,
+  main: HTMLElement,
+  opts?: {
+    clientX?: number;
+    clientY?: number;
+    width?: number;
+    side?: FloatSide;
+    wrap?: WrapMode;
+    useDefaultSlot?: boolean;
+  },
+) {
+  prepareMainForFlowImages(main);
+  unwrapImageIntoMain(img, main);
+
+  let width = Math.round(
+    opts?.width ??
+      (parsePx(img.style.width) ||
+        parsePx(img.getAttribute("width")) ||
+        img.getBoundingClientRect().width ||
+        320),
+  );
+  width = clamp(width, 40, Math.max(40, main.clientWidth));
+
+  const wrap = opts?.wrap ?? readWrapMode(img);
+  const side =
+    opts?.side ??
+    (opts?.clientX != null
+      ? resolveFloatSide(main, width, opts.clientX)
+      : ((img.getAttribute("data-crm-float") as FloatSide | null) || "right"));
+
+  if (opts?.clientY != null) {
+    const before = findFlowInsertBefore(main, opts.clientY, img);
+    if (before && before.parentNode === main) {
+      main.insertBefore(img, before);
+    } else {
+      main.appendChild(img);
+    }
+  } else if (opts?.useDefaultSlot) {
+    const before = defaultImageInsertBefore(main);
+    if (before && before.parentNode === main) {
+      main.insertBefore(img, before);
+    } else if (before === null && main.firstChild) {
+      // after first block if nextSibling was null → append after first
+      const first = [...main.children].find(
+        (el) =>
+          el instanceof HTMLElement &&
+          el.tagName !== "IMG" &&
+          !el.hasAttribute("data-crm-img-chrome"),
+      );
+      if (first) first.after(img);
+      else main.appendChild(img);
+    } else {
+      main.appendChild(img);
+    }
+  }
+
+  img.setAttribute("data-crm-free-img", "1");
+  img.setAttribute("data-crm-float", side === "block" ? "block" : side);
+  img.setAttribute("data-crm-wrap", wrap);
+  img.removeAttribute("data-crm-left");
+  img.removeAttribute("data-crm-top");
+  img.setAttribute("width", String(width));
+  img.removeAttribute("height");
+  img.draggable = false;
+  img.style.cssText = flowImageStyle(
+    width,
+    side === "block" ? "block" : side,
+    wrap,
+  );
+}
+
+function commitLiveImageLayout(
+  img: HTMLImageElement,
+  main: HTMLElement,
+  opts?: { clientX?: number; clientY?: number },
+) {
+  placeImageInFlow(img, main, opts);
+}
+
+function syncAllFreeImages(doc: Document) {
+  const main = findMainContentEl(doc);
+  prepareMainForFlowImages(main);
+  main.querySelectorAll("img[data-crm-free-img='1']").forEach((node) => {
+    placeImageInFlow(node as HTMLImageElement, main);
+  });
+}
+
+function parseImageLayout(
+  html: string,
+  src: string,
+): { width: ImageWidth; align: ImageAlign } {
+  const defaults = { width: 320 as ImageWidth, align: "left" as ImageAlign };
+  if (typeof DOMParser === "undefined" || !src) return defaults;
+  try {
+    const wrapped = /<html[\s>]/i.test(html)
+      ? html
+      : `<!DOCTYPE html><html><body>${html}</body></html>`;
+    const doc = new DOMParser().parseFromString(wrapped, "text/html");
+    const img = [...doc.querySelectorAll("img")].find((el) => {
+      const current = el.getAttribute("src") || "";
+      return current === src || el.src === src;
+    });
+    if (!img) return defaults;
+    const td = img.closest("td");
+    const alignRaw = (td?.getAttribute("align") || "").toLowerCase();
+    const align: ImageAlign =
+      alignRaw === "center" || alignRaw === "right" || alignRaw === "left"
+        ? alignRaw
+        : "left";
+    const style = img.getAttribute("style") || "";
+    const styleWidth = style.match(/(?:^|;)\s*width\s*:\s*([^;]+)/i)?.[1]?.trim();
+    const attrWidth = img.getAttribute("width")?.trim();
+    const raw = styleWidth || attrWidth || "";
+    if (/^100%$/.test(raw) || raw.toLowerCase() === "100%") {
+      return { width: "full", align };
+    }
+    const px = Number.parseInt(raw.replace(/px$/i, ""), 10);
+    if (Number.isFinite(px) && px > 0) return { width: px, align };
+    // Legacy inserts with only max-width:100% and no width → treat as full.
+    if (/max-width\s*:\s*100%/i.test(style) && !styleWidth && !attrWidth) {
+      return { width: "full", align };
+    }
+    return { width: 320, align };
+  } catch {
+    return defaults;
+  }
+}
+
+function applyImageLayout(
+  html: string,
+  fromSrc: string,
+  toSrc: string,
+  width: ImageWidth,
+  align: ImageAlign,
+) {
+  if (typeof DOMParser === "undefined") {
+    return replaceImageSrc(html, fromSrc, toSrc);
+  }
+  const hasHtml = /<html[\s>]/i.test(html);
+  const wrapped = hasHtml
+    ? html
+    : `<!DOCTYPE html><html><body id="__root">${html}</body></html>`;
+  const doc = new DOMParser().parseFromString(wrapped, "text/html");
+  const imgs = [...doc.querySelectorAll("img")].filter((el) => {
+    const current = el.getAttribute("src") || "";
+    return current === fromSrc || el.src === fromSrc;
+  });
+  if (imgs.length === 0) {
+    return replaceImageSrc(html, fromSrc, toSrc);
+  }
+  for (const img of imgs) {
+    img.setAttribute("src", toSrc);
+    if (img.hasAttribute("data-original-src")) {
+      img.setAttribute("data-original-src", toSrc);
+    }
+    const isFree = img.getAttribute("data-crm-free-img") === "1";
+    if (isFree) {
+      const side: FloatSide =
+        width === "full"
+          ? "block"
+          : align === "right"
+            ? "right"
+            : align === "center"
+              ? "block"
+              : "left";
+      const wrap: WrapMode = "below";
+      const w = width === "full" ? 480 : width;
+      img.setAttribute("width", String(w));
+      img.removeAttribute("height");
+      img.setAttribute("data-crm-float", side);
+      img.setAttribute("data-crm-wrap", wrap);
+      img.removeAttribute("data-crm-left");
+      img.removeAttribute("data-crm-top");
+      img.style.cssText = flowImageStyle(w, side, wrap);
+      continue;
+    }
+    img.setAttribute("style", imageCss(width, 0, 0));
+    img.setAttribute("width", width === "full" ? "100%" : String(width));
+    img.removeAttribute("height");
+    let td = img.closest("td");
+    if (!td) {
+      const table = doc.createElement("table");
+      table.setAttribute("width", "100%");
+      table.setAttribute("cellpadding", "0");
+      table.setAttribute("cellspacing", "0");
+      table.setAttribute("role", "presentation");
+      table.setAttribute("style", "margin:16px 0");
+      const tr = doc.createElement("tr");
+      td = doc.createElement("td");
+      td.setAttribute("style", "padding:0 16px");
+      const parent = img.parentNode;
+      if (parent) {
+        parent.insertBefore(table, img);
+        tr.appendChild(td);
+        table.appendChild(tr);
+        td.appendChild(img);
+      }
+    }
+    td.setAttribute("align", align);
+  }
+  if (hasHtml) {
+    const doctype = doc.doctype
+      ? `<!DOCTYPE ${doc.doctype.name}>\n`
+      : "<!DOCTYPE html>\n";
+    return `${doctype}${doc.documentElement.outerHTML}`;
+  }
+  return doc.getElementById("__root")?.innerHTML || doc.body.innerHTML;
+}
+
 export function MailingForm({ mailingId }: { mailingId: string }) {
   const { t, locale } = useLocale();
   const { pushToast } = useCrm();
@@ -148,6 +565,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   const [replaceOpen, setReplaceOpen] = useState(false);
   const [replaceSrc, setReplaceSrc] = useState<string | null>(null);
   const [replaceUrl, setReplaceUrl] = useState("");
+  const [imageWidth, setImageWidth] = useState<ImageWidth>(320);
+  const [imageAlign, setImageAlign] = useState<ImageAlign>("left");
+  const [imageWidthCustom, setImageWidthCustom] = useState("320");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLIFrameElement>(null);
@@ -223,7 +643,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           name: row.name,
           subject: row.subject,
           preview: row.preview,
-          html: row.html,
+          html: pullOrphansIntoMainContent(row.html || ""),
           status: row.status,
           recipientTag: row.recipientTag ?? "",
           templateId: row.templateId ?? "",
@@ -306,24 +726,81 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   const contentLocked = form.status === "sending";
   const activeStage = stageIndex(form.status);
 
+  function resolveImageWidth(): ImageWidth {
+    if (imageWidth === "full") return "full";
+    const custom = Number.parseInt(imageWidthCustom, 10);
+    if (Number.isFinite(custom) && custom >= 40 && custom <= 1200) {
+      return custom;
+    }
+    return typeof imageWidth === "number" ? imageWidth : 320;
+  }
+
   function openReplaceImage(src: string | null) {
     if (contentLocked) return;
     setReplaceSrc(src);
     setReplaceUrl(src && /^https?:\/\//i.test(src) ? src : "");
+    if (src) {
+      const layout = parseImageLayout(form.html, src);
+      setImageWidth(layout.width);
+      setImageAlign(layout.align);
+      setImageWidthCustom(
+        layout.width === "full" ? "320" : String(layout.width),
+      );
+    } else {
+      setImageWidth(320);
+      setImageAlign("left");
+      setImageWidthCustom("320");
+    }
     setReplaceOpen(true);
   }
 
   function applyImageUrl(nextUrl: string, previous: string | null) {
     const url = nextUrl.trim();
     if (!url) return;
+    const width = resolveImageWidth();
+    const align = imageAlign;
     if (previous) {
       setForm((prev) => ({
         ...prev,
-        html: replaceImageSrc(prev.html, previous, url),
+        html: applyImageLayout(prev.html, previous, url, width, align),
       }));
     } else {
-      const snippet = `<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0"><tr><td align="center"><img src="${url}" alt="" style="max-width:100%;height:auto;display:block" /></td></tr></table>`;
-      setForm((prev) => ({ ...prev, html: `${prev.html || ""}\n${snippet}` }));
+      const snippet = buildImageSnippet(url, width, align);
+      const live = tryInsertSnippetInPreview(snippet);
+      if (live) {
+        setForm((prev) => ({ ...prev, html: live }));
+      } else {
+        const base = insertIntoMainContent(
+          pullOrphansIntoMainContent(form.html || ""),
+          snippet,
+        );
+        let settled = base;
+        if (typeof DOMParser !== "undefined") {
+          const hadHtml = /<html[\s>]/i.test(base);
+          const wrapped = hadHtml
+            ? base
+            : `<!DOCTYPE html><html><body id="__root">${base}</body></html>`;
+          const parsed = new DOMParser().parseFromString(wrapped, "text/html");
+          const main = findMainContentEl(parsed);
+          const imgs = [
+            ...main.querySelectorAll("img[data-crm-free-img='1']"),
+          ];
+          const img = imgs[imgs.length - 1] as HTMLImageElement | undefined;
+          if (img) {
+            placeImageInFlow(img, main, {
+              useDefaultSlot: true,
+              side: align === "left" ? "left" : "right",
+              wrap: "below",
+              width: width === "full" ? 480 : width,
+            });
+          }
+          settled = hadHtml
+            ? `${parsed.doctype ? `<!DOCTYPE ${parsed.doctype.name}>\n` : "<!DOCTYPE html>\n"}${parsed.documentElement.outerHTML}`
+            : parsed.getElementById("__root")?.innerHTML ||
+              parsed.body.innerHTML;
+        }
+        setForm((prev) => ({ ...prev, html: settled }));
+      }
     }
     setEditorKey(`img-${Date.now()}`);
     setBodyMode("design");
@@ -335,6 +812,72 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     });
   }
 
+  /** Insert HTML at the caret in the iframe, or into the main body container. */
+  function tryInsertSnippetInPreview(snippet: string): string | null {
+    const doc = previewRef.current?.contentDocument;
+    if (!doc?.body) return null;
+    const main = findMainContentEl(doc);
+    if (/data-crm-free-img/i.test(snippet)) {
+      prepareMainForFlowImages(main);
+    }
+
+    const sel = doc.getSelection();
+    const holder = doc.createElement("div");
+    holder.innerHTML = snippet;
+    const nodes = [...holder.childNodes];
+    if (!nodes.length) return null;
+
+    if (
+      bodyMode === "edit" &&
+      sel &&
+      sel.rangeCount > 0 &&
+      main.contains(sel.anchorNode)
+    ) {
+      const range = sel.getRangeAt(0);
+      range.collapse(false);
+      const frag = doc.createDocumentFragment();
+      for (const node of nodes) frag.appendChild(node);
+      range.insertNode(frag);
+      sel.collapseToEnd();
+    } else if (/data-crm-free-img/i.test(snippet)) {
+      // New images: after the first paragraph, top-right with text wrapping under.
+      for (const node of nodes) {
+        const before = defaultImageInsertBefore(main);
+        if (before && before.parentNode === main) {
+          main.insertBefore(node, before);
+        } else {
+          const first = [...main.children].find(
+            (el) =>
+              el instanceof HTMLElement &&
+              el.tagName !== "IMG" &&
+              !el.hasAttribute("data-crm-img-chrome"),
+          );
+          if (first) first.after(node);
+          else main.appendChild(node);
+        }
+      }
+    } else {
+      for (const node of nodes) main.appendChild(node);
+    }
+
+    main.querySelectorAll("img[data-crm-free-img='1']").forEach((node) => {
+      const img = node as HTMLImageElement;
+      placeImageInFlow(img, main, {
+        width:
+          parsePx(img.style.width) ||
+          parsePx(img.getAttribute("width")) ||
+          280,
+        side: (img.getAttribute("data-crm-float") as FloatSide | null) || "right",
+        wrap: readWrapMode(img),
+      });
+    });
+
+    const hasHtmlRoot = doc.documentElement.tagName.toLowerCase() === "html";
+    return hasHtmlRoot
+      ? `${doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>\n` : "<!DOCTYPE html>\n"}${doc.documentElement.outerHTML}`
+      : doc.body.innerHTML;
+  }
+
   async function uploadImageFile(file: File, previous: string | null) {
     setUploading(true);
     try {
@@ -344,7 +887,12 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         method: "POST",
         body,
       });
-      const json = (await res.json()) as { error?: string; url?: string };
+      let json: { error?: string; url?: string } = {};
+      try {
+        json = (await res.json()) as { error?: string; url?: string };
+      } catch {
+        /* non-JSON error body */
+      }
       if (!res.ok || !json.url) {
         pushToast({
           message: json.error || t("pages.emailMarketing.imageUploadFailed"),
@@ -353,6 +901,14 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         return;
       }
       applyImageUrl(json.url, previous);
+    } catch (err) {
+      pushToast({
+        message:
+          err instanceof Error
+            ? err.message
+            : t("pages.emailMarketing.imageUploadFailed"),
+        tone: "error",
+      });
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -362,10 +918,13 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   function flushPreviewHtml() {
     const doc = previewRef.current?.contentDocument;
     if (!doc?.documentElement) return form.html;
+    clearImageEditorChrome(doc);
+    syncAllFreeImages(doc);
     const hasHtmlRoot = doc.documentElement.tagName.toLowerCase() === "html";
-    const html = hasHtmlRoot
+    let html = hasHtmlRoot
       ? `${doc.doctype ? `<!DOCTYPE ${doc.doctype.name}>\n` : "<!DOCTYPE html>\n"}${doc.documentElement.outerHTML}`
       : doc.body?.innerHTML || form.html;
+    html = pullOrphansIntoMainContent(html);
     setForm((prev) => ({ ...prev, html }));
     return html;
   }
@@ -398,6 +957,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     const frame = previewRef.current;
     const doc = frame?.contentDocument;
     if (!doc?.body) return;
+    doc.documentElement.style.background = "#f7f4ee";
+    doc.body.style.background = "#f7f4ee";
+    doc.body.style.margin = "0";
+    doc.body.style.padding = "0";
     resizePreview();
 
     const editable = bodyMode === "edit" && !contentLocked;
@@ -414,18 +977,735 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     };
     doc.body.oninput = onInput;
 
-    doc.querySelectorAll("img").forEach((img) => {
+    let selectedImg: HTMLImageElement | null = null;
+    let dragMode: "move" | "resize" | null = null;
+    let dragArmed = false;
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+    let grabOffsetX = 0;
+    let grabOffsetY = 0;
+    let parentWidth = 600;
+    let lastClientX = 0;
+    let lastClientY = 0;
+    let mainEl: HTMLElement = findMainContentEl(doc);
+    let dropLine: HTMLElement | null = null;
+    let dropPreview: HTMLElement | null = null;
+    let dropLabel: HTMLElement | null = null;
+    let ghostHost: HTMLElement | null = null;
+    let rafId = 0;
+    let latestX = 0;
+    let latestY = 0;
+    let lastDropBefore: Node | null | undefined = undefined;
+    let lastDropSide: FloatSide | null = null;
+    let originOpacity = "";
+    let originFilter = "";
+
+    prepareMainForFlowImages(mainEl);
+    mainEl.querySelectorAll("img").forEach((node) => {
+      const img = node as HTMLImageElement;
+      if ((img.width && img.width <= 2) || (img.height && img.height <= 2)) return;
+      // Prefer text-under (not beside) unless the user explicitly chose Beside.
+      placeImageInFlow(img, mainEl, {
+        wrap: img.getAttribute("data-crm-wrap") === "square" ? "square" : "below",
+      });
+    });
+
+    const hideOffscreen = (el: HTMLElement) => {
+      el.style.transform = "translate3d(-9999px,-9999px,0)";
+    };
+
+    const ensureDropChrome = () => {
+      const host = doc.documentElement || doc.body;
+      if (!dropLine || !dropLine.isConnected) {
+        dropLine?.remove();
+        dropLine = doc.createElement("div");
+        dropLine.setAttribute("data-crm-img-chrome", "drop-line");
+        dropLine.setAttribute(
+          "style",
+          [
+            "position:fixed",
+            "left:0",
+            "top:0",
+            "width:0",
+            "height:4px",
+            "background:#017e84",
+            "border-radius:2px",
+            "z-index:2147483647",
+            "pointer-events:none",
+            "display:none",
+            "box-shadow:0 0 0 2px #fff, 0 0 0 4px rgba(1,126,132,.35), 0 2px 10px rgba(0,0,0,.25)",
+          ].join(";"),
+        );
+        const capL = doc.createElement("span");
+        capL.setAttribute(
+          "style",
+          "position:absolute;left:-2px;top:-7px;width:12px;height:18px;border:3px solid #017e84;border-right:0;border-radius:3px 0 0 3px;background:#fff;box-sizing:border-box",
+        );
+        const capR = doc.createElement("span");
+        capR.setAttribute(
+          "style",
+          "position:absolute;right:-2px;top:-7px;width:12px;height:18px;border:3px solid #017e84;border-left:0;border-radius:0 3px 3px 0;background:#fff;box-sizing:border-box",
+        );
+        dropLine.appendChild(capL);
+        dropLine.appendChild(capR);
+        host.appendChild(dropLine);
+      }
+      if (!dropPreview || !dropPreview.isConnected) {
+        dropPreview?.remove();
+        dropPreview = doc.createElement("div");
+        dropPreview.setAttribute("data-crm-img-chrome", "drop-preview");
+        dropPreview.setAttribute(
+          "style",
+          [
+            "position:fixed",
+            "left:0",
+            "top:0",
+            "width:0",
+            "height:0",
+            "box-sizing:border-box",
+            "border:2px dashed #017e84",
+            "background:rgba(1,126,132,0.10)",
+            "border-radius:4px",
+            "z-index:2147483646",
+            "pointer-events:none",
+            "display:none",
+          ].join(";"),
+        );
+        host.appendChild(dropPreview);
+      }
+      if (!dropLabel || !dropLabel.isConnected) {
+        dropLabel?.remove();
+        dropLabel = doc.createElement("div");
+        dropLabel.setAttribute("data-crm-img-chrome", "drop-label");
+        dropLabel.setAttribute(
+          "style",
+          [
+            "position:fixed",
+            "left:0",
+            "top:0",
+            "padding:5px 10px",
+            "background:#017e84",
+            "color:#fff",
+            "font:12px/1.2 sans-serif",
+            "font-weight:700",
+            "border-radius:4px",
+            "z-index:2147483647",
+            "pointer-events:none",
+            "display:none",
+            "white-space:nowrap",
+            "box-shadow:0 2px 8px rgba(0,0,0,.25)",
+          ].join(";"),
+        );
+        host.appendChild(dropLabel);
+      }
+    };
+
+    const updateDropMarker = (clientX: number, clientY: number) => {
+      if (!selectedImg || dragMode !== "move") return;
+      ensureDropChrome();
+      if (!dropLine || !dropPreview || !dropLabel) return;
+
+      const before = findFlowInsertBefore(mainEl, clientY, selectedImg);
+      lastDropBefore = before;
+      const mainRect = mainEl.getBoundingClientRect();
+      let lineY = mainRect.bottom - 2;
+
+      if (before instanceof HTMLElement) {
+        lineY = before.getBoundingClientRect().top;
+      } else {
+        const kids = [...mainEl.children].filter((el) => {
+          if (el === selectedImg) return false;
+          if ((el as HTMLElement).style?.display === "none") return false;
+          if ((el as HTMLElement).hasAttribute?.("data-crm-img-chrome")) return false;
+          return true;
+        }) as HTMLElement[];
+        if (kids.length) {
+          lineY = kids[kids.length - 1]!.getBoundingClientRect().bottom;
+        } else {
+          lineY = Math.min(
+            Math.max(clientY, mainRect.top + 8),
+            mainRect.bottom - 8,
+          );
+        }
+      }
+
+      lineY = Math.min(Math.max(lineY, mainRect.top + 2), mainRect.bottom - 2);
+
+      const side = resolveFloatSide(mainEl, startWidth, clientX);
+      lastDropSide = side;
+      const previewW = Math.min(startWidth, Math.max(40, mainRect.width - 16));
+      const previewH = Math.max(36, Math.min(startHeight, 140));
+      const previewLeft =
+        side === "right"
+          ? mainRect.right - previewW - 8
+          : side === "left"
+            ? mainRect.left + 8
+            : mainRect.left + (mainRect.width - previewW) / 2;
+      const previewTop = Math.min(lineY + 10, mainRect.bottom - previewH - 4);
+
+      dropLine.style.display = "block";
+      dropLine.style.left = `${mainRect.left}px`;
+      dropLine.style.top = `${lineY - 2}px`;
+      dropLine.style.width = `${Math.max(40, mainRect.width)}px`;
+      dropLine.style.height = "4px";
+      dropLine.style.transform = "none";
+      dropLine.style.visibility = "visible";
+      dropLine.style.opacity = "1";
+
+      dropPreview.style.display = "block";
+      dropPreview.style.left = `${previewLeft}px`;
+      dropPreview.style.top = `${previewTop}px`;
+      dropPreview.style.width = `${previewW}px`;
+      dropPreview.style.height = `${previewH}px`;
+      dropPreview.style.transform = "none";
+
+      const sideText =
+        side === "right"
+          ? t("pages.emailMarketing.imageAlignRight")
+          : side === "left"
+            ? t("pages.emailMarketing.imageAlignLeft")
+            : t("pages.emailMarketing.imageAlignCenter");
+      dropLabel.textContent = `${t("pages.emailMarketing.imageDropHere")} · ${sideText}`;
+      dropLabel.style.display = "block";
+      dropLabel.style.left = `${Math.min(Math.max(mainRect.left, previewLeft), mainRect.right - 140)}px`;
+      dropLabel.style.top = `${Math.max(4, lineY - 32)}px`;
+      dropLabel.style.transform = "none";
+    };
+
+    const moveGhost = (clientX: number, clientY: number) => {
+      if (!ghostHost) return;
+      ghostHost.style.transform = `translate3d(${clientX - grabOffsetX}px,${clientY - grabOffsetY}px,0)`;
+    };
+
+    const flushMoveFrame = () => {
+      rafId = 0;
+      if (!dragMode || !selectedImg) return;
+      lastClientX = latestX;
+      lastClientY = latestY;
+      const dx = latestX - startX;
+      const dy = latestY - startY;
+
+      if (dragMode === "resize") {
+        // Gentle resize: dampen pointer travel and keep baseline fixed
+        // (do not rewrite startWidth each frame — that makes size jump).
+        const next = clamp(startWidth + dx * 0.35, 80, parentWidth);
+        const snapped = Math.round(next / 8) * 8;
+        const side =
+          (selectedImg.getAttribute("data-crm-float") as FloatSide | null) ||
+          "right";
+        const wrap = readWrapMode(selectedImg);
+        selectedImg.style.cssText = flowImageStyle(snapped, side, wrap);
+        selectedImg.setAttribute("width", String(snapped));
+        selectedImg.style.outline = "2px solid #017e84";
+        selectedImg.style.outlineOffset = "2px";
+        updateChromePositions();
+        return;
+      }
+
+      // Drop markers only (ghost already tracks pointer on each move event).
+      if (!dragArmed && Math.abs(dx) < 3 && Math.abs(dy) < 3) return;
+      if (!dragArmed) {
+        dragArmed = true;
+        doc
+          .querySelectorAll(
+            '[data-crm-img-chrome="handle"], [data-crm-img-chrome="toolbar"]',
+          )
+          .forEach((el) => {
+            (el as HTMLElement).style.display = "none";
+          });
+        originOpacity = selectedImg.style.opacity;
+        originFilter = selectedImg.style.filter;
+        selectedImg.style.opacity = "0.28";
+        selectedImg.style.filter = "grayscale(0.2)";
+        selectedImg.style.cursor = "grabbing";
+        ensureDropChrome();
+        moveGhost(latestX, latestY);
+      }
+      updateDropMarker(latestX, latestY);
+    };
+
+    const placeChrome = (img: HTMLImageElement) => {
+      clearImageEditorChrome(doc);
+      dropLine = null;
+      dropPreview = null;
+      dropLabel = null;
+      ghostHost = null;
+      selectedImg = img;
+      if (!/position:\s*fixed/i.test(img.getAttribute("style") || "")) {
+        placeImageInFlow(img, mainEl);
+      }
+      img.setAttribute("data-crm-img-selected", "1");
+      img.style.outline = "2px solid #017e84";
+      img.style.outlineOffset = "2px";
+      img.style.cursor = "grab";
+
+      const rect = img.getBoundingClientRect();
+
+      const handle = doc.createElement("div");
+      handle.setAttribute("data-crm-img-chrome", "handle");
+      handle.title = t("pages.emailMarketing.imageResizeHint");
+      handle.setAttribute(
+        "style",
+        [
+          "position:fixed",
+          `left:${rect.right - 11}px`,
+          `top:${rect.bottom - 11}px`,
+          "width:22px",
+          "height:22px",
+          "background:#017e84",
+          "border:2px solid #fff",
+          "border-radius:4px",
+          "box-sizing:border-box",
+          "cursor:nwse-resize",
+          "z-index:2147483646",
+          "pointer-events:auto",
+          "touch-action:none",
+          "box-shadow:0 1px 4px rgba(0,0,0,.25)",
+        ].join(";"),
+      );
+
+      const toolbar = doc.createElement("div");
+      toolbar.setAttribute("data-crm-img-chrome", "toolbar");
+      const widthLabel = Math.round(
+        parsePx(img.style.width) ||
+          parsePx(img.getAttribute("width")) ||
+          rect.width,
+      );
+      toolbar.setAttribute(
+        "style",
+        [
+          "position:fixed",
+          `left:${Math.max(8, rect.left)}px`,
+          `top:${Math.max(8, rect.top - 44)}px`,
+          "display:flex",
+          "flex-wrap:wrap",
+          "align-items:center",
+          "gap:6px",
+          "padding:6px 8px",
+          "background:#017e84",
+          "color:#fff",
+          "font:13px/1.2 sans-serif",
+          "border-radius:6px",
+          "z-index:2147483646",
+          "pointer-events:auto",
+          "box-shadow:0 2px 10px rgba(0,0,0,.18)",
+          "max-width:min(92vw,420px)",
+        ].join(";"),
+      );
+
+      const sizePill = doc.createElement("span");
+      sizePill.setAttribute("data-crm-img-chrome", "size");
+      sizePill.textContent = `${widthLabel}px`;
+      sizePill.style.opacity = "0.9";
+      sizePill.style.minWidth = "48px";
+
+      const mkToolBtn = (label: string, active: boolean, onClick: () => void) => {
+        const btn = doc.createElement("button");
+        btn.type = "button";
+        btn.textContent = label;
+        btn.setAttribute(
+          "style",
+          `border:0;background:${active ? "#017e84" : "#444"};color:#fff;padding:6px 10px;border-radius:4px;cursor:pointer;font:13px sans-serif`,
+        );
+        btn.onclick = (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onClick();
+        };
+        return btn;
+      };
+
+      const currentWidth = () =>
+        Math.round(
+          parsePx(img.style.width) ||
+            parsePx(img.getAttribute("width")) ||
+            280,
+        );
+
+      const applyWidth = (width: number) => {
+        const side =
+          (img.getAttribute("data-crm-float") as FloatSide | null) || "right";
+        const wrap = readWrapMode(img);
+        const w = clamp(Math.round(width / 8) * 8, 80, mainEl.clientWidth || 560);
+        placeImageInFlow(img, mainEl, { width: w, side, wrap });
+        setBodyDirty(true);
+        placeChrome(img);
+        resizePreview();
+      };
+
+      const applySide = (side: FloatSide) => {
+        placeImageInFlow(img, mainEl, {
+          width: currentWidth(),
+          side,
+          wrap: "below",
+        });
+        setBodyDirty(true);
+        placeChrome(img);
+        resizePreview();
+      };
+
+      const currentSide =
+        (img.getAttribute("data-crm-float") as FloatSide | null) || "right";
+
+      const changeBtn = doc.createElement("button");
+      changeBtn.type = "button";
+      changeBtn.textContent = t("pages.emailMarketing.changeImage");
+      changeBtn.setAttribute(
+        "style",
+        "border:0;background:#017e84;color:#fff;padding:6px 10px;border-radius:4px;cursor:pointer;font:13px sans-serif",
+      );
+      changeBtn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        flushPreviewHtml();
+        openReplaceImage(img.currentSrc || img.src);
+      };
+
+      const doneBtn = doc.createElement("button");
+      doneBtn.type = "button";
+      doneBtn.textContent = t("pages.emailMarketing.imageDone");
+      doneBtn.setAttribute(
+        "style",
+        "border:0;background:#444;color:#fff;padding:6px 10px;border-radius:4px;cursor:pointer;font:13px sans-serif",
+      );
+      doneBtn.onclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        commitLiveImageLayout(img, mainEl);
+        clearImageEditorChrome(doc);
+        selectedImg = null;
+        setBodyDirty(true);
+        flushPreviewHtml();
+        resizePreview();
+      };
+
+      toolbar.appendChild(sizePill);
+      toolbar.appendChild(
+        mkToolBtn(t("pages.emailMarketing.imageSmaller"), false, () =>
+          applyWidth(currentWidth() - 40),
+        ),
+      );
+      toolbar.appendChild(
+        mkToolBtn(t("pages.emailMarketing.imageBigger"), false, () =>
+          applyWidth(currentWidth() + 40),
+        ),
+      );
+      toolbar.appendChild(
+        mkToolBtn(
+          t("pages.emailMarketing.imageAlignLeft"),
+          currentSide === "left",
+          () => applySide("left"),
+        ),
+      );
+      toolbar.appendChild(
+        mkToolBtn(
+          t("pages.emailMarketing.imageAlignRight"),
+          currentSide === "right",
+          () => applySide("right"),
+        ),
+      );
+      toolbar.appendChild(changeBtn);
+      toolbar.appendChild(doneBtn);
+      doc.body.appendChild(toolbar);
+      doc.body.appendChild(handle);
+
+      handle.onpointerdown = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+          handle.setPointerCapture(event.pointerId);
+        } catch {
+          /* ignore */
+        }
+        beginDrag(img, "resize", event.clientX, event.clientY);
+      };
+    };
+
+    const updateChromePositions = () => {
+      if (!selectedImg || !selectedImg.isConnected) return;
+      if (dragArmed && dragMode === "move") return;
+      const rect = selectedImg.getBoundingClientRect();
+      const handle = doc.querySelector(
+        '[data-crm-img-chrome="handle"]',
+      ) as HTMLElement | null;
+      const toolbar = doc.querySelector(
+        '[data-crm-img-chrome="toolbar"]',
+      ) as HTMLElement | null;
+      const sizePill = doc.querySelector(
+        '[data-crm-img-chrome="size"]',
+      ) as HTMLElement | null;
+      if (handle) {
+        handle.style.display = "";
+        handle.style.left = `${rect.right - 11}px`;
+        handle.style.top = `${rect.bottom - 11}px`;
+      }
+      if (toolbar) {
+        toolbar.style.display = "flex";
+        toolbar.style.left = `${rect.left}px`;
+        toolbar.style.top = `${Math.max(4, rect.top - 36)}px`;
+      }
+      if (sizePill) {
+        const w = Math.round(
+          parsePx(selectedImg.style.width) ||
+            parsePx(selectedImg.getAttribute("width")) ||
+            rect.width,
+        );
+        sizePill.textContent = `${w}px`;
+      }
+    };
+
+    const beginDrag = (
+      img: HTMLImageElement,
+      mode: "move" | "resize",
+      clientX: number,
+      clientY: number,
+    ) => {
+      mainEl = findMainContentEl(doc);
+      prepareMainForFlowImages(mainEl);
+      parentWidth = Math.max(mainEl.clientWidth || 600, 80);
+      dragMode = mode;
+      dragArmed = false;
+      startX = clientX;
+      startY = clientY;
+      lastClientX = clientX;
+      lastClientY = clientY;
+      latestX = clientX;
+      latestY = clientY;
+      const imgRect = img.getBoundingClientRect();
+      startWidth = Math.round(
+        parsePx(img.style.width) ||
+          parsePx(img.getAttribute("width")) ||
+          imgRect.width ||
+          320,
+      );
+      startHeight = Math.round(imgRect.height || startWidth * 0.66);
+      grabOffsetX = clientX - imgRect.left;
+      grabOffsetY = clientY - imgRect.top;
+
+      if (mode === "move") {
+        unwrapImageIntoMain(img, mainEl);
+        lastDropBefore = undefined;
+        lastDropSide = null;
+        // Floating ghost follows the pointer with GPU transforms.
+        // Document stays still until drop — like Word.
+        ghostHost = doc.createElement("div");
+        ghostHost.setAttribute("data-crm-img-chrome", "ghost");
+        ghostHost.setAttribute(
+          "style",
+          [
+            "position:fixed",
+            "left:0",
+            "top:0",
+            `width:${startWidth}px`,
+            "z-index:2147483640",
+            "pointer-events:none",
+            "opacity:0.92",
+            "box-shadow:0 14px 36px rgba(0,0,0,.28)",
+            "border-radius:2px",
+            "overflow:hidden",
+            "will-change:transform",
+            `transform:translate3d(${imgRect.left}px,${imgRect.top}px,0)`,
+          ].join(";"),
+        );
+        const ghostImg = doc.createElement("img");
+        ghostImg.src = img.currentSrc || img.src;
+        ghostImg.alt = "";
+        ghostImg.draggable = false;
+        ghostImg.setAttribute(
+          "style",
+          `display:block;width:${startWidth}px;height:auto;border:0;pointer-events:none`,
+        );
+        ghostHost.appendChild(ghostImg);
+        doc.body.appendChild(ghostHost);
+        ensureDropChrome();
+      }
+    };
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!dragMode || !selectedImg) return;
+      event.preventDefault();
+      latestX = event.clientX;
+      latestY = event.clientY;
+      if (dragMode === "move" && ghostHost) {
+        const moved =
+          dragArmed || Math.hypot(latestX - startX, latestY - startY) >= 3;
+        if (moved) {
+          if (!dragArmed) {
+            dragArmed = true;
+            doc
+              .querySelectorAll(
+                '[data-crm-img-chrome="handle"], [data-crm-img-chrome="toolbar"]',
+              )
+              .forEach((el) => {
+                (el as HTMLElement).style.display = "none";
+              });
+            originOpacity = selectedImg.style.opacity;
+            originFilter = selectedImg.style.filter;
+            selectedImg.style.opacity = "0.28";
+            selectedImg.style.filter = "grayscale(0.2)";
+            selectedImg.style.cursor = "grabbing";
+            ensureDropChrome();
+          }
+          moveGhost(latestX, latestY);
+          // Update the placement line on every move so it never lags/hides.
+          updateDropMarker(latestX, latestY);
+        }
+      }
+      if (!rafId) {
+        rafId = doc.defaultView?.requestAnimationFrame(flushMoveFrame) ?? 0;
+        if (!rafId) flushMoveFrame();
+      }
+    };
+
+    const endDragCleanup = () => {
+      if (rafId && doc.defaultView) {
+        doc.defaultView.cancelAnimationFrame(rafId);
+      }
+      rafId = 0;
+      ghostHost?.remove();
+      ghostHost = null;
+      if (dropLine) {
+        hideOffscreen(dropLine);
+        dropLine.remove();
+        dropLine = null;
+      }
+      if (dropPreview) {
+        hideOffscreen(dropPreview);
+        dropPreview.remove();
+        dropPreview = null;
+      }
+      if (dropLabel) {
+        hideOffscreen(dropLabel);
+        dropLabel.remove();
+        dropLabel = null;
+      }
+    };
+
+    const onPointerUp = () => {
+      if (!dragMode || !selectedImg) {
+        endDragCleanup();
+        dragMode = null;
+        dragArmed = false;
+        return;
+      }
+      const img = selectedImg;
+      img.style.opacity = originOpacity;
+      img.style.filter = originFilter;
+      img.style.cursor = "grab";
+
+      if (dragMode === "move" && dragArmed) {
+        const side =
+          lastDropSide ?? resolveFloatSide(mainEl, startWidth, lastClientX);
+        const before =
+          lastDropBefore !== undefined
+            ? lastDropBefore
+            : findFlowInsertBefore(mainEl, lastClientY, img);
+        if (before && before.parentNode === mainEl) {
+          mainEl.insertBefore(img, before);
+        } else {
+          mainEl.appendChild(img);
+        }
+        placeImageInFlow(img, mainEl, {
+          width: startWidth,
+          side,
+          wrap: "below",
+        });
+      } else if (dragMode === "resize") {
+        const width = Math.round(
+          parsePx(img.style.width) || startWidth || 320,
+        );
+        const side =
+          (img.getAttribute("data-crm-float") as FloatSide | null) || "right";
+        placeImageInFlow(img, mainEl, {
+          width,
+          side,
+          wrap: readWrapMode(img),
+        });
+      } else {
+        placeImageInFlow(img, mainEl, {
+          width: startWidth,
+          wrap: "below",
+        });
+      }
+
+      endDragCleanup();
+      img.style.outline = "2px solid #017e84";
+      img.style.outlineOffset = "2px";
+      img.style.cursor = "grab";
+      dragMode = null;
+      dragArmed = false;
+      setBodyDirty(true);
+      placeChrome(img);
+      resizePreview();
+    };
+
+    const selectImage = (img: HTMLImageElement) => {
+      placeChrome(img);
+    };
+
+    const deselectImage = () => {
+      endDragCleanup();
+      if (selectedImg) {
+        selectedImg.style.opacity = originOpacity || selectedImg.style.opacity;
+        selectedImg.style.filter = originFilter || selectedImg.style.filter;
+        selectedImg.style.display = "";
+        commitLiveImageLayout(selectedImg, mainEl);
+        setBodyDirty(true);
+      }
+      clearImageEditorChrome(doc);
+      selectedImg = null;
+    };
+
+    doc.onpointermove = onPointerMove;
+    doc.onpointerup = onPointerUp;
+    doc.onpointercancel = onPointerUp;
+
+    doc.onclick = (event) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("[data-crm-img-chrome]")) return;
+      if (target?.tagName?.toLowerCase() === "img") return;
+      if (selectedImg) {
+        deselectImage();
+        flushPreviewHtml();
+      }
+    };
+
+    doc.querySelectorAll("img").forEach((node) => {
+      const img = node as HTMLImageElement;
       if (!img.complete) {
         img.addEventListener("load", () => resizePreview(), { once: true });
       }
       if (contentLocked) return;
+      if ((img.width && img.width <= 2) || (img.height && img.height <= 2)) return;
+      img.draggable = false;
       img.style.cursor = "pointer";
-      img.title = t("pages.emailMarketing.clickToReplaceImage");
+      img.style.touchAction = "none";
+      img.title = t("pages.emailMarketing.imageDragHint");
+      img.ondblclick = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        flushPreviewHtml();
+        openReplaceImage(img.currentSrc || img.src);
+      };
+      img.onpointerdown = (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+          img.setPointerCapture(event.pointerId);
+        } catch {
+          /* ignore */
+        }
+        selectImage(img);
+        dragArmed = false;
+        beginDrag(img, "move", event.clientX, event.clientY);
+      };
       img.onclick = (event) => {
         event.preventDefault();
         event.stopPropagation();
-        if (editable) flushPreviewHtml();
-        openReplaceImage(img.currentSrc || img.src);
+        selectImage(img);
       };
     });
   }
@@ -440,7 +1720,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
 
   useEffect(() => {
     const empty = `<p style="padding:24px;font-family:sans-serif;color:#666">${t("pages.emailMarketing.emptyBody")}</p>`;
-    setFrameSrcDoc(form.html?.trim() ? form.html : empty);
+    const html = form.html?.trim()
+      ? pullOrphansIntoMainContent(form.html)
+      : empty;
+    setFrameSrcDoc(html);
     // Refresh iframe document only when the editor is intentionally remounted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editorKey]);
@@ -925,7 +2208,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       name: prev.name || tpl.name,
       subject: tpl.subject,
       preview: tpl.preview,
-      html: tpl.html,
+      html: pullOrphansIntoMainContent(tpl.html || ""),
     }));
     setEditorKey(`${id}-${Date.now()}`);
     setBodyMode("design");
@@ -936,9 +2219,15 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     const snippet = BLOCK_SNIPPETS[key];
     if (!snippet) return;
     if (bodyMode === "edit") flushPreviewHtml();
+    const live = tryInsertSnippetInPreview(snippet);
     setForm((prev) => ({
       ...prev,
-      html: `${prev.html || ""}\n${snippet}`,
+      html:
+        live ??
+        insertIntoMainContent(
+          pullOrphansIntoMainContent(prev.html || ""),
+          snippet,
+        ),
     }));
     setBodyDirty(true);
     setEditorKey(`snip-${key}-${Date.now()}`);
@@ -1566,16 +2855,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                 </div>
               ) : null}
               <div
-                className={`bg-[#f4f3ef] p-3 sm:p-6 ${
+                className={`bg-[#f7f4ee] ${
                   bodyMode === "edit" ? "ring-2 ring-inset ring-[#017e84]/40" : ""
                 }`}
               >
-                <div className="mx-auto max-w-4xl border border-line bg-white shadow-sm">
+                <div className="w-full border-y border-line bg-[#f7f4ee]">
                   <iframe
                     key={editorKey}
                     ref={previewRef}
                     title={t("pages.emailMarketing.emailPreview")}
-                    className="block w-full border-0 bg-white"
+                    className="block w-full border-0 bg-[#f7f4ee]"
                     style={{ height: previewHeight, overflow: "hidden" }}
                     scrolling="no"
                     sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
@@ -1808,6 +3097,54 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
               onChange={(e) => setReplaceUrl(e.target.value)}
               placeholder="https://"
             />
+          </Field>
+          <Field label={t("pages.emailMarketing.imageSize")}>
+            <div className="flex flex-wrap items-center gap-2">
+              {IMAGE_WIDTH_PRESETS.map((preset) => {
+                const active =
+                  preset.value === "full"
+                    ? imageWidth === "full"
+                    : imageWidth !== "full" &&
+                      Number.parseInt(imageWidthCustom, 10) === preset.value;
+                return (
+                  <button
+                    key={String(preset.value)}
+                    type="button"
+                    className={active ? btnPrimary : btnSecondary}
+                    onClick={() => {
+                      setImageWidth(preset.value);
+                      if (preset.value !== "full") {
+                        setImageWidthCustom(String(preset.value));
+                      }
+                    }}
+                  >
+                    {t(preset.labelKey)}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-1 text-xs text-mute">
+              {t("pages.emailMarketing.imageSizeHint")}
+            </p>
+          </Field>
+          <Field label={t("pages.emailMarketing.imagePosition")}>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["left", "pages.emailMarketing.imageAlignLeft"],
+                  ["right", "pages.emailMarketing.imageAlignRight"],
+                ] as const
+              ).map(([value, labelKey]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={imageAlign === value ? btnPrimary : btnSecondary}
+                  onClick={() => setImageAlign(value)}
+                >
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
           </Field>
         </div>
       </Modal>

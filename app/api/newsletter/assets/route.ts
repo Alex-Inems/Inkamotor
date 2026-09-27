@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { jsonError } from "@/lib/api";
-import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
+import { missingSupabaseEnv } from "@/lib/supabase/server";
+import {
+  supabaseHttps,
+  supabasePublicObjectUrl,
+} from "@/lib/supabase/https";
 
 export const dynamic = "force-dynamic";
 
@@ -25,17 +29,53 @@ function extFor(type: string, name: string) {
   return m ? `.${m[1]!.replace("jpeg", "jpg")}` : ".bin";
 }
 
-async function ensureBucket() {
-  const sb = getSupabase();
-  const { data: buckets } = await sb.storage.listBuckets();
-  if (!buckets?.some((b) => b.name === BUCKET)) {
-    const { error } = await sb.storage.createBucket(BUCKET, {
+function authHeaders() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!.trim();
+  return {
+    Authorization: `Bearer ${key}`,
+    apikey: key,
+  };
+}
+
+async function ensureBucket(baseUrl: string) {
+  const list = await supabaseHttps({
+    url: `${baseUrl}/storage/v1/bucket`,
+    method: "GET",
+    headers: { ...authHeaders(), Accept: "application/json" },
+  });
+  if (list.status >= 400) {
+    throw new Error(`Could not list storage buckets (${list.status}): ${list.text.slice(0, 200)}`);
+  }
+  let buckets: { name?: string }[] = [];
+  try {
+    buckets = JSON.parse(list.text) as { name?: string }[];
+  } catch {
+    throw new Error("Could not parse storage bucket list");
+  }
+  if (buckets.some((b) => b.name === BUCKET)) return;
+
+  const created = await supabaseHttps({
+    url: `${baseUrl}/storage/v1/bucket`,
+    method: "POST",
+    headers: {
+      ...authHeaders(),
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      id: BUCKET,
+      name: BUCKET,
       public: true,
-      fileSizeLimit: MAX_BYTES,
-    });
-    if (error && !/already exists/i.test(error.message)) {
-      throw new Error(error.message);
-    }
+      file_size_limit: MAX_BYTES,
+    }),
+  });
+  if (
+    created.status >= 400 &&
+    !/already exists|duplicate/i.test(created.text)
+  ) {
+    throw new Error(
+      `Could not create ${BUCKET} bucket (${created.status}): ${created.text.slice(0, 240)}`,
+    );
   }
 }
 
@@ -49,11 +89,16 @@ export async function POST(req: Request) {
     });
   }
 
+  const baseUrl = process.env.SUPABASE_URL!.trim().replace(/\/$/, "");
+
   let form: FormData;
   try {
     form = await req.formData();
   } catch {
-    return jsonError(400, { error: "Expected multipart form data", code: "send_failed" });
+    return jsonError(400, {
+      error: "Expected multipart form data",
+      code: "send_failed",
+    });
   }
 
   const file = form.get("file");
@@ -75,20 +120,30 @@ export async function POST(req: Request) {
   }
 
   try {
-    await ensureBucket();
+    await ensureBucket(baseUrl);
     const buf = Buffer.from(await file.arrayBuffer());
     const hash = createHash("sha1").update(buf).digest("hex").slice(0, 20);
     const path = `uploads/${hash}${extFor(type, file.name || "")}`;
-    const sb = getSupabase();
-    const { error } = await sb.storage.from(BUCKET).upload(path, buf, {
-      contentType: type,
-      upsert: true,
+
+    const uploaded = await supabaseHttps({
+      url: `${baseUrl}/storage/v1/object/${BUCKET}/${path}`,
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": type,
+        "x-upsert": "true",
+      },
+      body: buf,
     });
-    if (error) throw new Error(error.message);
-    const { data } = sb.storage.from(BUCKET).getPublicUrl(path);
+    if (uploaded.status >= 400) {
+      throw new Error(
+        `Upload failed (${uploaded.status}): ${uploaded.text.slice(0, 240)}`,
+      );
+    }
+
     return Response.json({
       ok: true,
-      url: data.publicUrl,
+      url: supabasePublicObjectUrl(baseUrl, BUCKET, path),
       path,
       bytes: buf.length,
       contentType: type,

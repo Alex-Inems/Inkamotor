@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
-import { Inria_Sans, Roboto, Staatliches } from "next/font/google";
+import { Inria_Sans, Staatliches } from "next/font/google";
 import { CrmShell } from "@/components/crm-shell";
 import { SESSION_COOKIE, readSessionToken } from "@/lib/auth";
 import {
@@ -21,12 +21,6 @@ const inriaSans = Inria_Sans({
   variable: "--font-inria",
   subsets: ["latin"],
   weight: ["300", "400", "700"],
-});
-
-const roboto = Roboto({
-  variable: "--font-roboto",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
 });
 
 export const metadata: Metadata = {
@@ -59,7 +53,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang={localeMeta[locale].bcp47}
       suppressHydrationWarning
-      className={`${staatliches.variable} ${inriaSans.variable} ${roboto.variable} h-full antialiased`}
+      className={`${staatliches.variable} ${inriaSans.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">
         <CrmShell user={user} locale={locale}>

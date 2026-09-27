@@ -8,16 +8,14 @@ export type NewsletterTemplate = {
 };
 
 function branded(title: string, body: string) {
-  return `<div style="background:#1c1b19;padding:24px 12px">
-  <div style="max-width:560px;margin:0 auto;background:#f7f4ee;color:#1c1b19;font-family:Georgia,serif">
-    <div style="height:6px;background:linear-gradient(90deg,#31595d 20%,#e1736c 40%,#ecbb5a 60%,#624e8a 80%,#65814f 100%)"></div>
-    <div style="background:#31595d;color:#fff;padding:20px 24px">
-      <p style="margin:0;letter-spacing:0.16em;font-size:12px">INKAMOTO TOURS</p>
-      <h1 style="margin:10px 0 0;font-size:28px;font-weight:normal">${title}</h1>
-    </div>
-    <div style="padding:24px;font-size:16px;line-height:1.55">
-      ${body}
-    </div>
+  return `<div style="width:100%;max-width:100%;margin:0;background:#f7f4ee;color:#1c1b19;font-family:Georgia,serif">
+  <div style="height:6px;background:linear-gradient(90deg,#31595d 20%,#e1736c 40%,#ecbb5a 60%,#624e8a 80%,#65814f 100%)"></div>
+  <div style="background:#31595d;color:#fff;padding:20px 24px">
+    <p style="margin:0;letter-spacing:0.16em;font-size:12px">INKAMOTO TOURS</p>
+    <h1 style="margin:10px 0 0;font-size:28px;font-weight:normal">${title}</h1>
+  </div>
+  <div style="padding:24px;font-size:16px;line-height:1.55">
+    ${body}
   </div>
 </div>`;
 }

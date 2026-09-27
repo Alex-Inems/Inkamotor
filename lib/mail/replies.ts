@@ -181,10 +181,12 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
     const payload = withDelivery
       ? { ...basePayload, related_mail_id: related, ...deliveryPayload }
       : { ...basePayload, related_mail_id: related };
+    // Keep select literal so Supabase types stay valid; delivery fields are
+    // already known from the insert payload.
     return supabase
       .from("mail_replies")
       .insert(payload)
-      .select(withDelivery ? REPLY_SELECT : REPLY_SELECT_BASE)
+      .select(REPLY_SELECT_BASE)
       .single();
   }
 
@@ -201,10 +203,18 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
       retry = await insertReply(null, false);
     }
     if (!retry.error && retry.data) {
-      reply = mapRow(retry.data as Record<string, unknown>);
+      reply = mapRow({
+        ...(retry.data as Record<string, unknown>),
+        provider_message_id: providerMessageId,
+        delivery_status: deliveryStatus,
+      });
     }
   } else if (!inserted.error && inserted.data) {
-    reply = mapRow(inserted.data as Record<string, unknown>);
+    reply = mapRow({
+      ...(inserted.data as Record<string, unknown>),
+      provider_message_id: providerMessageId,
+      delivery_status: deliveryStatus,
+    });
   }
 
   const copyId = reply?.id ?? crypto.randomUUID();
