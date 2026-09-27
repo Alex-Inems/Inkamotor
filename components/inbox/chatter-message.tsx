@@ -41,23 +41,37 @@ function deliveryLabel(
   if (status === "delivered") return t("pages.inbox.deliveryDelivered");
   if (status === "bounced") return t("pages.inbox.deliveryBounced");
   if (status === "error") return t("pages.inbox.deliveryError");
+  if (status === "queued") return t("pages.inbox.deliverySent");
   return t("pages.inbox.deliverySent");
 }
 
-function deliveryIconClass(status: DeliveryStatus | null | undefined) {
-  if (status === "opened") return "text-[#2f6b3a]";
-  if (status === "delivered") return "text-[#017e84]";
-  if (status === "bounced" || status === "error") return "text-[#c43c3c]";
-  return "text-mute";
+/** Strong, distinct colors so status is obvious on the dark CRM chrome. */
+function deliveryTone(status: DeliveryStatus | null | undefined): {
+  className: string;
+  filled: boolean;
+} {
+  if (status === "opened") {
+    return { className: "text-[#6bdc7a]", filled: true };
+  }
+  if (status === "delivered") {
+    return { className: "text-[#3ec4cb]", filled: true };
+  }
+  if (status === "bounced" || status === "error") {
+    return { className: "text-[#f07171]", filled: false };
+  }
+  return { className: "text-[#a8a39a]", filled: false };
 }
 
 export function MailTrackingIcon({
   message,
+  showLabel = false,
 }: {
   message: Pick<
     RoomMessage,
     "mine" | "deliveryStatus" | "deliveredAt" | "openedAt" | "at"
   >;
+  /** When true, show “Sent / Delivered / Opened” next to the icon. */
+  showLabel?: boolean;
 }) {
   const { t, locale } = useLocale();
   if (!message.mine) return null;
@@ -72,26 +86,38 @@ export function MailTrackingIcon({
   const title = tipAt
     ? `${label} · ${formatDateTime(tipAt, locale)}`
     : label;
+  const tone = deliveryTone(status);
 
   return (
     <span
-      className={`inline-flex h-4 w-4 shrink-0 items-center justify-center ${deliveryIconClass(status)}`}
+      className={`inline-flex items-center gap-1 ${tone.className}`}
       title={title}
       aria-label={label}
+      data-delivery-status={status}
     >
-      <svg
-        viewBox="0 0 24 24"
-        className="h-[14px] w-[14px]"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <rect x="3" y="5" width="18" height="14" rx="2" />
-        <path d="m3 7 9 7 9-7" />
-      </svg>
+      <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
+        <svg
+          viewBox="0 0 24 24"
+          className="h-[15px] w-[15px]"
+          fill={tone.filled ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth={tone.filled ? "1.5" : "2"}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <rect x="3" y="5" width="18" height="14" rx="2" />
+          <path
+            d="m3 7 9 7 9-7"
+            fill="none"
+            stroke={tone.filled ? "#0f1f1e" : "currentColor"}
+            strokeWidth={tone.filled ? "1.75" : "2"}
+          />
+        </svg>
+      </span>
+      {showLabel ? (
+        <span className="text-[11px] font-semibold leading-none">{label}</span>
+      ) : null}
     </span>
   );
 }
@@ -140,7 +166,6 @@ export function ChatterMessage({
       <div className="min-w-0 flex-1">
         <header className="mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 leading-none">
           <strong className="text-[13px] font-semibold text-ink">{author}</strong>
-          <MailTrackingIcon message={message} />
           <time
             className="text-[11px] text-mute"
             dateTime={message.at}
@@ -234,6 +259,11 @@ export function ChatterMessage({
             </>
           )}
         </div>
+        {message.mine ? (
+          <div className="mt-1 flex max-w-[min(100%,36rem)] justify-end pr-0.5">
+            <MailTrackingIcon message={message} showLabel />
+          </div>
+        ) : null}
       </div>
     </article>
   );

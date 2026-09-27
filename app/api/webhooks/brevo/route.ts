@@ -8,6 +8,8 @@ type BrevoEvent = {
   "message-id"?: string;
   messageId?: string;
   "message-id-header"?: string;
+  /** Some Brevo payloads nest ids under `X-Mailin-custom` / similar. */
+  mid?: string;
   date?: string;
   ts?: number | string;
   ts_event?: number | string;
@@ -72,7 +74,11 @@ export async function POST(request: Request) {
   let updated = 0;
   for (const row of events) {
     const providerMessageId =
-      row["message-id"] || row.messageId || row["message-id-header"] || null;
+      row["message-id"] ||
+      row.messageId ||
+      row["message-id-header"] ||
+      row.mid ||
+      null;
     const result = await applyDeliveryEvent({
       providerMessageId,
       event: row.event,

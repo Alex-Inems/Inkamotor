@@ -737,7 +737,12 @@ export async function sendTransactionalEmail(input: {
     typeof result?.messageId === "string" && result.messageId.trim()
       ? result.messageId.trim()
       : null;
-  return { messageId };
+  // Also normalize messageId returned by Brevo send before storing.
+  return {
+    messageId: messageId
+      ? messageId.replace(/^<|>$/g, "").trim() || null
+      : null,
+  };
 }
 
 export function mapBrevoCampaign(c: BrevoCampaign) {

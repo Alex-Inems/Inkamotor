@@ -1,5 +1,6 @@
 import { listAttachmentsByReplyIds } from "@/lib/mail/attachments";
 import {
+  normalizeDeliveryStatus,
   normalizeProviderMessageId,
   type DeliveryStatus,
 } from "@/lib/mail/delivery";
@@ -57,10 +58,9 @@ function mapRow(
     relatedInquiryId: (row.related_inquiry_id as string) || null,
     sentAt: String(row.sent_at),
     providerMessageId: (row.provider_message_id as string) || null,
-    deliveryStatus:
-      typeof status === "string" && status
-        ? (status as DeliveryStatus)
-        : null,
+    deliveryStatus: normalizeDeliveryStatus(
+      typeof status === "string" ? status : null,
+    ),
     deliveredAt: (row.delivered_at as string) || null,
     openedAt: (row.opened_at as string) || null,
     attachments,

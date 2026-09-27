@@ -132,6 +132,15 @@ export function SaleChatPanel({
     void loadConversation();
   }, [loadConversation]);
 
+  // Refresh delivery status while the panel is open (Brevo webhooks update DB).
+  useEffect(() => {
+    if (!canLoad) return;
+    const id = window.setInterval(() => {
+      void loadConversation();
+    }, 12_000);
+    return () => window.clearInterval(id);
+  }, [canLoad, loadConversation]);
+
   const room = useMemo(() => {
     if (!canLoad) return null;
     return groupMailRooms({

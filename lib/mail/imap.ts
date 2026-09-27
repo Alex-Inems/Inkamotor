@@ -3,10 +3,14 @@ import { simpleParser } from "mailparser";
 import { missingEnv } from "@/lib/api";
 import { autoSubscribe } from "@/lib/mail/auto-subscribe";
 import { listAttachmentsByReplyIds } from "@/lib/mail/attachments";
-import type { DeliveryStatus } from "@/lib/mail/delivery";
+import {
+  normalizeDeliveryStatus,
+  type DeliveryStatus,
+} from "@/lib/mail/delivery";
 import { isOwnAddress, messageContact } from "@/lib/mail/extract";
 import { isMissingColumnError } from "@/lib/mail/schema-compat";
 import { getSupabase } from "@/lib/supabase/server";
+
 
 const IMAP_KEYS = ["IMAP_HOST", "IMAP_USER", "IMAP_PASSWORD"] as const;
 
@@ -61,10 +65,9 @@ function mapRow(
     receivedAt: String(row.received_at),
     isRead: Boolean(row.is_read),
     providerMessageId: (row.provider_message_id as string) || null,
-    deliveryStatus:
-      typeof status === "string" && status
-        ? (status as DeliveryStatus)
-        : null,
+    deliveryStatus: normalizeDeliveryStatus(
+      typeof status === "string" ? status : null,
+    ),
     deliveredAt: (row.delivered_at as string) || null,
     openedAt: (row.opened_at as string) || null,
     attachments: attachments.length ? attachments : undefined,
