@@ -177,7 +177,8 @@ export function SaleChatPanel({
           inReplyToSubject: room?.lastSubject,
           message: payload.message,
           relatedMailId: room?.lastMailId,
-          attachments: payload.attachments,
+          attachments:
+        payload.attachments.length > 0 ? payload.attachments : undefined,
         }),
       });
       const json = (await res.json()) as {

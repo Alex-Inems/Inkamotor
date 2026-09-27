@@ -390,7 +390,8 @@ export default function InboxPage() {
           inReplyToSubject: active.lastSubject,
           message: payload.message,
           relatedMailId: active.lastMailId,
-          attachments: payload.attachments,
+          attachments:
+            payload.attachments.length > 0 ? payload.attachments : undefined,
         }),
       });
       const json = await res.json();

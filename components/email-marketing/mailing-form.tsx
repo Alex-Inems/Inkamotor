@@ -1012,166 +1012,84 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       });
     });
 
-    const hideOffscreen = (el: HTMLElement) => {
-      el.style.transform = "translate3d(-9999px,-9999px,0)";
-    };
-
-    const ensureDropChrome = () => {
-      const host = doc.documentElement || doc.body;
-      if (!dropLine || !dropLine.isConnected) {
-        dropLine?.remove();
-        dropLine = doc.createElement("div");
-        dropLine.setAttribute("data-crm-img-chrome", "drop-line");
-        dropLine.setAttribute(
-          "style",
-          [
-            "position:fixed",
-            "left:0",
-            "top:0",
-            "width:0",
-            "height:4px",
-            "background:#017e84",
-            "border-radius:2px",
-            "z-index:2147483647",
-            "pointer-events:none",
-            "display:none",
-            "box-shadow:0 0 0 2px #fff, 0 0 0 4px rgba(1,126,132,.35), 0 2px 10px rgba(0,0,0,.25)",
-          ].join(";"),
-        );
-        const capL = doc.createElement("span");
-        capL.setAttribute(
-          "style",
-          "position:absolute;left:-2px;top:-7px;width:12px;height:18px;border:3px solid #017e84;border-right:0;border-radius:3px 0 0 3px;background:#fff;box-sizing:border-box",
-        );
-        const capR = doc.createElement("span");
-        capR.setAttribute(
-          "style",
-          "position:absolute;right:-2px;top:-7px;width:12px;height:18px;border:3px solid #017e84;border-left:0;border-radius:0 3px 3px 0;background:#fff;box-sizing:border-box",
-        );
-        dropLine.appendChild(capL);
-        dropLine.appendChild(capR);
-        host.appendChild(dropLine);
-      }
-      if (!dropPreview || !dropPreview.isConnected) {
-        dropPreview?.remove();
-        dropPreview = doc.createElement("div");
-        dropPreview.setAttribute("data-crm-img-chrome", "drop-preview");
-        dropPreview.setAttribute(
-          "style",
-          [
-            "position:fixed",
-            "left:0",
-            "top:0",
-            "width:0",
-            "height:0",
-            "box-sizing:border-box",
-            "border:2px dashed #017e84",
-            "background:rgba(1,126,132,0.10)",
-            "border-radius:4px",
-            "z-index:2147483646",
-            "pointer-events:none",
-            "display:none",
-          ].join(";"),
-        );
-        host.appendChild(dropPreview);
-      }
-      if (!dropLabel || !dropLabel.isConnected) {
-        dropLabel?.remove();
-        dropLabel = doc.createElement("div");
-        dropLabel.setAttribute("data-crm-img-chrome", "drop-label");
-        dropLabel.setAttribute(
-          "style",
-          [
-            "position:fixed",
-            "left:0",
-            "top:0",
-            "padding:5px 10px",
-            "background:#017e84",
-            "color:#fff",
-            "font:12px/1.2 sans-serif",
-            "font-weight:700",
-            "border-radius:4px",
-            "z-index:2147483647",
-            "pointer-events:none",
-            "display:none",
-            "white-space:nowrap",
-            "box-shadow:0 2px 8px rgba(0,0,0,.25)",
-          ].join(";"),
-        );
-        host.appendChild(dropLabel);
-      }
+    const ensureFlowDropLine = () => {
+      if (dropLine && dropLine.isConnected) return dropLine;
+      dropLine?.remove();
+      dropLine = doc.createElement("div");
+      dropLine.setAttribute("data-crm-img-chrome", "drop-line");
+      dropLine.setAttribute(
+        "style",
+        [
+          "display:block",
+          "box-sizing:border-box",
+          "width:100%",
+          "height:6px",
+          "margin:14px 0",
+          "padding:0",
+          "border:0",
+          "border-radius:3px",
+          "background:#017e84",
+          "box-shadow:0 0 0 2px #fff, 0 0 0 4px rgba(1,126,132,.4), 0 2px 12px rgba(0,0,0,.2)",
+          "pointer-events:none",
+          "clear:both",
+          "position:relative",
+          "z-index:20",
+        ].join(";"),
+      );
+      const label = doc.createElement("span");
+      label.setAttribute("data-crm-drop-label", "1");
+      label.setAttribute(
+        "style",
+        [
+          "position:absolute",
+          "left:8px",
+          "top:-22px",
+          "padding:3px 8px",
+          "background:#017e84",
+          "color:#fff",
+          "font:11px/1.2 sans-serif",
+          "font-weight:700",
+          "border-radius:3px",
+          "white-space:nowrap",
+          "pointer-events:none",
+          "box-shadow:0 1px 4px rgba(0,0,0,.2)",
+        ].join(";"),
+      );
+      label.textContent = t("pages.emailMarketing.imageDropHere");
+      dropLine.appendChild(label);
+      return dropLine;
     };
 
     const updateDropMarker = (clientX: number, clientY: number) => {
-      if (!selectedImg || dragMode !== "move") return;
-      ensureDropChrome();
-      if (!dropLine || !dropPreview || !dropLabel) return;
-
+      if (!selectedImg || dragMode !== "move" || !dragArmed) return;
+      mainEl = findMainContentEl(doc);
+      const line = ensureFlowDropLine();
       const before = findFlowInsertBefore(mainEl, clientY, selectedImg);
       lastDropBefore = before;
-      const mainRect = mainEl.getBoundingClientRect();
-      let lineY = mainRect.bottom - 2;
+      lastDropSide = resolveFloatSide(mainEl, startWidth, clientX);
 
-      if (before instanceof HTMLElement) {
-        lineY = before.getBoundingClientRect().top;
-      } else {
-        const kids = [...mainEl.children].filter((el) => {
-          if (el === selectedImg) return false;
-          if ((el as HTMLElement).style?.display === "none") return false;
-          if ((el as HTMLElement).hasAttribute?.("data-crm-img-chrome")) return false;
-          return true;
-        }) as HTMLElement[];
-        if (kids.length) {
-          lineY = kids[kids.length - 1]!.getBoundingClientRect().bottom;
-        } else {
-          lineY = Math.min(
-            Math.max(clientY, mainRect.top + 8),
-            mainRect.bottom - 8,
-          );
+      // Insert the bar into the letter flow so it cannot hide behind overlays.
+      if (before && before.parentNode === mainEl) {
+        if (line.nextSibling !== before || line.parentNode !== mainEl) {
+          mainEl.insertBefore(line, before);
         }
+      } else if (line.parentNode !== mainEl || mainEl.lastElementChild !== line) {
+        mainEl.appendChild(line);
       }
 
-      lineY = Math.min(Math.max(lineY, mainRect.top + 2), mainRect.bottom - 2);
-
-      const side = resolveFloatSide(mainEl, startWidth, clientX);
-      lastDropSide = side;
-      const previewW = Math.min(startWidth, Math.max(40, mainRect.width - 16));
-      const previewH = Math.max(36, Math.min(startHeight, 140));
-      const previewLeft =
-        side === "right"
-          ? mainRect.right - previewW - 8
-          : side === "left"
-            ? mainRect.left + 8
-            : mainRect.left + (mainRect.width - previewW) / 2;
-      const previewTop = Math.min(lineY + 10, mainRect.bottom - previewH - 4);
-
-      dropLine.style.display = "block";
-      dropLine.style.left = `${mainRect.left}px`;
-      dropLine.style.top = `${lineY - 2}px`;
-      dropLine.style.width = `${Math.max(40, mainRect.width)}px`;
-      dropLine.style.height = "4px";
-      dropLine.style.transform = "none";
-      dropLine.style.visibility = "visible";
-      dropLine.style.opacity = "1";
-
-      dropPreview.style.display = "block";
-      dropPreview.style.left = `${previewLeft}px`;
-      dropPreview.style.top = `${previewTop}px`;
-      dropPreview.style.width = `${previewW}px`;
-      dropPreview.style.height = `${previewH}px`;
-      dropPreview.style.transform = "none";
-
       const sideText =
-        side === "right"
+        lastDropSide === "right"
           ? t("pages.emailMarketing.imageAlignRight")
-          : side === "left"
+          : lastDropSide === "left"
             ? t("pages.emailMarketing.imageAlignLeft")
             : t("pages.emailMarketing.imageAlignCenter");
-      dropLabel.textContent = `${t("pages.emailMarketing.imageDropHere")} · ${sideText}`;
-      dropLabel.style.display = "block";
-      dropLabel.style.left = `${Math.min(Math.max(mainRect.left, previewLeft), mainRect.right - 140)}px`;
-      dropLabel.style.top = `${Math.max(4, lineY - 32)}px`;
-      dropLabel.style.transform = "none";
+      const label = line.querySelector(
+        "[data-crm-drop-label]",
+      ) as HTMLElement | null;
+      if (label) {
+        label.textContent = `${t("pages.emailMarketing.imageDropHere")} · ${sideText}`;
+      }
+      line.style.display = "block";
     };
 
     const moveGhost = (clientX: number, clientY: number) => {
@@ -1220,7 +1138,6 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         selectedImg.style.opacity = "0.28";
         selectedImg.style.filter = "grayscale(0.2)";
         selectedImg.style.cursor = "grabbing";
-        ensureDropChrome();
         moveGhost(latestX, latestY);
       }
       updateDropMarker(latestX, latestY);
@@ -1420,6 +1337,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           /* ignore */
         }
         beginDrag(img, "resize", event.clientX, event.clientY);
+        handle.onpointermove = onPointerMove;
+        handle.onpointerup = onPointerUp;
+        handle.onpointercancel = onPointerUp;
       };
     };
 
@@ -1519,7 +1439,6 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         );
         ghostHost.appendChild(ghostImg);
         doc.body.appendChild(ghostHost);
-        ensureDropChrome();
       }
     };
 
@@ -1530,7 +1449,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       latestY = event.clientY;
       if (dragMode === "move" && ghostHost) {
         const moved =
-          dragArmed || Math.hypot(latestX - startX, latestY - startY) >= 3;
+          dragArmed || Math.hypot(latestX - startX, latestY - startY) >= 2;
         if (moved) {
           if (!dragArmed) {
             dragArmed = true;
@@ -1546,7 +1465,6 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             selectedImg.style.opacity = "0.28";
             selectedImg.style.filter = "grayscale(0.2)";
             selectedImg.style.cursor = "grabbing";
-            ensureDropChrome();
           }
           moveGhost(latestX, latestY);
           // Update the placement line on every move so it never lags/hides.
@@ -1564,23 +1482,19 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         doc.defaultView.cancelAnimationFrame(rafId);
       }
       rafId = 0;
+      if (selectedImg) {
+        selectedImg.onpointermove = null;
+        selectedImg.onpointerup = null;
+        selectedImg.onpointercancel = null;
+      }
       ghostHost?.remove();
       ghostHost = null;
-      if (dropLine) {
-        hideOffscreen(dropLine);
-        dropLine.remove();
-        dropLine = null;
-      }
-      if (dropPreview) {
-        hideOffscreen(dropPreview);
-        dropPreview.remove();
-        dropPreview = null;
-      }
-      if (dropLabel) {
-        hideOffscreen(dropLabel);
-        dropLabel.remove();
-        dropLabel = null;
-      }
+      dropLine?.remove();
+      dropLine = null;
+      dropPreview?.remove();
+      dropPreview = null;
+      dropLabel?.remove();
+      dropLabel = null;
     };
 
     const onPointerUp = () => {
@@ -1590,29 +1504,42 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         dragArmed = false;
         return;
       }
+      // Guard against img + document both receiving the same pointerup.
       const img = selectedImg;
+      const mode = dragMode;
+      const armed = dragArmed;
+      dragMode = null;
+      dragArmed = false;
+      img.onpointermove = null;
+      img.onpointerup = null;
+      img.onpointercancel = null;
       img.style.opacity = originOpacity;
       img.style.filter = originFilter;
       img.style.cursor = "grab";
 
-      if (dragMode === "move" && dragArmed) {
+      if (mode === "move" && armed) {
         const side =
           lastDropSide ?? resolveFloatSide(mainEl, startWidth, lastClientX);
-        const before =
-          lastDropBefore !== undefined
-            ? lastDropBefore
-            : findFlowInsertBefore(mainEl, lastClientY, img);
-        if (before && before.parentNode === mainEl) {
-          mainEl.insertBefore(img, before);
+        // Prefer the visible flow line as the drop anchor.
+        if (dropLine?.parentNode === mainEl) {
+          mainEl.insertBefore(img, dropLine);
         } else {
-          mainEl.appendChild(img);
+          const before =
+            lastDropBefore !== undefined
+              ? lastDropBefore
+              : findFlowInsertBefore(mainEl, lastClientY, img);
+          if (before && before.parentNode === mainEl) {
+            mainEl.insertBefore(img, before);
+          } else {
+            mainEl.appendChild(img);
+          }
         }
         placeImageInFlow(img, mainEl, {
           width: startWidth,
           side,
           wrap: "below",
         });
-      } else if (dragMode === "resize") {
+      } else if (mode === "resize") {
         const width = Math.round(
           parsePx(img.style.width) || startWidth || 320,
         );
@@ -1634,8 +1561,6 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       img.style.outline = "2px solid #017e84";
       img.style.outlineOffset = "2px";
       img.style.cursor = "grab";
-      dragMode = null;
-      dragArmed = false;
       setBodyDirty(true);
       placeChrome(img);
       resizePreview();
@@ -1693,14 +1618,18 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         if (event.button !== 0) return;
         event.preventDefault();
         event.stopPropagation();
+        selectImage(img);
+        dragArmed = false;
+        beginDrag(img, "move", event.clientX, event.clientY);
         try {
           img.setPointerCapture(event.pointerId);
         } catch {
           /* ignore */
         }
-        selectImage(img);
-        dragArmed = false;
-        beginDrag(img, "move", event.clientX, event.clientY);
+        // Listen on the image itself — capture retargets moves here, not always to doc.
+        img.onpointermove = onPointerMove;
+        img.onpointerup = onPointerUp;
+        img.onpointercancel = onPointerUp;
       };
       img.onclick = (event) => {
         event.preventDefault();

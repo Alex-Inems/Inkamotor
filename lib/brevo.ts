@@ -89,11 +89,25 @@ function brevo<T>(
             return;
           }
           if (status >= 400) {
+            let detail = text.slice(0, 400);
+            try {
+              const parsed = JSON.parse(text) as {
+                message?: string;
+                code?: string;
+              };
+              if (parsed.message?.trim()) {
+                detail = parsed.message.trim();
+              }
+            } catch {
+              /* keep raw text */
+            }
             reject(
               new Error(
                 status === 429
                   ? "Brevo is busy. Wait a minute and try again."
-                  : `Brevo ${status}: ${text.slice(0, 400)}`,
+                  : detail.startsWith("Brevo")
+                    ? detail
+                    : `Brevo ${status}: ${detail}`,
               ),
             );
             return;
@@ -688,20 +702,36 @@ export async function sendTransactionalEmail(input: {
     )
     .filter(Boolean);
 
+  const toName = input.toName?.trim();
+  const textContent = input.textContent?.trim();
+  const attachments = (input.attachments ?? []).filter(
+    (file) => file.name?.trim() && file.content?.trim(),
+  );
+
+  // Brevo returns "missing_parameter" if optional fields are sent empty
+  // (e.g. attachment: [] or name: ""). Only include what we actually have.
+  const body: Record<string, unknown> = {
+    sender: sender(),
+    to: [
+      toName
+        ? { email: input.toEmail, name: toName }
+        : { email: input.toEmail },
+    ],
+    subject: input.subject,
+    htmlContent: input.htmlContent,
+  };
+  if (textContent) body.textContent = textContent;
+  if (tags.length) body.tags = tags;
+  if (attachments.length) {
+    body.attachment = attachments.map((file) => ({
+      name: file.name.trim(),
+      content: file.content.trim(),
+    }));
+  }
+
   const result = await brevo<{ messageId?: string }>("/smtp/email", {
     method: "POST",
-    body: JSON.stringify({
-      sender: sender(),
-      to: [{ email: input.toEmail, name: input.toName }],
-      subject: input.subject,
-      htmlContent: input.htmlContent,
-      textContent: input.textContent,
-      tags: tags.length ? tags : undefined,
-      attachment: input.attachments?.map((file) => ({
-        name: file.name,
-        content: file.content,
-      })),
-    }),
+    body: JSON.stringify(body),
   });
   const messageId =
     typeof result?.messageId === "string" && result.messageId.trim()
