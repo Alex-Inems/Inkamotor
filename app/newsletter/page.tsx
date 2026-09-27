@@ -647,7 +647,7 @@ function NewsletterPageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name.trim() || form.subject.trim(),
-          subject: form.subject.trim(),
+      subject: form.subject.trim(),
           previewText: form.preview.trim(),
           htmlContent: html,
           emails: selectedEmails,
@@ -759,9 +759,9 @@ function NewsletterPageInner() {
             >
               {t("pages.newsletter.refresh")}
             </button>
-            <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
+          <button type="button" className={btnPrimary} onClick={() => setOpenAdd(true)}>
               {t("pages.newsletter.newCampaign")}
-            </button>
+          </button>
           </div>
         }
       />
@@ -849,8 +849,8 @@ function NewsletterPageInner() {
           ) : null}
           <Panel title={t("pages.newsletter.addSubscriber")}>
             <form className="grid gap-3 sm:grid-cols-[2fr_2fr_auto]" onSubmit={addSubscriber}>
-              <input
-                className={inputClass}
+        <input
+          className={inputClass}
                 type="email"
                 placeholder={t("pages.newsletter.emailPlaceholder")}
                 value={newSubscriber.email}
@@ -859,7 +859,7 @@ function NewsletterPageInner() {
                 }
               />
               <input
-                className={inputClass}
+          className={inputClass}
                 placeholder={t("pages.newsletter.nameOptional")}
                 value={newSubscriber.name}
                 onChange={(e) =>
@@ -888,20 +888,20 @@ function NewsletterPageInner() {
               <EmptyHint>
                 {t("pages.newsletter.noSubscribers")}
               </EmptyHint>
-            ) : (
-              <div className="table-wrap">
-                <table className="data-table">
-                  <thead>
-                    <tr>
+          ) : (
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
                       <th>{t("common.email")}</th>
                       <th>{t("common.name")}</th>
                       <th>{t("common.source")}</th>
                       <th>{t("common.status")}</th>
                       <th>{t("common.added")}</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
                     {subscribers.map((s) => (
                       <tr key={s.id}>
                         <td className="font-medium">{s.email}</td>
@@ -914,14 +914,14 @@ function NewsletterPageInner() {
                               : s.source === "manual"
                                 ? t("sources.manual")
                                 : t("common.dash")}
-                        </td>
-                        <td>
+                      </td>
+                      <td>
                           <StatusBadge tone={s.blocked ? "warning" : "success"}>
                             {s.blocked
                               ? t("pages.newsletter.unsubscribed")
                               : t("pages.newsletter.subscribed")}
-                          </StatusBadge>
-                        </td>
+                        </StatusBadge>
+                      </td>
                         <td className="whitespace-nowrap text-mute">
                           {s.addedAt
                             ? formatDate(s.addedAt.slice(0, 10), locale)
@@ -988,29 +988,29 @@ function NewsletterPageInner() {
                           <td>
                             <p className="font-medium">{c.name}</p>
                             <p className="text-xs text-mute">{c.subject}</p>
-                          </td>
-                          <td>
+                      </td>
+                      <td>
                             <StatusBadge tone={tone(c.status)}>{t(`status.${c.status}`)}</StatusBadge>
-                          </td>
+                      </td>
                           <td>{formatNumber(c.recipients, false, locale)}</td>
                           <td>{formatPercent(openRate(c))}</td>
                           <td>{formatPercent(clickRate(c))}</td>
-                          <td className="whitespace-nowrap text-mute">
+                      <td className="whitespace-nowrap text-mute">
                             {c.sentAt
                               ? formatDate(c.sentAt.slice(0, 10), locale)
                               : c.scheduledAt
                                 ? formatDate(c.scheduledAt.slice(0, 10), locale)
                                 : t("common.dash")}
-                          </td>
+                      </td>
                           <td className="whitespace-nowrap">
                             <div className="flex flex-wrap justify-end gap-1">
-                              <button
-                                type="button"
-                                className={btnGhost}
+                        <button
+                          type="button"
+                          className={btnGhost}
                                 onClick={() => setSelected(c)}
-                              >
+                        >
                                 {t("common.open")}
-                              </button>
+                        </button>
                               <button
                                 type="button"
                                 className={`${btnGhost} text-pink`}
@@ -1023,15 +1023,15 @@ function NewsletterPageInner() {
                                 {t("pages.newsletter.deleteCampaign")}
                               </button>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Panel>
-          </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+      </div>
         </>
       ) : null}
 
@@ -1063,8 +1063,8 @@ function NewsletterPageInner() {
             <>
               <Field label={t("pages.newsletter.template")}>
                 <div className="flex flex-wrap gap-2">
-                  <select
-                    className={inputClass}
+            <select
+              className={inputClass}
                     value={templateId}
                     onChange={(e) => applyTemplate(e.target.value)}
                   >
@@ -1075,7 +1075,7 @@ function NewsletterPageInner() {
                         {tpl.builtin ? ` · ${t("pages.newsletter.builtin")}` : ""}
                       </option>
                     ))}
-                  </select>
+            </select>
                   <button type="button" className={btnGhost} onClick={() => void saveTemplate()}>
                     {templateId &&
                     !templates.find((tpl) => tpl.id === templateId)?.builtin
@@ -1104,38 +1104,38 @@ function NewsletterPageInner() {
                     </button>
                   ) : null}
                 </div>
-              </Field>
+          </Field>
               <Field label={t("pages.newsletter.internalName")}>
-                <input
-                  className={inputClass}
+              <input
+                className={inputClass}
                   value={form.name}
                   onChange={(e) => {
                     setTemplateDirty(true);
                     setForm({ ...form, name: e.target.value });
                   }}
                   placeholder={t("pages.newsletter.namePlaceholder")}
-                />
-              </Field>
+              />
+            </Field>
               <Field label={t("common.subject")}>
-                <input
-                  className={inputClass}
+            <input
+              className={inputClass}
                   value={form.subject}
                   onChange={(e) => {
                     setTemplateDirty(true);
                     setForm({ ...form, subject: e.target.value });
                   }}
-                />
-              </Field>
+            />
+          </Field>
               <Field label={t("pages.newsletter.previewText")}>
                 <input
                   className={inputClass}
-                  value={form.preview}
+                value={form.preview}
                   onChange={(e) => {
                     setTemplateDirty(true);
                     setForm({ ...form, preview: e.target.value });
                   }}
-                />
-              </Field>
+              />
+            </Field>
               <Field label={t("pages.newsletter.body")}>
                 <HtmlEditor
                   html={form.html}
@@ -1169,7 +1169,7 @@ function NewsletterPageInner() {
                     />
                     {t("pages.newsletter.scheduleOption")}
                   </label>
-                </div>
+          </div>
                 {when === "later" ? (
                   <input
                     type="datetime-local"
@@ -1266,8 +1266,8 @@ function NewsletterPageInner() {
                       return (
                         <li key={s.id} className="border-b border-line last:border-b-0">
                           <label className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-ash/50">
-                            <input
-                              type="checkbox"
+            <input
+              type="checkbox"
                               className="mt-1"
                               checked={checked}
                               onChange={() => toggleEmail(s.email)}
@@ -1294,7 +1294,7 @@ function NewsletterPageInner() {
                                 </span>
                               ) : null}
                             </span>
-                          </label>
+          </label>
                         </li>
                       );
                     })}
@@ -1329,20 +1329,20 @@ function NewsletterPageInner() {
                     : when === "later"
                       ? t("pages.newsletter.scheduleSend")
                       : t("pages.newsletter.sendNow")}
-                </button>
+            </button>
                 {multiDay ? (
                   <span className="text-xs text-mute">
                     {t("pages.newsletter.sendOverDays", { days: daysNeeded })}
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  className={btnSecondary}
+            <button
+              type="button"
+              className={btnSecondary}
                   onClick={closeComposer}
-                >
+            >
                   {t("common.cancel")}
-                </button>
-              </div>
+            </button>
+          </div>
             </>
           )}
         </form>
@@ -1379,17 +1379,17 @@ function NewsletterPageInner() {
               <p className="text-mute">{selected.preview}</p>
             ) : null}
             <div className="pt-2">
-              <button
-                type="button"
+                  <button
+                    type="button"
                 className={`${btnGhost} text-pink`}
-                onClick={() => {
+                    onClick={() => {
                   setDeleteNotice(null);
                   setPendingDelete(selected);
                   setSelected(null);
                 }}
               >
                 {t("pages.newsletter.deleteCampaign")}
-              </button>
+                  </button>
             </div>
           </div>
         ) : null}
@@ -1415,8 +1415,8 @@ function NewsletterPageInner() {
               </FormNotice>
             )}
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
+                <button
+                  type="button"
                 className={`${btnPrimary} bg-wine hover:bg-wine/90`}
                 disabled={deleting}
                 onClick={() => void confirmDelete()}
@@ -1424,15 +1424,15 @@ function NewsletterPageInner() {
                 {deleting
                   ? t("common.deleting")
                   : t("pages.newsletter.deleteCampaign")}
-              </button>
-              <button
-                type="button"
-                className={btnSecondary}
+                </button>
+                <button
+                  type="button"
+                  className={btnSecondary}
                 disabled={deleting}
                 onClick={() => setPendingDelete(null)}
               >
                 {t("common.cancel")}
-              </button>
+                </button>
             </div>
           </div>
         ) : null}

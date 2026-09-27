@@ -463,8 +463,8 @@ export default function LeadsPage() {
               aria-label={t("pages.leads.viewMode")}
               className="flex border border-line"
             >
-              <button
-                type="button"
+            <button
+              type="button"
                 aria-pressed={view === "kanban"}
                 className={`min-h-11 px-3 text-xs font-semibold uppercase tracking-[0.08em] ${
                   view === "kanban"
@@ -474,9 +474,9 @@ export default function LeadsPage() {
                 onClick={() => setView("kanban")}
               >
                 {t("pages.leads.kanban")}
-              </button>
-              <button
-                type="button"
+            </button>
+            <button
+              type="button"
                 aria-pressed={view === "list"}
                 className={`min-h-11 px-3 text-xs font-semibold uppercase tracking-[0.08em] ${
                   view === "list"
@@ -486,28 +486,28 @@ export default function LeadsPage() {
                 onClick={() => setView("list")}
               >
                 {t("pages.leads.list")}
-              </button>
-            </div>
-            <button
-              type="button"
+            </button>
+                  </div>
+                <button
+                  type="button"
               className={btnSecondary}
               disabled={tags.length === 0}
               onClick={() => setBulkQuoteOpen(true)}
             >
               {t("pages.sales.bulkQuoteTitle")}
-            </button>
-            <button
-              type="button"
+                </button>
+                  <button
+                    type="button"
               className={btnPrimary}
-              onClick={() => {
+                    onClick={() => {
                 setSelectedId(null);
                 setQuickStage("new");
                 setAdding(true);
               }}
             >
               {t("pages.leads.addLead")}
-            </button>
-          </div>
+                  </button>
+                  </div>
         }
       />
 
@@ -519,8 +519,8 @@ export default function LeadsPage() {
           onChange={(e) => setDraft(e.target.value)}
         />
         {view === "list" ? (
-          <select
-            className={inputClass}
+              <select
+                className={inputClass}
             value={stage}
             onChange={(e) => {
               setStage(e.target.value as LeadStatus | "all");
@@ -531,14 +531,14 @@ export default function LeadsPage() {
             {pipeline.map((s) => (
               <option key={s.id} value={s.id}>
                 {stageLabel(s.id)}
-              </option>
-            ))}
-          </select>
+                  </option>
+                ))}
+              </select>
         ) : (
           <div className="hidden lg:block" />
         )}
-        <select
-          className={inputClass}
+              <select
+                className={inputClass}
           value={tag}
           onChange={(e) => {
             setTag(e.target.value);
@@ -549,11 +549,11 @@ export default function LeadsPage() {
           {tags.map((name) => (
             <option key={name} value={name}>
               {name}
-            </option>
-          ))}
-        </select>
-        <select
-          className={inputClass}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={inputClass}
           value={country}
           onChange={(e) => {
             setCountry(e.target.value);
@@ -564,9 +564,9 @@ export default function LeadsPage() {
           {countries.map((name) => (
             <option key={name} value={name}>
               {name}
-            </option>
-          ))}
-        </select>
+                  </option>
+                ))}
+              </select>
         <select
           className={`${inputClass} col-span-2 lg:col-span-1`}
           value={kind}
@@ -579,7 +579,7 @@ export default function LeadsPage() {
           <option value="person">{t("pages.leads.person")}</option>
           <option value="company">{t("pages.leads.company")}</option>
         </select>
-      </div>
+          </div>
 
       {view === "kanban" ? (
         <div className="mt-4">
@@ -606,7 +606,7 @@ export default function LeadsPage() {
                   const cards = byStage[status] ?? [];
                   const isDropTarget = dropStage === status;
                   const renaming = editingStageId === status;
-                  return (
+                return (
                     <section
                       key={status}
                       className={`flex shrink-0 flex-col border border-line bg-panel ${
@@ -641,10 +641,10 @@ export default function LeadsPage() {
                           >
                             <span className="text-[10px] font-bold">
                               {stageCounts[status] ?? 0}
-                            </span>
+                              </span>
                             <span className="origin-center rotate-180 text-[11px] font-semibold uppercase tracking-[0.12em] [writing-mode:vertical-rl]">
                               {stageLabelShort(status)}
-                            </span>
+                              </span>
                           </button>
                         ) : (
                           <>
@@ -682,15 +682,15 @@ export default function LeadsPage() {
                                   n: formatNumber(stageCounts[status] ?? 0, false, locale),
                                 })}
                               </p>
-                            </div>
-                            <button
-                              type="button"
+                          </div>
+                        <button
+                          type="button"
                               className={btnGhost}
                               aria-label={t("pages.leads.quickAdd")}
                               onClick={() => openQuickAdd(status)}
-                            >
+                        >
                               +
-                            </button>
+                        </button>
                             <button
                               type="button"
                               className={btnGhost}
@@ -727,7 +727,7 @@ export default function LeadsPage() {
                               />
                             ))
                           )}
-                        </div>
+          </div>
                       ) : null}
                     </section>
                   );
@@ -737,7 +737,7 @@ export default function LeadsPage() {
                     {addingColumn ? (
                       <>
                         <input
-                          className={inputClass}
+              className={inputClass}
                           value={newColumnLabel}
                           autoFocus
                           placeholder={t("pages.leads.columnName")}
@@ -761,36 +761,36 @@ export default function LeadsPage() {
                           >
                             {t("pages.leads.addColumn")}
                           </button>
-                          <button
-                            type="button"
-                            className={btnSecondary}
+                        <button
+                          type="button"
+                          className={btnSecondary}
                             onClick={() => {
                               setAddingColumn(false);
                               setNewColumnLabel("");
                             }}
-                          >
+                        >
                             {t("common.cancel")}
-                          </button>
+                        </button>
                         </div>
                       </>
                     ) : (
-                      <button
-                        type="button"
+                          <button
+                            type="button"
                         className={`${btnSecondary} w-full`}
-                        onClick={() => {
+                            onClick={() => {
                           setAddingColumn(true);
                           setEditingStageId(null);
-                        }}
-                      >
+                            }}
+                          >
                         {t("pages.leads.addColumn")}
-                      </button>
+                          </button>
                     )}
-                  </div>
+                      </div>
                 </section>
-              </div>
+                    </div>
             </>
-          )}
-        </div>
+            )}
+          </div>
       ) : (
         <div className="mt-4 border border-line bg-panel">
           <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
@@ -905,9 +905,9 @@ export default function LeadsPage() {
                                     className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sand"
                                   >
                                     {tag}
-                                  </span>
+                        </span>
                                 ))}
-                              </span>
+                        </span>
                             ) : (
                               "—"
                             )}
@@ -932,7 +932,7 @@ export default function LeadsPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                      </div>
                 <div className="mt-4 flex flex-col gap-3 text-sm text-mute sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                   <p>
                     {t("pages.leads.pageOf", {
@@ -942,28 +942,28 @@ export default function LeadsPage() {
                     })}
                   </p>
                   <div className="grid grid-cols-2 gap-2 sm:flex">
-                    <button
-                      type="button"
+                        <button
+                          type="button"
                       className={btnSecondary}
                       disabled={page === 0}
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    >
+                        >
                       {t("common.back")}
-                    </button>
-                    <button
-                      type="button"
-                      className={btnSecondary}
+                        </button>
+                      <button
+                        type="button"
+                        className={btnSecondary}
                       disabled={page >= pageCount - 1}
                       onClick={() => setPage((p) => p + 1)}
-                    >
+                      >
                       {t("pages.leads.nextPage")}
-                    </button>
+                      </button>
+                    </div>
                   </div>
-                </div>
               </>
             )}
           </div>
-        </div>
+          </div>
       )}
 
       <Modal
@@ -991,11 +991,11 @@ export default function LeadsPage() {
                     >
                       {t("pages.leads.openChat")}
                     </Link>
-                  ) : null}
+      ) : null}
                   {!booked ? (
-                    <button
-                      type="button"
-                      className={btnSecondary}
+            <button
+              type="button"
+              className={btnSecondary}
                       onClick={() =>
                         void addSale(
                           quickSaleInput({
@@ -1014,7 +1014,7 @@ export default function LeadsPage() {
                       }
                     >
                       {t("pages.leads.createSale")}
-                    </button>
+            </button>
                   ) : null}
                 </>
               ) : null
@@ -1039,7 +1039,7 @@ export default function LeadsPage() {
         onClose={() => setBulkQuoteOpen(false)}
         onDone={() => setBulkQuoteOpen(false)}
       />
-    </div>
+            </div>
   );
 }
 
@@ -1084,10 +1084,10 @@ function KanbanCard({
         dragging || busy ? "opacity-50" : ""
       } ${busy ? "" : "cursor-grab active:cursor-grabbing"}`}
     >
-      <button
-        type="button"
+              <button
+                type="button"
         disabled={busy}
-        onClick={() => {
+                onClick={() => {
           if (suppressClick.current) {
             suppressClick.current = false;
             return;
@@ -1111,7 +1111,7 @@ function KanbanCard({
                 </p>
                 {lead.company && lead.company !== lead.name ? (
                   <p className="mt-0.5 truncate text-xs text-mute">{lead.company}</p>
-                ) : null}
+              ) : null}
               </div>
               {lead.value > 0 ? (
                 <p className="shrink-0 text-xs font-semibold text-gold">
@@ -1123,7 +1123,7 @@ function KanbanCard({
               <p className="mt-2 line-clamp-2 text-[11px] leading-snug text-sand">
                 {activity}
               </p>
-            ) : null}
+        ) : null}
             {tags.length ? (
               <div className="mt-2 flex flex-wrap gap-1">
                 {tags.map((tag) => (
@@ -1132,12 +1132,12 @@ function KanbanCard({
                     className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-mute"
                   >
                     {tag}
-                  </span>
+              </span>
                 ))}
-              </div>
-            ) : null}
+            </div>
+              ) : null}
+            </div>
           </div>
-        </div>
       </button>
       <div className="flex items-center justify-between gap-2 px-3 pb-2.5 pl-[3.25rem]">
         <PriorityStars
@@ -1152,7 +1152,7 @@ function KanbanCard({
           <span>
             {formatDate((details.updated || lead.lastContact).slice(0, 10), locale)}
           </span>
-        </div>
+    </div>
       </div>
     </article>
   );
@@ -1244,7 +1244,7 @@ function ListCard({
                 {tag}
               </span>
             ))}
-          </div>
+        </div>
         ) : null}
       </button>
     </article>
@@ -1264,14 +1264,14 @@ function SortHead({
 }) {
   return (
     <th>
-      <button
-        type="button"
+            <button
+              type="button"
         onClick={onClick}
         className={`uppercase tracking-[0.12em] ${active ? "text-gold" : "text-mute"}`}
-      >
+            >
         {label}
         {active ? (dir === "asc" ? " ↑" : " ↓") : ""}
-      </button>
+            </button>
     </th>
   );
 }
