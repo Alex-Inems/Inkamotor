@@ -13,15 +13,24 @@ export type DeliveryEventInput = {
   date?: string | null;
 };
 
+type DeliveryRow = {
+  id: string | number;
+  delivery_status?: string | null;
+  delivered_at?: string | null;
+  opened_at?: string | null;
+  provider_message_id?: string | null;
+};
+
 function idVariants(id: string): string[] {
   const bare = id.replace(/^<|>$/g, "").trim();
-  return [...new Set([id, bare, `<${bare}>`].filter(Boolean))];
+  // Prefer bare id first — that's how we store Brevo messageIds on send.
+  return [...new Set([bare, id, `<${bare}>`].filter(Boolean))];
 }
 
 async function findRow(
   table: "mail_messages" | "mail_replies",
   providerMessageId: string,
-) {
+): Promise<DeliveryRow | null> {
   const supabase = getSupabase();
   for (const candidate of idVariants(providerMessageId)) {
     const { data, error } = await supabase
@@ -34,20 +43,17 @@ async function findRow(
       if (isMissingColumnError(error)) return null;
       throw new Error(error.message);
     }
-    if (data) return data;
+    if (data) return data as DeliveryRow;
   }
   return null;
 }
 
-async function patchTable(
+async function patchRow(
   table: "mail_messages" | "mail_replies",
-  providerMessageId: string,
+  data: DeliveryRow,
   next: DeliveryStatus,
   at: string,
 ): Promise<boolean> {
-  const data = await findRow(table, providerMessageId);
-  if (!data) return false;
-
   const current =
     typeof data.delivery_status === "string"
       ? normalizeDeliveryStatus(data.delivery_status)
@@ -79,28 +85,45 @@ async function patchTable(
 /** Map a Brevo transactional event onto mail_messages + mail_replies. */
 export async function applyDeliveryEvent(
   input: DeliveryEventInput,
-): Promise<{ updated: boolean; status: DeliveryStatus | null }> {
+): Promise<{
+  updated: boolean;
+  found: boolean;
+  status: DeliveryStatus | null;
+}> {
   if (missingSupabaseEnv().length > 0) {
-    return { updated: false, status: null };
+    return { updated: false, found: false, status: null };
   }
 
   const providerMessageId = normalizeProviderMessageId(input.providerMessageId);
   const status = normalizeDeliveryStatus(input.event);
   if (!providerMessageId || !status) {
-    return { updated: false, status: null };
+    return { updated: false, found: false, status: null };
   }
 
   const at = input.date?.trim()
     ? new Date(input.date).toISOString()
     : new Date().toISOString();
   if (Number.isNaN(Date.parse(at))) {
-    return { updated: false, status };
+    return { updated: false, found: false, status };
+  }
+
+  const [messageRow, replyRow] = await Promise.all([
+    findRow("mail_messages", providerMessageId),
+    findRow("mail_replies", providerMessageId),
+  ]);
+  const found = !!(messageRow || replyRow);
+  if (!found) {
+    return { updated: false, found: false, status };
   }
 
   const [messages, replies] = await Promise.all([
-    patchTable("mail_messages", providerMessageId, status, at),
-    patchTable("mail_replies", providerMessageId, status, at),
+    messageRow
+      ? patchRow("mail_messages", messageRow, status, at)
+      : Promise.resolve(false),
+    replyRow
+      ? patchRow("mail_replies", replyRow, status, at)
+      : Promise.resolve(false),
   ]);
 
-  return { updated: messages || replies, status };
+  return { updated: messages || replies, found: true, status };
 }

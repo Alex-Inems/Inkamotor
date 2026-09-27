@@ -6,11 +6,23 @@ import {
   missingImapEnv,
   syncImapInbox,
 } from "@/lib/mail/imap";
+import { syncDeliveryFromBrevo } from "@/lib/mail/sync-delivery-from-brevo";
 import { translateMailList } from "@/lib/mail/translate-mailbox";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+async function pullDelivery(email?: string) {
+  try {
+    await syncDeliveryFromBrevo({
+      email: email || null,
+      limit: email ? 40 : 30,
+    });
+  } catch {
+    /* don't block the mailbox if Brevo stats are slow */
+  }
+}
 
 export async function GET(req: Request) {
   const missing = missingSupabaseEnv();
@@ -25,6 +37,7 @@ export async function GET(req: Request) {
   try {
     const locale = localeFromRequest(req);
     const email = new URL(req.url).searchParams.get("email")?.trim() || "";
+    await pullDelivery(email);
     const messages = email
       ? await listMailMessagesForEmail(email)
       : await listMailMessages();
@@ -57,6 +70,7 @@ export async function POST(req: Request) {
   try {
     const locale = localeFromRequest(req);
     const result = await syncImapInbox();
+    await pullDelivery();
     const messages = await listMailMessages();
     const localized = await translateMailList(messages, locale);
     return Response.json({

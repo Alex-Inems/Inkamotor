@@ -785,7 +785,44 @@ type SmtpEvent = {
   subject?: string;
   tag?: string;
   tags?: string[];
+  messageId?: string;
 };
+
+/** Recent transactional SMTP events (delivered / opened / …) from Brevo. */
+export async function listSmtpEmailEvents(opts?: {
+  limit?: number;
+  email?: string;
+  days?: number;
+}): Promise<
+  {
+    email?: string;
+    event?: string;
+    date?: string;
+    subject?: string;
+    messageId?: string;
+  }[]
+> {
+  const limit = Math.min(Math.max(opts?.limit ?? 80, 1), 500);
+  const days = Math.min(Math.max(opts?.days ?? 7, 1), 90);
+  const params = new URLSearchParams({
+    limit: String(limit),
+    sort: "desc",
+    days: String(days),
+  });
+  if (opts?.email?.trim()) {
+    params.set("email", opts.email.trim().toLowerCase());
+  }
+  const data = await brevo<{ events?: SmtpEvent[] }>(
+    `/smtp/statistics/events?${params.toString()}`,
+  );
+  return (data.events ?? []).map((row) => ({
+    email: row.email,
+    event: row.event,
+    date: row.date,
+    subject: row.subject,
+    messageId: row.messageId,
+  }));
+}
 
 export async function listNewsletterOutbox() {
   const data = await brevo<{ events?: SmtpEvent[] }>(

@@ -26,9 +26,9 @@ export function normalizeDeliveryStatus(
   if (
     raw === "opened" ||
     raw === "uniqueopened" ||
-    raw === "unique_opened" ||
     raw === "firstopening" ||
-    raw === "proxyopen"
+    raw === "proxyopen" ||
+    raw === "loadedbyproxy"
   ) {
     return "opened";
   }
@@ -36,6 +36,9 @@ export function normalizeDeliveryStatus(
     raw === "hardbounce" ||
     raw === "softbounce" ||
     raw === "bounce" ||
+    raw === "bounces" ||
+    raw === "hardbounces" ||
+    raw === "softbounces" ||
     raw === "blocked" ||
     raw === "invalid"
   ) {

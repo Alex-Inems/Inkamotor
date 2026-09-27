@@ -246,6 +246,7 @@ export default function InboxPage() {
         setMail((json as { messages: MailMessage[] }).messages ?? []);
         setSyncedAt(new Date().toISOString());
         void loadStatus();
+        void loadReplies();
         void refreshCrm();
         if (!silent && ((json as { synced?: number }).synced ?? 0) === 0) {
           pushToast(t("pages.inbox.noNew"));
@@ -254,7 +255,7 @@ export default function InboxPage() {
         setSyncing(false);
       }
     },
-    [loadStatus, pushToast, refreshCrm, t, locale],
+    [loadReplies, loadStatus, pushToast, refreshCrm, t, locale],
   );
 
   useEffect(() => {
@@ -263,6 +264,26 @@ export default function InboxPage() {
     void loadReplies();
     loadMail().finally(() => setLoading(false));
   }, [loadMail, loadReplies, loadStatus]);
+
+  // Refresh delivery icons without waiting for a full IMAP sync.
+  useEffect(() => {
+    let cancelled = false;
+    const run = () => {
+      if (cancelled || document.visibilityState === "hidden") return;
+      void loadReplies();
+      void loadMail();
+    };
+    const timer = setInterval(run, 20_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [loadMail, loadReplies]);
 
   useEffect(() => {
     if (!conn?.namecheap.ready) return;

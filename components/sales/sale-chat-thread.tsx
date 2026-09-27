@@ -140,7 +140,7 @@ export function SaleChatPanel({
     if (!canLoad) return;
     const id = window.setInterval(() => {
       void loadConversation({ silent: true });
-    }, 20_000);
+    }, 15_000);
     return () => window.clearInterval(id);
   }, [canLoad, loadConversation]);
 

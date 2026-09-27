@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { localeFromRequest } from "@/lib/i18n/request-locale";
 import { listMailReplies, listMailRepliesForEmail } from "@/lib/mail/replies";
+import { syncDeliveryFromBrevo } from "@/lib/mail/sync-delivery-from-brevo";
 import { translateReplyList } from "@/lib/mail/translate-mailbox";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
 
@@ -20,6 +21,17 @@ export async function GET(req: Request) {
   try {
     const locale = localeFromRequest(req);
     const email = new URL(req.url).searchParams.get("email")?.trim() || "";
+
+    // Pull delivery/open events from Brevo so status works without a webhook.
+    try {
+      await syncDeliveryFromBrevo({
+        email: email || null,
+        limit: email ? 60 : 40,
+      });
+    } catch {
+      /* don't block the thread if Brevo stats are slow */
+    }
+
     const replies = email
       ? await listMailRepliesForEmail(email)
       : await listMailReplies();
