@@ -2116,7 +2116,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           previewText: saved.preview,
           htmlContent: saved.html,
           emails,
-          scheduledAt,
+          scheduledAt: scheduleAt,
         }),
       });
       const json = (await res.json()) as {
