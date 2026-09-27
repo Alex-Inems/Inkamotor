@@ -163,7 +163,7 @@ function PdfCanvasPreview({
       {error ? (
         <p className="px-3 py-3 text-center text-xs text-pink">{error}</p>
       ) : null}
-      <div ref={hostRef} className="max-h-[20rem] overflow-y-auto p-2" />
+      <div ref={hostRef} className="max-h-[14rem] overflow-y-auto p-1.5" />
       {pageCount > 3 ? (
         <p className="px-3 pb-2 text-center text-[11px] text-mute">
           {pageCount} pages · showing first 3
@@ -235,12 +235,12 @@ function DocumentEmbedPreview({
         data={url}
         type={mimeType || "application/pdf"}
         aria-label={fileName}
-        className="block h-[20rem] w-full bg-white"
+        className="block h-[14rem] w-full bg-white"
       >
         <iframe
           src={url}
           title={fileName}
-          className="block h-[20rem] w-full border-0 bg-white"
+          className="block h-[14rem] w-full border-0 bg-white"
         />
       </object>
     </div>
@@ -262,7 +262,7 @@ export function MessageAttachments({
   const light = tone === "light";
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-1.5 space-y-1.5">
       {visible.map((file) => {
         const previewUrl = `/api/inbox/attachments/${file.id}`;
         const downloadUrl = `${previewUrl}?download=1`;
@@ -323,7 +323,7 @@ export function MessageAttachments({
               <img
                 src={previewUrl}
                 alt={file.fileName}
-                className="max-h-64 w-full bg-white object-contain"
+                className="max-h-48 w-full bg-white object-contain"
                 loading="lazy"
               />
             ) : text ? (
