@@ -74,7 +74,9 @@ create table if not exists mail_replies (
       )
     ),
   delivered_at timestamptz,
-  opened_at timestamptz
+  opened_at timestamptz,
+  sent_by_email text,
+  sent_by_name text
 );
 
 create index if not exists mail_replies_sent_idx

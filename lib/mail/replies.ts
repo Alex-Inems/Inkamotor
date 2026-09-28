@@ -1,3 +1,4 @@
+import type { ActorAttribution } from "@/lib/auth-actor";
 import { listAttachmentsByReplyIds } from "@/lib/mail/attachments";
 import {
   normalizeDeliveryStatus,
@@ -20,6 +21,8 @@ export type MailReply = {
   deliveryStatus: DeliveryStatus | null;
   deliveredAt: string | null;
   openedAt: string | null;
+  sentByEmail: string | null;
+  sentByName: string | null;
   attachments: MailReplyAttachment[];
 };
 
@@ -36,7 +39,9 @@ const UUID_RE =
 const REPLY_SELECT_BASE =
   "id, to_name, to_email, subject, body_text, related_mail_id, related_inquiry_id, sent_at";
 
-const REPLY_SELECT = `${REPLY_SELECT_BASE}, provider_message_id, delivery_status, delivered_at, opened_at`;
+const REPLY_SELECT_DELIVERY = `${REPLY_SELECT_BASE}, provider_message_id, delivery_status, delivered_at, opened_at`;
+
+const REPLY_SELECT_FULL = `${REPLY_SELECT_DELIVERY}, sent_by_email, sent_by_name`;
 
 function asUuid(value?: string | null): string | null {
   const v = value?.trim();
@@ -63,6 +68,8 @@ function mapRow(
     ),
     deliveredAt: (row.delivered_at as string) || null,
     openedAt: (row.opened_at as string) || null,
+    sentByEmail: (row.sent_by_email as string) || null,
+    sentByName: (row.sent_by_name as string) || null,
     attachments,
   };
 }
@@ -85,7 +92,11 @@ async function selectReplies(
     select: string,
   ) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
 ) {
-  const withDelivery = await build(REPLY_SELECT);
+  const withActor = await build(REPLY_SELECT_FULL);
+  if (!withActor.error) return withActor;
+  if (!isMissingColumnError(withActor.error)) return withActor;
+
+  const withDelivery = await build(REPLY_SELECT_DELIVERY);
   if (!withDelivery.error) return withDelivery;
   if (!isMissingColumnError(withDelivery.error)) return withDelivery;
   return build(REPLY_SELECT_BASE);
@@ -135,6 +146,7 @@ type SaveInput = {
   relatedInquiryId?: string | null;
   providerMessageId?: string | null;
   deliveryStatus?: DeliveryStatus | null;
+  actor?: ActorAttribution | null;
 };
 
 /**
@@ -158,6 +170,7 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
     "contact@inkamototours.com";
   const fromName = process.env.BREVO_SENDER_NAME?.trim() || "Inkamoto Tours";
   const preview = input.bodyText.replace(/\s+/g, " ").trim().slice(0, 240);
+  const actor = input.actor ?? null;
 
   const supabase = getSupabase();
   const basePayload = {
@@ -173,16 +186,25 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
     provider_message_id: providerMessageId,
     delivery_status: deliveryStatus,
   };
+  const actorPayload = actor
+    ? { sent_by_email: actor.email, sent_by_name: actor.name }
+    : {};
 
   async function insertReply(
     related: string | null,
-    withDelivery: boolean,
+    mode: "full" | "delivery" | "base",
   ) {
-    const payload = withDelivery
-      ? { ...basePayload, related_mail_id: related, ...deliveryPayload }
-      : { ...basePayload, related_mail_id: related };
-    // Keep select literal so Supabase types stay valid; delivery fields are
-    // already known from the insert payload.
+    const payload =
+      mode === "full"
+        ? {
+            ...basePayload,
+            related_mail_id: related,
+            ...deliveryPayload,
+            ...actorPayload,
+          }
+        : mode === "delivery"
+          ? { ...basePayload, related_mail_id: related, ...deliveryPayload }
+          : { ...basePayload, related_mail_id: related };
     return supabase
       .from("mail_replies")
       .insert(payload)
@@ -191,22 +213,30 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
   }
 
   let reply: MailReply | null = null;
-  let inserted = await insertReply(relatedMailId, true);
+  let inserted = await insertReply(relatedMailId, "full");
 
   if (inserted.error && isMissingColumnError(inserted.error)) {
-    inserted = await insertReply(relatedMailId, false);
+    inserted = await insertReply(relatedMailId, "delivery");
+  }
+  if (inserted.error && isMissingColumnError(inserted.error)) {
+    inserted = await insertReply(relatedMailId, "base");
   }
 
   if (inserted.error && relatedMailId) {
-    let retry = await insertReply(null, true);
+    let retry = await insertReply(null, "full");
     if (retry.error && isMissingColumnError(retry.error)) {
-      retry = await insertReply(null, false);
+      retry = await insertReply(null, "delivery");
+    }
+    if (retry.error && isMissingColumnError(retry.error)) {
+      retry = await insertReply(null, "base");
     }
     if (!retry.error && retry.data) {
       reply = mapRow({
         ...(retry.data as Record<string, unknown>),
         provider_message_id: providerMessageId,
         delivery_status: deliveryStatus,
+        sent_by_email: actor?.email ?? null,
+        sent_by_name: actor?.name ?? null,
       });
     }
   } else if (!inserted.error && inserted.data) {
@@ -214,6 +244,8 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
       ...(inserted.data as Record<string, unknown>),
       provider_message_id: providerMessageId,
       delivery_status: deliveryStatus,
+      sent_by_email: actor?.email ?? null,
+      sent_by_name: actor?.name ?? null,
     });
   }
 
@@ -269,6 +301,8 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
       deliveryStatus,
       deliveredAt: null,
       openedAt: null,
+      sentByEmail: actor?.email ?? null,
+      sentByName: actor?.name ?? null,
       attachments: [],
     }
   );

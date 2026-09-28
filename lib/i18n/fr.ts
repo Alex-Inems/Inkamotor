@@ -467,6 +467,7 @@ export const fr: Messages = {
       deliveryOpened: "Ouvert",
       deliveryBounced: "Rejeté",
       deliveryError: "Échec",
+      sentBy: "par {name}",
     },
     followUps: {
       title: "Relances",

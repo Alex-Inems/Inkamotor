@@ -1,4 +1,6 @@
 import { jsonError } from "@/lib/api";
+import { actorFromClaims } from "@/lib/auth-actor";
+import { getSessionClaims } from "@/lib/auth-request";
 import { missingBrevoEnv } from "@/lib/brevo";
 import { applyCrmMutation, getSaleById } from "@/lib/crm/repository";
 import { localeFromRequest } from "@/lib/i18n/request-locale";
@@ -56,6 +58,8 @@ export async function POST(request: Request) {
 
   const locale = localeFromRequest(request);
   const enriched = enrichSale(sale);
+  const claims = await getSessionClaims();
+  const actor = actorFromClaims(claims);
 
   try {
     const result = await sendSaleQuoteEmail({
@@ -63,14 +67,18 @@ export async function POST(request: Request) {
       locale,
       relatedInquiryId: sale.inquiryId,
       message: body.message?.trim() || null,
+      actor,
     });
 
     if (sale.status === "pending") {
-      await applyCrmMutation({
-        op: "updateSaleStatus",
-        id: saleId,
-        status: "sent",
-      });
+      await applyCrmMutation(
+        {
+          op: "updateSaleStatus",
+          id: saleId,
+          status: "sent",
+        },
+        claims,
+      );
     }
 
     return Response.json({

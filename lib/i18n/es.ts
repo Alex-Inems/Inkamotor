@@ -467,6 +467,7 @@ export const es: Messages = {
       deliveryOpened: "Abierto",
       deliveryBounced: "Rebotado",
       deliveryError: "Error",
+      sentBy: "por {name}",
     },
     followUps: {
       title: "Seguimientos",

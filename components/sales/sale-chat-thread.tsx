@@ -44,6 +44,8 @@ type MailReply = {
   deliveryStatus?: DeliveryStatus | null;
   deliveredAt?: string | null;
   openedAt?: string | null;
+  sentByEmail?: string | null;
+  sentByName?: string | null;
   attachments?: {
     id: string;
     fileName: string;

@@ -1,3 +1,4 @@
+import type { ActorAttribution } from "@/lib/auth-actor";
 import { sendTransactionalEmail } from "@/lib/brevo";
 import { type Sale } from "@/lib/demo-data";
 import { type Locale } from "@/lib/i18n";
@@ -40,6 +41,7 @@ export async function sendSaleQuoteEmail(input: {
   locale: Locale;
   relatedInquiryId?: string | null;
   message?: string | null;
+  actor?: ActorAttribution | null;
 }) {
   const { sale, locale } = input;
   const to = sale.email.trim();
@@ -83,6 +85,7 @@ export async function sendSaleQuoteEmail(input: {
       relatedInquiryId: input.relatedInquiryId ?? null,
       providerMessageId: messageId,
       deliveryStatus: "sent",
+      actor: input.actor,
     });
     replyId = reply.id;
 

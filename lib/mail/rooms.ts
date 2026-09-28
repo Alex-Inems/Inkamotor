@@ -51,6 +51,8 @@ export type ReplyItem = {
   deliveryStatus?: DeliveryStatus | null;
   deliveredAt?: string | null;
   openedAt?: string | null;
+  sentByEmail?: string | null;
+  sentByName?: string | null;
   attachments: ReplyAttachment[];
 };
 
@@ -66,6 +68,8 @@ export type RoomMessage = {
   deliveryStatus?: DeliveryStatus | null;
   deliveredAt?: string | null;
   openedAt?: string | null;
+  /** CRM user who sent (session) — internal only; clients always see Inkamoto. */
+  sentByName?: string | null;
   attachments?: ReplyAttachment[];
 };
 
@@ -268,12 +272,14 @@ export function groupMailRooms(input: {
       mine: true,
       at: r.sentAt,
       subject: r.subject,
-      authorName: "",
+      // Client-facing brand; personal name stays in sentByName for the team.
+      authorName: "Inkamoto Tours",
       clean: cleanBody(r.bodyText),
       raw: r.bodyText,
       deliveryStatus: r.deliveryStatus ?? null,
       deliveredAt: r.deliveredAt ?? null,
       openedAt: r.openedAt ?? null,
+      sentByName: r.sentByName?.trim() || null,
       attachments: r.attachments?.length ? r.attachments : undefined,
     });
   }

@@ -1,7 +1,15 @@
+import {
+  actorFromClaims,
+  resolveActorName,
+  resolveSalespersonName,
+  type ActorAttribution,
+} from "@/lib/auth-actor";
 import { resolveLeadCompany } from "@/lib/crm/contact-details";
 import { SALES_CURRENCY } from "@/lib/format";
 import { seedOdooProducts } from "@/lib/seed/odoo-products";
 import { enrichSale, saleBillableLines } from "@/lib/sale-quote";
+import { isMissingColumnError } from "@/lib/mail/schema-compat";
+import type { SessionClaims } from "@/lib/session";
 import { getSupabase } from "@/lib/supabase/server";
 import type { CrmMutation, CrmSnapshot } from "@/lib/crm/types";
 import {
@@ -27,6 +35,54 @@ import {
 export type { CrmMutation, CrmSnapshot } from "@/lib/crm/types";
 
 const PAGE = 1000;
+
+function createdByPayload(actor: ActorAttribution | null) {
+  if (!actor) return {};
+  return {
+    created_by_email: actor.email,
+    created_by_name: actor.name,
+  };
+}
+
+async function insertWithOptionalActor(
+  table: string,
+  row: Record<string, unknown>,
+  actor: ActorAttribution | null,
+) {
+  const sb = getSupabase();
+  // created_by_* columns are optional migrations — cast so typed client accepts them.
+  const withActor = { ...row, ...createdByPayload(actor) } as Record<
+    string,
+    unknown
+  >;
+  let result = await sb.from(table as "leads").insert(withActor as never);
+  if (result.error && isMissingColumnError(result.error) && actor) {
+    result = await sb.from(table as "leads").insert(row as never);
+  }
+  return result;
+}
+
+async function upsertWithOptionalActor(
+  table: string,
+  row: Record<string, unknown>,
+  actor: ActorAttribution | null,
+  onConflict: string,
+) {
+  const sb = getSupabase();
+  const withActor = { ...row, ...createdByPayload(actor) } as Record<
+    string,
+    unknown
+  >;
+  let result = await sb
+    .from(table as "leads")
+    .upsert(withActor as never, { onConflict });
+  if (result.error && isMissingColumnError(result.error) && actor) {
+    result = await sb
+      .from(table as "leads")
+      .upsert(row as never, { onConflict });
+  }
+  return result;
+}
 
 async function selectLeadsSlim(sb: ReturnType<typeof getSupabase>) {
   const page = 1000;
@@ -317,15 +373,20 @@ export async function loadCrmSnapshot(): Promise<CrmSnapshot> {
   };
 }
 
-export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapshot> {
+export async function applyCrmMutation(
+  mutation: CrmMutation,
+  claims?: SessionClaims | null,
+): Promise<CrmSnapshot> {
   const sb = getSupabase();
   const day = todayIso();
+  const actor = actorFromClaims(claims ?? null);
 
   switch (mutation.op) {
     case "addLead": {
       const email = mutation.input.email.trim().toLowerCase();
       const id = `ld_${email}`;
-      const { error } = await sb.from("leads").upsert(
+      const { error } = await upsertWithOptionalActor(
+        "leads",
         {
           id,
           name: mutation.input.name,
@@ -336,12 +397,13 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
           status: mutation.input.status,
           value: mutation.input.value,
           currency: "USD",
-          owner: mutation.input.owner,
+          owner: resolveActorName(mutation.input.owner, actor),
           created_at: day,
           last_contact: day,
           notes: mutation.input.notes,
         },
-        { onConflict: "id" },
+        actor,
+        "id",
       );
       if (error) throw new Error(error.message);
       break;
@@ -358,20 +420,24 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
       const snap = await loadCrmSnapshot();
       const id = `inv_${Date.now()}`;
       const number = nextInvoiceNumber(snap.invoices);
-      const { error } = await sb.from("invoices").insert({
-        id,
-        number,
-        client: mutation.input.client,
-        email: mutation.input.email.trim().toLowerCase(),
-        client_address: mutation.input.clientAddress || null,
-        status: mutation.input.sendNow ? "sent" : "draft",
-        issue_date: day,
-        due_date: mutation.input.dueDate,
-        paid_date: null,
-        currency: SALES_CURRENCY,
-        lines: mutation.input.lines,
-        notes: mutation.input.notes,
-      });
+      const { error } = await insertWithOptionalActor(
+        "invoices",
+        {
+          id,
+          number,
+          client: mutation.input.client,
+          email: mutation.input.email.trim().toLowerCase(),
+          client_address: mutation.input.clientAddress || null,
+          status: mutation.input.sendNow ? "sent" : "draft",
+          issue_date: day,
+          due_date: mutation.input.dueDate,
+          paid_date: null,
+          currency: SALES_CURRENCY,
+          lines: mutation.input.lines,
+          notes: mutation.input.notes,
+        },
+        actor,
+      );
       if (error) throw new Error(error.message);
       break;
     }
@@ -405,34 +471,46 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
       if (!inquiry || inquiry.lead_id) break;
       const leadId = `ld_${Date.now()}`;
       const fuId = `fu_${Date.now()}`;
-      const { error: leadErr } = await sb.from("leads").insert({
-        id: leadId,
-        name: inquiry.name,
-        email: String(inquiry.email).trim().toLowerCase(),
-        phone: "—",
-        company: inquiry.channel === "wholesale" ? inquiry.name : "Personal",
-        source: "website",
-        status: "new",
-        value: inquiry.channel === "wholesale" ? 2500 : 150,
-        currency: "USD",
-        owner: inquiry.owner ?? "Team",
-        created_at: day,
-        last_contact: day,
-        notes: `Converted from inkamototours.com (${inquiry.channel}): ${inquiry.subject}`,
-      });
+      const owner = resolveActorName(
+        typeof inquiry.owner === "string" ? inquiry.owner : null,
+        actor,
+      );
+      const { error: leadErr } = await insertWithOptionalActor(
+        "leads",
+        {
+          id: leadId,
+          name: inquiry.name,
+          email: String(inquiry.email).trim().toLowerCase(),
+          phone: "—",
+          company: inquiry.channel === "wholesale" ? inquiry.name : "Personal",
+          source: "website",
+          status: "new",
+          value: inquiry.channel === "wholesale" ? 2500 : 150,
+          currency: "USD",
+          owner,
+          created_at: day,
+          last_contact: day,
+          notes: `Converted from inkamototours.com (${inquiry.channel}): ${inquiry.subject}`,
+        },
+        actor,
+      );
       if (leadErr) throw new Error(leadErr.message);
-      const { error: fuErr } = await sb.from("follow_ups").insert({
-        id: fuId,
-        title: `Follow up with ${inquiry.name}`,
-        related_to: `${inquiry.name} · ${inquiry.subject}`,
-        related_type: "lead",
-        related_id: leadId,
-        due_at: day,
-        status: "open",
-        owner: inquiry.owner ?? "Team",
-        notes: `Auto-created from site inquiry ${inquiry.id}`,
-        created_at: day,
-      });
+      const { error: fuErr } = await insertWithOptionalActor(
+        "follow_ups",
+        {
+          id: fuId,
+          title: `Follow up with ${inquiry.name}`,
+          related_to: `${inquiry.name} · ${inquiry.subject}`,
+          related_type: "lead",
+          related_id: leadId,
+          due_at: day,
+          status: "open",
+          owner,
+          notes: `Auto-created from site inquiry ${inquiry.id}`,
+          created_at: day,
+        },
+        actor,
+      );
       if (fuErr) throw new Error(fuErr.message);
       const { error: upErr } = await sb
         .from("site_inquiries")
@@ -443,18 +521,22 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
     }
     case "addFollowUp": {
       const id = `fu_${Date.now()}`;
-      const { error } = await sb.from("follow_ups").insert({
-        id,
-        title: mutation.input.title,
-        related_to: mutation.input.relatedTo,
-        related_type: mutation.input.relatedType,
-        related_id: mutation.input.relatedId,
-        due_at: mutation.input.dueAt,
-        status: "open",
-        owner: mutation.input.owner,
-        notes: mutation.input.notes,
-        created_at: day,
-      });
+      const { error } = await insertWithOptionalActor(
+        "follow_ups",
+        {
+          id,
+          title: mutation.input.title,
+          related_to: mutation.input.relatedTo,
+          related_type: mutation.input.relatedType,
+          related_id: mutation.input.relatedId,
+          due_at: mutation.input.dueAt,
+          status: "open",
+          owner: resolveActorName(mutation.input.owner, actor),
+          notes: mutation.input.notes,
+          created_at: day,
+        },
+        actor,
+      );
       if (error) throw new Error(error.message);
       break;
     }
@@ -471,29 +553,33 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
       const id = `sale_${Date.now()}`;
       const number = nextSaleNumber(snap.sales);
       const status = mutation.input.status ?? "pending";
-      const { error } = await sb.from("sales").insert({
-        id,
-        number,
-        customer: mutation.input.customer,
-        email: mutation.input.email.trim().toLowerCase(),
-        product: mutation.input.product,
-        amount: mutation.input.amount,
-        currency: SALES_CURRENCY,
-        status,
-        source: mutation.input.source,
-        inquiry_id: mutation.input.inquiryId,
-        lead_id: mutation.input.leadId,
-        created_at: day,
-        closed_at: null,
-        notes: mutation.input.notes,
-        lines: mutation.input.lines,
-        quote_template_name: mutation.input.quoteTemplateName,
-        payment_terms: mutation.input.paymentTerms,
-        validity_date: mutation.input.validityDate,
-        terms_html: mutation.input.termsHtml,
-        salesperson: mutation.input.salesperson,
-        invoice_id: null,
-      });
+      const { error } = await insertWithOptionalActor(
+        "sales",
+        {
+          id,
+          number,
+          customer: mutation.input.customer,
+          email: mutation.input.email.trim().toLowerCase(),
+          product: mutation.input.product,
+          amount: mutation.input.amount,
+          currency: SALES_CURRENCY,
+          status,
+          source: mutation.input.source,
+          inquiry_id: mutation.input.inquiryId,
+          lead_id: mutation.input.leadId,
+          created_at: day,
+          closed_at: null,
+          notes: mutation.input.notes,
+          lines: mutation.input.lines,
+          quote_template_name: mutation.input.quoteTemplateName,
+          payment_terms: mutation.input.paymentTerms,
+          validity_date: mutation.input.validityDate,
+          terms_html: mutation.input.termsHtml,
+          salesperson: resolveSalespersonName(mutation.input.salesperson, actor),
+          invoice_id: null,
+        },
+        actor,
+      );
       if (error) throw new Error(error.message);
       break;
     }
@@ -572,21 +658,25 @@ export async function applyCrmMutation(mutation: CrmMutation): Promise<CrmSnapsh
       due.setDate(due.getDate() + 30);
       const dueDate = due.toISOString().slice(0, 10);
 
-      const { error: invErr } = await sb.from("invoices").insert({
-        id,
-        number,
-        client: sale.customer,
-        email: sale.email,
-        client_address: null,
-        status: "draft",
-        issue_date: day,
-        due_date: dueDate,
-        paid_date: null,
-        currency: SALES_CURRENCY,
-        lines,
-        notes: `Generated from order ${sale.number}.`,
-        sale_id: sale.id,
-      });
+      const { error: invErr } = await insertWithOptionalActor(
+        "invoices",
+        {
+          id,
+          number,
+          client: sale.customer,
+          email: sale.email,
+          client_address: null,
+          status: "draft",
+          issue_date: day,
+          due_date: dueDate,
+          paid_date: null,
+          currency: SALES_CURRENCY,
+          lines,
+          notes: `Generated from order ${sale.number}.`,
+          sale_id: sale.id,
+        },
+        actor,
+      );
       if (invErr) throw new Error(invErr.message);
 
       const { error: saleErr } = await sb

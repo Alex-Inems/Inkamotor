@@ -32,7 +32,9 @@ import {
   saveQuotationDraft,
 } from "@/lib/quotation-draft";
 import { SalesAmount } from "@/components/sales/sales-amount";
+import { isGenericActorName } from "@/lib/auth-actor";
 import { useLocale } from "@/lib/i18n";
+import { useSessionUser } from "@/lib/session-user";
 
 type Tab = "lines" | "other";
 
@@ -47,6 +49,7 @@ function stageOdooLabel(status: SaleStatus, t: (key: string) => string) {
 export function QuotationForm() {
   const router = useRouter();
   const { t, locale } = useLocale();
+  const sessionUser = useSessionUser();
   const { leads, products, addSale, sendSaleQuote, pushToast } = useCrm();
   const { templates, ready: templatesReady } = useQuoteTemplates();
   const defaultTemplate = templates[0] ?? null;
@@ -58,9 +61,13 @@ export function QuotationForm() {
   const [paymentTerms, setPaymentTerms] = useState(PAYMENT_TERMS[1]?.name ?? "");
   const [trip, setTrip] = useState("");
   const [lines, setLines] = useState<SaleLine[]>([emptyQuotationLine()]);
-  const [otherInfo, setOtherInfo] = useState<QuotationOtherInfo>(() =>
-    defaultQuotationOtherInfo(null, t),
-  );
+  const [otherInfo, setOtherInfo] = useState<QuotationOtherInfo>(() => {
+    const defaults = defaultQuotationOtherInfo(null, t);
+    return {
+      ...defaults,
+      seller: sessionUser.firstName || sessionUser.name || defaults.seller,
+    };
+  });
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sendQuoteSale, setSendQuoteSale] = useState<Sale | null>(null);
@@ -84,7 +91,16 @@ export function QuotationForm() {
         setTrip(parsed.trip);
         setLines(parsed.bodyLines.length > 0 ? parsed.bodyLines : [emptyQuotationLine()]);
       }
-      if (draft.otherInfo) setOtherInfo(draft.otherInfo);
+      if (draft.otherInfo) {
+        const sessionSeller =
+          sessionUser.firstName || sessionUser.name || draft.otherInfo.seller;
+        setOtherInfo({
+          ...draft.otherInfo,
+          seller: isGenericActorName(draft.otherInfo.seller)
+            ? sessionSeller
+            : draft.otherInfo.seller,
+        });
+      }
       setDraftHydrated(true);
       return;
     }
@@ -96,11 +112,22 @@ export function QuotationForm() {
     }
     setQuoteTemplateName(tpl.name);
     setValidityDate(defaultValidityDate(tpl.numberOfDays));
-    setOtherInfo(defaultQuotationOtherInfo(tpl, t));
+    const defaults = defaultQuotationOtherInfo(tpl, t);
+    setOtherInfo({
+      ...defaults,
+      seller: sessionUser.firstName || sessionUser.name || defaults.seller,
+    });
     setTrip("");
     setLines(applyLocalizedTemplateToQuotationLines([], tpl, locale));
     setDraftHydrated(true);
-  }, [templatesReady, defaultTemplate, t, locale]);
+  }, [
+    templatesReady,
+    defaultTemplate,
+    t,
+    locale,
+    sessionUser.firstName,
+    sessionUser.name,
+  ]);
 
   const template = useMemo(
     () => templates.find((row) => row.name === quoteTemplateName) ?? defaultTemplate,

@@ -463,6 +463,7 @@ export const en = {
       deliveryOpened: "Opened",
       deliveryBounced: "Bounced",
       deliveryError: "Failed",
+      sentBy: "by {name}",
     },
     followUps: {
       title: "Follow-ups",

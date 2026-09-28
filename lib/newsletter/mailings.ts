@@ -1,3 +1,5 @@
+import type { ActorAttribution } from "@/lib/auth-actor";
+import { isMissingColumnError } from "@/lib/mail/schema-compat";
 import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
 import { builtinTemplates } from "@/lib/newsletter/templates";
 
@@ -203,6 +205,7 @@ export type MailingWrite = {
   openPct?: number;
   clickPct?: number;
   replyPct?: number;
+  actor?: ActorAttribution | null;
 };
 
 export async function upsertMailing(
@@ -214,6 +217,7 @@ export async function upsertMailing(
   }
   const mailingId = id?.trim() || `mail_${Date.now()}`;
   const now = new Date().toISOString();
+  const actor = input.actor ?? null;
   const payload: Record<string, unknown> = {
     id: mailingId,
     name: input.name.trim() || input.subject.trim() || "Untitled mailing",
@@ -236,15 +240,29 @@ export async function upsertMailing(
   if (input.openPct !== undefined) payload.open_pct = input.openPct;
   if (input.clickPct !== undefined) payload.click_pct = input.clickPct;
   if (input.replyPct !== undefined) payload.reply_pct = input.replyPct;
+  if (actor) {
+    payload.created_by_email = actor.email;
+    payload.created_by_name = actor.name;
+  }
 
   const sb = getSupabase();
   if (id) {
-    const { data, error } = await sb
+    let { data, error } = await sb
       .from("newsletter_mailings")
       .update(payload)
       .eq("id", mailingId)
       .select(SELECT_COLS)
       .single();
+    if (error && isMissingColumnError(error) && actor) {
+      const { created_by_email: _e, created_by_name: _n, ...withoutActor } =
+        payload;
+      ({ data, error } = await sb
+        .from("newsletter_mailings")
+        .update(withoutActor)
+        .eq("id", mailingId)
+        .select(SELECT_COLS)
+        .single());
+    }
     if (error) {
       if (isMissingTable(error.message)) {
         throw new Error(
@@ -256,11 +274,24 @@ export async function upsertMailing(
     return mapRow(data as Row);
   }
 
-  const { data, error } = await sb
+  let { data, error } = await sb
     .from("newsletter_mailings")
     .insert({ ...payload, created_at: now, mailing_date: input.mailingDate ?? now })
     .select(SELECT_COLS)
     .single();
+  if (error && isMissingColumnError(error) && actor) {
+    const { created_by_email: _e, created_by_name: _n, ...withoutActor } =
+      payload;
+    ({ data, error } = await sb
+      .from("newsletter_mailings")
+      .insert({
+        ...withoutActor,
+        created_at: now,
+        mailing_date: input.mailingDate ?? now,
+      })
+      .select(SELECT_COLS)
+      .single());
+  }
   if (error) {
     if (isMissingTable(error.message)) {
       throw new Error(

@@ -37,8 +37,10 @@ import {
   resetHtmlHistory,
 } from "@/components/rich-text-toolbar";
 import { useCrm } from "@/lib/crm-store";
+import { isGenericActorName } from "@/lib/auth-actor";
 import { formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
+import { useSessionUser } from "@/lib/session-user";
 import type { MailingStatus, NewsletterMailing } from "@/lib/newsletter/mailings";
 import {
   copyTemplateDisplayName,
@@ -542,6 +544,7 @@ function applyImageLayout(
 
 export function MailingForm({ mailingId }: { mailingId: string }) {
   const { t, locale } = useLocale();
+  const sessionUser = useSessionUser();
   const { pushToast } = useCrm();
   const router = useRouter();
   const isNew = mailingId === "new";
@@ -589,7 +592,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     recipientTag: "",
     recipientEmails: [] as string[],
     templateId: "",
-    responsible: "Team",
+    responsible: sessionUser.firstName || sessionUser.name || "Team",
   });
   /** Explicit “choose people” mode even when the checklist is still empty. */
   const [pickingPeople, setPickingPeople] = useState(false);
@@ -654,7 +657,12 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             .map((e) => e.trim().toLowerCase())
             .filter(Boolean),
           templateId: row.templateId ?? "",
-          responsible: row.responsible || "Team",
+          responsible: isGenericActorName(row.responsible)
+            ? sessionUser.firstName ||
+              sessionUser.name ||
+              row.responsible ||
+              "Team"
+            : row.responsible || "Team",
         });
         setPickingPeople((row.emails?.length ?? 0) > 0);
         setEditorKey(`${row.id}-${Date.now()}`);
@@ -679,7 +687,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           recipientEmails: [],
           // Prefill content only — do not link a template until the user picks or duplicates.
           templateId: "",
-          responsible: "Team",
+          responsible: sessionUser.firstName || sessionUser.name || "Team",
         });
         setPickingPeople(false);
         setEditorKey(`new-${Date.now()}`);
@@ -687,7 +695,15 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [isNew, mailingId, pushToast, router, t]);
+  }, [
+    isNew,
+    mailingId,
+    pushToast,
+    router,
+    sessionUser.firstName,
+    sessionUser.name,
+    t,
+  ]);
 
   useEffect(() => {
     void load();

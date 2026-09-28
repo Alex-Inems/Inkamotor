@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api";
+import { getSessionClaims } from "@/lib/auth-request";
 import { localizeCrmSnapshot } from "@/lib/crm/localize";
 import { applyCrmMutation, loadCrmSnapshot, type CrmMutation } from "@/lib/crm/repository";
 import { localeFromRequest } from "@/lib/i18n/request-locale";
@@ -50,7 +51,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const data = await applyCrmMutation(body);
+    const claims = await getSessionClaims();
+    const data = await applyCrmMutation(body, claims);
     const localized = await localizeCrmSnapshot(data, localeFromRequest(request));
     return Response.json(localized);
   } catch (err) {

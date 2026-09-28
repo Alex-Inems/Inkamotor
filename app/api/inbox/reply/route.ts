@@ -1,4 +1,6 @@
 import { jsonError } from "@/lib/api";
+import { actorFromClaims } from "@/lib/auth-actor";
+import { getSessionClaims } from "@/lib/auth-request";
 import { missingBrevoEnv, sendTransactionalEmail } from "@/lib/brevo";
 import { saveReplyAttachment } from "@/lib/mail/attachments";
 import {
@@ -139,6 +141,8 @@ export async function POST(request: Request) {
     });
   }
 
+  const actor = actorFromClaims(await getSessionClaims());
+
   let reply = null;
   if (missingSupabaseEnv().length === 0) {
     try {
@@ -151,6 +155,7 @@ export async function POST(request: Request) {
         relatedInquiryId: body.relatedInquiryId,
         providerMessageId,
         deliveryStatus: "sent",
+        actor,
       });
 
       const savedAttachments = [];
@@ -187,6 +192,8 @@ export async function POST(request: Request) {
         deliveryStatus: "sent" as const,
         deliveredAt: null,
         openedAt: null,
+        sentByEmail: actor?.email ?? null,
+        sentByName: actor?.name ?? null,
         attachments: [],
       };
     }

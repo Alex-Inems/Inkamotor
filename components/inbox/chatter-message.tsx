@@ -149,6 +149,7 @@ export function ChatterMessage({
   const author = message.mine
     ? message.authorName.trim() || youLabel
     : message.authorName.trim() || message.subject || youLabel;
+  const sentBy = message.mine ? message.sentByName?.trim() : "";
   const showSubject =
     !message.mine &&
     message.subject.trim() &&
@@ -184,7 +185,13 @@ export function ChatterMessage({
               {author}
             </strong>
           </header>
-        ) : null}
+        ) : (
+          <header className="mb-0.5 flex max-w-full items-baseline gap-1.5 px-1 leading-none">
+            <strong className="truncate text-[11px] font-medium text-mute">
+              {author}
+            </strong>
+          </header>
+        )}
 
         <div
           className={`wa-bubble wa-tail group/msg w-fit max-w-full text-[13.5px] leading-snug ${
@@ -311,8 +318,13 @@ export function ChatterMessage({
         </div>
 
         {message.mine ? (
-          <div className="mt-1 flex justify-end pr-0.5">
+          <div className="mt-1 flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 pr-0.5">
             <MailTrackingIcon message={message} showLabel />
+            {sentBy ? (
+              <span className="text-[11px] text-mute">
+                {t("pages.inbox.sentBy", { name: sentBy })}
+              </span>
+            ) : null}
           </div>
         ) : null}
       </div>

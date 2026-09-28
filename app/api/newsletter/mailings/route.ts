@@ -1,5 +1,10 @@
 import { jsonError } from "@/lib/api";
 import {
+  actorFromClaims,
+  resolveActorName,
+} from "@/lib/auth-actor";
+import { getSessionClaims } from "@/lib/auth-request";
+import {
   deleteMailing,
   getMailing,
   listMailings,
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
   }
 
   try {
+    const actor = actorFromClaims(await getSessionClaims());
     const mailing = await upsertMailing(
       {
         name: body.name || body.subject || "Untitled mailing",
@@ -81,8 +87,9 @@ export async function POST(req: Request) {
         emails: body.emails,
         sentCount: body.sentCount,
         scheduledAt: body.scheduledAt,
-        responsible: body.responsible,
+        responsible: resolveActorName(body.responsible, actor),
         templateId: body.templateId,
+        actor,
       },
       body.id,
     );
@@ -116,6 +123,7 @@ export async function PATCH(req: Request) {
     if (!prev) {
       return jsonError(404, { error: "Mailing not found", code: "db_error" });
     }
+    const actor = actorFromClaims(await getSessionClaims());
     const mailing = await upsertMailing(
       {
         name: body.name ?? prev.name,
@@ -129,9 +137,13 @@ export async function PATCH(req: Request) {
         sentCount: body.sentCount ?? prev.sentCount,
         scheduledAt:
           body.scheduledAt !== undefined ? body.scheduledAt : prev.scheduledAt,
-        responsible: body.responsible ?? prev.responsible,
+        responsible: resolveActorName(
+          body.responsible ?? prev.responsible,
+          actor,
+        ),
         templateId:
           body.templateId !== undefined ? body.templateId : prev.templateId,
+        actor,
       },
       id,
     );
