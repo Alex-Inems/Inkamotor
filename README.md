@@ -13,7 +13,7 @@ Deploy on a subdomain (e.g. `crm.inkamototours.com`). Staff log in and work from
 | **Leads / Sales / Follow-ups** | Pipeline, quotations, and tasks in Supabase |
 | **Invoices** | Create PDF invoices and email them |
 | **Email marketing** | Draft / send mailings to subscribers |
-| **Odoo sync** | Optional cron pull of contacts, sales, and recent messages (every **5 minutes** on Vercel) |
+| **Odoo sync** | Optional cron pull of contacts, sales, and recent messages (**once daily**, evening UTC) |
 | **Setup** | Admin checklist for env / integrations |
 | Analytics / Search Console / Meta Ads | Optional / paused as needed |
 
@@ -112,7 +112,7 @@ Search Console can reuse the same OAuth client; see `.env.example` for `GOOGLE_R
 | `ODOO_PASSWORD` | Odoo password |
 | `CRON_SECRET` | Bearer secret for `/api/cron/odoo-sync` |
 
-Vercel Cron is configured in `vercel.json` as `*/5 * * * *` (every 5 minutes). Frequent schedules need a Vercel plan that allows them.
+Vercel Cron is configured in `vercel.json` as `0 19 * * *` (once daily at **19:00 UTC** — about 20:00–21:00 in Brussels).
 
 ### Optional
 
