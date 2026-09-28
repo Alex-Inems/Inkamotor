@@ -420,7 +420,9 @@ export default function InboxPage() {
       const json = await res.json();
       if (!res.ok) {
         pushToast((json as ApiError).error || t("pages.inbox.sendFailed"));
-        return;
+        throw new Error(
+          (json as ApiError).error || t("pages.inbox.sendFailed"),
+        );
       }
       const saved = (json as { reply?: MailReply | null }).reply;
       if (saved) {

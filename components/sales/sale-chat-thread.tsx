@@ -211,6 +211,7 @@ export function SaleChatPanel({
       await loadConversation({ silent: true });
     } catch (err) {
       pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
+      throw err;
     } finally {
       setSending(false);
     }

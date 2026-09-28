@@ -107,10 +107,15 @@ export function MessageCompose({
     if (!draft.trim() && attachments.length === 0) return;
 
     const outbound = await pendingToOutbound(attachments);
-    await onSend({
-      message: draft.trim(),
-      attachments: outbound,
-    });
+    try {
+      await onSend({
+        message: draft.trim(),
+        attachments: outbound,
+      });
+    } catch {
+      // Keep draft so the user can retry; caller shows the error toast.
+      return;
+    }
     setDraft("");
     setAttachments([]);
     setLinkOpen(false);

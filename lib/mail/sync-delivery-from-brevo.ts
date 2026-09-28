@@ -24,6 +24,21 @@ const recentSync = new Map<
 >();
 const SYNC_COOLDOWN_MS = 12_000;
 
+function normalizeSubject(value: string | null | undefined) {
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^re:\s*/i, "")
+    .replace(/\s+/g, " ");
+}
+
+function subjectsMatch(a: string | null | undefined, b: string | null | undefined) {
+  const left = normalizeSubject(a);
+  const right = normalizeSubject(b);
+  if (!left || !right) return false;
+  return left === right;
+}
+
 /**
  * Pull recent Brevo transactional events and advance delivery_status on
  * matching CRM rows. Used when the Brevo webhook is not configured — opening
@@ -71,8 +86,8 @@ async function runSync(opts: {
     const mid = normalizeProviderMessageId(row.messageId);
     const key =
       mid ??
-      `email:${(row.email ?? "").trim().toLowerCase()}|${(row.subject ?? "").trim().toLowerCase()}`;
-    if (!mid && key === "email:|") continue;
+      `email:${(row.email ?? "").trim().toLowerCase()}|${normalizeSubject(row.subject)}`;
+    if (!mid && key.endsWith("|")) continue;
 
     const next: SyncEvent = { ...row, status };
     const prev = best.get(key);
@@ -83,9 +98,10 @@ async function runSync(opts: {
 
   let updated = 0;
   for (const row of best.values()) {
-    if (row.messageId) {
+    const mid = normalizeProviderMessageId(row.messageId);
+    if (mid) {
       const byId = await applyDeliveryEvent({
-        providerMessageId: row.messageId,
+        providerMessageId: mid,
         event: row.status,
         date: row.date,
       });
@@ -93,13 +109,15 @@ async function runSync(opts: {
         updated += 1;
         continue;
       }
-      // Row exists but is already at/past this status — don't subject-match
-      // a different outbound message.
+      // Known CRM row already at/past this status — stop.
       if (byId.found) continue;
+      // Message id present but not in CRM: do NOT fall back to "latest reply
+      // for this email" — that wrongly marks unrelated new drafts as opened.
+      continue;
     }
 
     const recipient = row.email?.trim().toLowerCase();
-    if (!recipient) continue;
+    if (!recipient || !normalizeSubject(row.subject)) continue;
     const advanced = await advanceLatestReplyForEmail({
       email: recipient,
       status: row.status,
@@ -123,15 +141,16 @@ async function advanceLatestReplyForEmail(input: {
     ? new Date(input.at).toISOString()
     : new Date().toISOString();
   if (Number.isNaN(Date.parse(at))) return false;
+  if (!normalizeSubject(input.subject)) return false;
 
   const { data, error } = await supabase
     .from("mail_replies")
     .select(
-      "id, delivery_status, delivered_at, opened_at, subject, provider_message_id",
+      "id, delivery_status, delivered_at, opened_at, subject, provider_message_id, sent_at",
     )
     .eq("to_email", input.email)
     .order("sent_at", { ascending: false })
-    .limit(8);
+    .limit(12);
 
   if (error) {
     if (isMissingColumnError(error)) return false;
@@ -139,21 +158,15 @@ async function advanceLatestReplyForEmail(input: {
   }
   if (!data?.length) return false;
 
-  const subject = input.subject?.trim().toLowerCase() || "";
-  const candidates = subject
-    ? data.filter((row) => {
-        const sub = String(row.subject ?? "").trim().toLowerCase();
-        return (
-          !sub ||
-          sub === subject ||
-          sub === `re: ${subject}` ||
-          subject === `re: ${sub}` ||
-          sub.includes(subject) ||
-          subject.includes(sub.replace(/^re:\s*/i, ""))
-        );
-      })
-    : data;
-  const rows = candidates.length ? candidates : data;
+  const eventMs = Date.parse(at);
+  // Only orphan rows (no Brevo id yet) with the same subject, sent near the event.
+  const rows = data.filter((row) => {
+    if (row.provider_message_id) return false;
+    if (!subjectsMatch(String(row.subject ?? ""), input.subject)) return false;
+    const sentMs = Date.parse(String(row.sent_at ?? ""));
+    if (!Number.isFinite(sentMs) || !Number.isFinite(eventMs)) return true;
+    return Math.abs(sentMs - eventMs) < 48 * 60 * 60_000;
+  });
 
   for (const row of rows) {
     const current =
@@ -179,18 +192,6 @@ async function advanceLatestReplyForEmail(input: {
     if (updateError) {
       if (isMissingColumnError(updateError)) return false;
       throw new Error(updateError.message);
-    }
-
-    const providerId =
-      typeof row.provider_message_id === "string"
-        ? row.provider_message_id
-        : null;
-    if (providerId) {
-      await applyDeliveryEvent({
-        providerMessageId: providerId,
-        event: input.status,
-        date: at,
-      });
     }
     return true;
   }
