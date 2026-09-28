@@ -24,6 +24,7 @@ export async function proxy(request: NextRequest) {
   const isGoogleLoginCallback = pathname === "/api/auth/google/callback";
   const isNewsletterUnsubscribe = pathname === "/api/newsletter/unsubscribe";
   const isBrevoWebhook = pathname === "/api/webhooks/brevo";
+  const isOdooCron = pathname === "/api/cron/odoo-sync";
 
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const authed = await verifySessionToken(token);
@@ -35,7 +36,8 @@ export async function proxy(request: NextRequest) {
     isGoogleLoginStart ||
     isGoogleLoginCallback ||
     isNewsletterUnsubscribe ||
-    isBrevoWebhook
+    isBrevoWebhook ||
+    isOdooCron
   ) {
     return NextResponse.next();
   }
