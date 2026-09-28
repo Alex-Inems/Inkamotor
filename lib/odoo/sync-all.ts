@@ -67,13 +67,28 @@ function isOwn(email: string | null) {
   return OWN_HINTS.some((h) => e.includes(h));
 }
 
-async function syncSales(client: OdooSessionClient, stats: OdooSyncStats) {
+function odooSince(hours: number) {
+  return new Date(Date.now() - hours * 3600 * 1000)
+    .toISOString()
+    .slice(0, 19)
+    .replace("T", " ");
+}
+
+async function syncSales(
+  client: OdooSessionClient,
+  stats: OdooSyncStats,
+  sinceHours?: number,
+) {
   const sb = getSupabase();
+  const domain =
+    sinceHours && sinceHours > 0
+      ? [["write_date", ">=", odooSince(sinceHours)]]
+      : [];
   const saleIds = await client.executeKw<number[]>(
     "sale.order",
     "search",
-    [[]],
-    { order: "date_order desc" },
+    [domain],
+    { order: "write_date desc" },
   );
   const fields = [
     "id",
@@ -224,12 +239,23 @@ async function syncSales(client: OdooSessionClient, stats: OdooSyncStats) {
   }
 }
 
-async function syncContacts(client: OdooSessionClient, stats: OdooSyncStats) {
+async function syncContacts(
+  client: OdooSessionClient,
+  stats: OdooSyncStats,
+  sinceHours?: number,
+) {
   const sb = getSupabase();
+  const domain: unknown[] = [
+    ["email", "!=", false],
+    ["email", "!=", ""],
+  ];
+  if (sinceHours && sinceHours > 0) {
+    domain.push(["write_date", ">=", odooSince(sinceHours)]);
+  }
   const partnerIds = await client.executeKw<number[]>(
     "res.partner",
     "search",
-    [[["email", "!=", false], ["email", "!=", ""]]],
+    [domain],
     { order: "write_date desc" },
   );
   const emailCount = new Map<string, number>();
@@ -315,7 +341,7 @@ async function syncContacts(client: OdooSessionClient, stats: OdooSyncStats) {
 async function syncMessages(
   client: OdooSessionClient,
   stats: OdooSyncStats,
-  days = 3,
+  sinceHours = 72,
 ) {
   const sb = getSupabase();
   const companyFrom =
@@ -324,10 +350,7 @@ async function syncMessages(
     "contact@inkamototours.com";
   const companyName = process.env.BREVO_SENDER_NAME?.trim() || "Inkamoto Tours";
 
-  const since = new Date(Date.now() - days * 24 * 3600 * 1000)
-    .toISOString()
-    .slice(0, 19)
-    .replace("T", " ");
+  const since = odooSince(sinceHours);
   const msgIds = await client.executeKw<number[]>(
     "mail.message",
     "search",
@@ -452,7 +475,8 @@ async function syncMessages(
 
 /** Pull Odoo sales, contacts, and recent messages into Supabase. */
 export async function syncOdooAll(opts?: {
-  days?: number;
+  /** Look back this many hours for changed records (default 24). Use 0 for full sync. */
+  sinceHours?: number;
 }): Promise<OdooSyncStats> {
   const stats: OdooSyncStats = {
     sales: 0,
@@ -460,9 +484,10 @@ export async function syncOdooAll(opts?: {
     messages: 0,
     errors: [],
   };
+  const sinceHours = opts?.sinceHours ?? 24;
   const client = await connectOdooSession();
-  await syncSales(client, stats);
-  await syncContacts(client, stats);
-  await syncMessages(client, stats, opts?.days ?? 3);
+  await syncSales(client, stats, sinceHours);
+  await syncContacts(client, stats, sinceHours);
+  await syncMessages(client, stats, Math.max(sinceHours, 24));
   return stats;
 }

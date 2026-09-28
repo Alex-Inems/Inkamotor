@@ -15,7 +15,7 @@ function authorized(req: Request) {
   return url.searchParams.get("secret") === secret;
 }
 
-/** Hourly Odoo → CRM sync (sales, contacts, recent messages). */
+/** Odoo → CRM sync every 10 minutes (sales, contacts, recent messages). */
 export async function GET(req: Request) {
   if (!authorized(req)) {
     return jsonError(401, { error: "Unauthorized", code: "unauthorized" });
@@ -25,14 +25,15 @@ export async function GET(req: Request) {
   if (missing.length > 0) {
     return jsonError(503, {
       error:
-        "Add ODOO_URL, ODOO_DB, ODOO_LOGIN, ODOO_PASSWORD (and Supabase) for hourly sync.",
+        "Add ODOO_URL, ODOO_DB, ODOO_LOGIN, ODOO_PASSWORD (and Supabase) for Odoo sync.",
       code: "missing_credentials",
       missing,
     });
   }
 
   try {
-    const stats = await syncOdooAll({ days: 3 });
+    // 24h lookback so brief outages still catch up without a full re-import.
+    const stats = await syncOdooAll({ sinceHours: 24 });
     return Response.json({ ok: true, ...stats });
   } catch (err) {
     return jsonError(502, {
