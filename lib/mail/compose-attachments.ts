@@ -193,10 +193,19 @@ export async function compressImageForSend(
   };
 }
 
+export type AttachmentProgress = {
+  fileName: string;
+  fileIndex: number;
+  fileCount: number;
+  /** 0–100 overall across all attachments. */
+  percent: number;
+};
+
 async function stageBlob(input: {
   blob: Blob;
   fileName: string;
   mimeType: string;
+  onBytes?: (uploadedBytes: number) => void;
 }): Promise<string> {
   const uploadId =
     typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -220,11 +229,13 @@ async function stageBlob(input: {
           : `Could not upload ${input.fileName}`,
       );
     }
+    input.onBytes?.(input.blob.size);
     return parsed.data.id;
   }
 
   const total = Math.ceil(input.blob.size / COMPOSE_CHUNK_BYTES);
   let stagedId = "";
+  let uploaded = 0;
   for (let i = 0; i < total; i++) {
     const start = i * COMPOSE_CHUNK_BYTES;
     const end = Math.min(input.blob.size, start + COMPOSE_CHUNK_BYTES);
@@ -245,6 +256,8 @@ async function stageBlob(input: {
       throw new Error(parsed.error || `Could not upload ${input.fileName}`);
     }
     if (parsed.data.id) stagedId = parsed.data.id;
+    uploaded += chunk.size;
+    input.onBytes?.(uploaded);
   }
   if (!stagedId) {
     throw new Error(`Could not upload ${input.fileName}`);
@@ -258,11 +271,32 @@ async function stageBlob(input: {
  */
 export async function pendingToOutbound(
   files: PendingAttachment[],
+  onProgress?: (progress: AttachmentProgress) => void,
 ): Promise<OutboundAttachment[]> {
   const out: OutboundAttachment[] = [];
   let total = 0;
+  const fileCount = files.length;
+  const approxTotalBytes = Math.max(
+    1,
+    files.reduce((sum, file) => sum + file.byteSize, 0),
+  );
+  let completedBytes = 0;
 
-  for (const file of files) {
+  const report = (fileName: string, fileIndex: number, withinFile = 0) => {
+    const raw =
+      ((completedBytes + withinFile) / approxTotalBytes) * 100;
+    onProgress?.({
+      fileName,
+      fileIndex,
+      fileCount,
+      percent: Math.max(0, Math.min(99, Math.round(raw))),
+    });
+  };
+
+  for (let fileIndex = 0; fileIndex < files.length; fileIndex++) {
+    const file = files[fileIndex]!;
+    report(file.fileName, fileIndex, 0);
+
     const mime = resolveMimeType(file.mimeType, file.fileName);
     const prepared = isCompressibleImage(mime, file.fileName)
       ? await compressImageForSend(file.file, {
@@ -294,6 +328,8 @@ export async function pendingToOutbound(
         base64: await blobToBase64(prepared.blob),
         blob: prepared.blob,
       });
+      completedBytes += file.byteSize;
+      report(file.fileName, fileIndex, 0);
       continue;
     }
 
@@ -301,13 +337,28 @@ export async function pendingToOutbound(
       blob: prepared.blob,
       fileName: prepared.fileName,
       mimeType: prepared.mimeType,
+      onBytes: (uploadedBytes) => {
+        const ratio = prepared.blob.size
+          ? uploadedBytes / prepared.blob.size
+          : 1;
+        report(file.fileName, fileIndex, file.byteSize * ratio);
+      },
     });
     out.push({
       fileName: prepared.fileName,
       mimeType: prepared.mimeType,
       stagedId,
     });
+    completedBytes += file.byteSize;
+    report(file.fileName, fileIndex, 0);
   }
+
+  onProgress?.({
+    fileName: files[files.length - 1]?.fileName ?? "",
+    fileIndex: Math.max(0, fileCount - 1),
+    fileCount,
+    percent: 100,
+  });
 
   return out;
 }

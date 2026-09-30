@@ -39,13 +39,18 @@ export type ToastInput =
       detail?: string;
       tone?: ToastTone;
       ms?: number;
+      /** 0–100; shows a progress bar and stays until dismissed/updated away. */
+      progress?: number;
+      /** Keep on screen until dismissToast (ignores ms). */
+      sticky?: boolean;
     };
 
-type Toast = {
+export type Toast = {
   id: number;
   message: string;
   detail?: string;
   tone: ToastTone;
+  progress?: number;
 };
 
 type NewLeadInput = {
@@ -150,7 +155,11 @@ type CrmStore = CrmSnapshot & {
   addInvoiceFromSale: (saleId: string) => Promise<Invoice | null>;
   resetDemo: () => void;
   refreshCrm: () => Promise<void>;
-  pushToast: (input: ToastInput) => void;
+  pushToast: (input: ToastInput) => number;
+  updateToast: (
+    id: number,
+    patch: Partial<Pick<Toast, "message" | "detail" | "tone" | "progress">>,
+  ) => void;
   dismissToast: (id: number) => void;
 };
 
@@ -181,6 +190,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const id = ++toastSeq.current;
     const payload = typeof input === "string" ? { message: input } : input;
     const tone = payload.tone ?? "default";
+    const sticky =
+      payload.sticky === true || typeof payload.progress === "number";
     const ms =
       payload.ms ??
       (tone === "success" ? 9000 : tone === "error" ? 7000 : 3200);
@@ -192,13 +203,44 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           message: payload.message,
           detail: payload.detail,
           tone,
+          progress:
+            typeof payload.progress === "number"
+              ? Math.max(0, Math.min(100, payload.progress))
+              : undefined,
         },
-      ].slice(-3),
+      ].slice(-4),
     );
-    window.setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, ms);
+    if (!sticky) {
+      window.setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, ms);
+    }
+    return id;
   }, []);
+
+  const updateToast = useCallback(
+    (
+      id: number,
+      patch: Partial<Pick<Toast, "message" | "detail" | "tone" | "progress">>,
+    ) => {
+      setToasts((prev) =>
+        prev.map((toast) => {
+          if (toast.id !== id) return toast;
+          return {
+            ...toast,
+            ...patch,
+            progress:
+              typeof patch.progress === "number"
+                ? Math.max(0, Math.min(100, patch.progress))
+                : patch.progress === undefined
+                  ? toast.progress
+                  : undefined,
+          };
+        }),
+      );
+    },
+    [],
+  );
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -472,6 +514,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       resetDemo,
       refreshCrm,
       pushToast,
+      updateToast,
       dismissToast,
     }),
     [
@@ -500,6 +543,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       resetDemo,
       refreshCrm,
       pushToast,
+      updateToast,
       dismissToast,
     ],
   );

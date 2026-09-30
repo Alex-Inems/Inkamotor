@@ -35,7 +35,7 @@ export function MessageCompose({
   onSend: (payload: MessageComposePayload) => Promise<void>;
 }) {
   const { t } = useLocale();
-  const { pushToast } = useCrm();
+  const { pushToast, updateToast, dismissToast } = useCrm();
   const fileInputId = useId();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState("");
@@ -110,18 +110,50 @@ export function MessageCompose({
     }
     if (!draft.trim() && attachments.length === 0) return;
 
-    const large = attachments.some(
+    const needsUpload = attachments.some(
       (file) => file.byteSize > 3 * 1024 * 1024,
     );
     setPreparing(true);
-    if (large) {
-      pushToast(t("pages.inbox.uploadingAttachment"));
+    let progressToastId: number | null = null;
+    if (needsUpload) {
+      progressToastId = pushToast({
+        message: t("pages.inbox.uploadingAttachment"),
+        tone: "info",
+        progress: 0,
+        sticky: true,
+      });
     }
 
     let outbound;
     try {
-      outbound = await pendingToOutbound(attachments);
+      outbound = await pendingToOutbound(
+        attachments,
+        progressToastId == null
+          ? undefined
+          : (progress) => {
+              updateToast(progressToastId!, {
+                message: t("pages.inbox.uploadingAttachment"),
+                detail:
+                  progress.fileCount > 1
+                    ? `${progress.fileName} (${progress.fileIndex + 1}/${progress.fileCount})`
+                    : progress.fileName,
+                progress: progress.percent,
+              });
+            },
+      );
+      if (progressToastId != null) {
+        updateToast(progressToastId, {
+          message: t("pages.inbox.uploadingAttachment"),
+          detail: undefined,
+          progress: 100,
+        });
+        window.setTimeout(() => {
+          if (progressToastId != null) dismissToast(progressToastId);
+        }, 600);
+        progressToastId = null;
+      }
     } catch (err) {
+      if (progressToastId != null) dismissToast(progressToastId);
       pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
       setPreparing(false);
       return;
