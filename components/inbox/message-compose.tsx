@@ -118,6 +118,7 @@ export function MessageCompose({
     if (needsUpload) {
       progressToastId = pushToast({
         message: t("pages.inbox.uploadingAttachment"),
+        detail: attachments[0]?.fileName,
         tone: "info",
         progress: 0,
         sticky: true,
@@ -135,7 +136,7 @@ export function MessageCompose({
                 message: t("pages.inbox.uploadingAttachment"),
                 detail:
                   progress.fileCount > 1
-                    ? `${progress.fileName} (${progress.fileIndex + 1}/${progress.fileCount})`
+                    ? `${progress.fileName} · ${progress.fileIndex + 1}/${progress.fileCount}`
                     : progress.fileName,
                 progress: progress.percent,
               });
@@ -149,7 +150,7 @@ export function MessageCompose({
         });
         window.setTimeout(() => {
           if (progressToastId != null) dismissToast(progressToastId);
-        }, 600);
+        }, 500);
         progressToastId = null;
       }
     } catch (err) {

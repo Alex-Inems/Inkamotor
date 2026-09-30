@@ -469,7 +469,7 @@ export const fr: Messages = {
       deliveryError: "Échec",
       sentBy: "par {name}",
       previewFallback: "Aperçu indisponible — utilisez Ouvrir ou Télécharger.",
-      uploadingAttachment: "Envoi du fichier… cela peut prendre une minute pour les gros fichiers.",
+      uploadingAttachment: "Envoi…",
     },
     followUps: {
       title: "Relances",

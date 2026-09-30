@@ -127,3 +127,41 @@ export async function applyDeliveryEvent(
 
   return { updated: messages || replies, found: true, status };
 }
+
+/**
+ * If a row was marked Opened only from a privacy-proxy pixel, demote it to
+ * Delivered when sync finds no real open event for that message id.
+ */
+export async function demoteFalseProxyOpen(
+  providerMessageId: string,
+): Promise<boolean> {
+  if (missingSupabaseEnv().length > 0) return false;
+  const mid = normalizeProviderMessageId(providerMessageId);
+  if (!mid) return false;
+
+  let changed = false;
+  for (const table of ["mail_messages", "mail_replies"] as const) {
+    const row = await findRow(table, mid);
+    if (!row) continue;
+    const current =
+      typeof row.delivery_status === "string"
+        ? normalizeDeliveryStatus(row.delivery_status)
+        : null;
+    if (current !== "opened") continue;
+
+    const { error } = await getSupabase()
+      .from(table)
+      .update({
+        delivery_status: "delivered",
+        opened_at: null,
+        delivered_at: (row.delivered_at as string) || new Date().toISOString(),
+      })
+      .eq("id", row.id);
+    if (error) {
+      if (isMissingColumnError(error)) continue;
+      throw new Error(error.message);
+    }
+    changed = true;
+  }
+  return changed;
+}

@@ -23,12 +23,13 @@ export function normalizeDeliveryStatus(
   if (raw === "queued" || raw === "request" || raw === "requests") return "queued";
   if (raw === "sent" || raw === "deferred") return "sent";
   if (raw === "delivered") return "delivered";
+  // Apple / Gmail privacy proxies prefetch the open pixel without a real open.
+  // Treat those as delivered only — never as Opened in the CRM.
+  if (raw === "proxyopen" || raw === "loadedbyproxy") return "delivered";
   if (
     raw === "opened" ||
     raw === "uniqueopened" ||
-    raw === "firstopening" ||
-    raw === "proxyopen" ||
-    raw === "loadedbyproxy"
+    raw === "firstopening"
   ) {
     return "opened";
   }

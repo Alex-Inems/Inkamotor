@@ -1,5 +1,8 @@
 import { missingBrevoEnv, listSmtpEmailEvents } from "@/lib/brevo";
-import { applyDeliveryEvent } from "@/lib/mail/apply-delivery-event";
+import {
+  applyDeliveryEvent,
+  demoteFalseProxyOpen,
+} from "@/lib/mail/apply-delivery-event";
 import {
   normalizeDeliveryStatus,
   normalizeProviderMessageId,
@@ -41,8 +44,8 @@ function subjectsMatch(a: string | null | undefined, b: string | null | undefine
 
 /**
  * Pull recent Brevo transactional events and advance delivery_status on
- * matching CRM rows. Used when the Brevo webhook is not configured — opening
- * mail in Gmail often only shows up as `loadedByProxy` / `opened` here.
+ * matching CRM rows. Used when the Brevo webhook is not configured.
+ * Privacy-proxy pixel loads (`loadedByProxy`) count as delivered, not opened.
  */
 export async function syncDeliveryFromBrevo(opts?: {
   email?: string | null;
@@ -80,10 +83,25 @@ async function runSync(opts: {
 
   // Collapse to strongest status per message-id (or email+subject fallback key).
   const best = new Map<string, SyncEvent>();
+  // Track whether any *real* open exists for a message id (not proxy).
+  const realOpenByMid = new Map<string, boolean>();
   for (const row of events) {
+    const rawEvent = (row.event ?? "").trim().toLowerCase().replace(/[_-]+/g, "");
+    const mid = normalizeProviderMessageId(row.messageId);
+    if (mid) {
+      if (
+        rawEvent === "opened" ||
+        rawEvent === "uniqueopened" ||
+        rawEvent === "firstopening"
+      ) {
+        realOpenByMid.set(mid, true);
+      } else if (!realOpenByMid.has(mid)) {
+        realOpenByMid.set(mid, false);
+      }
+    }
+
     const status = normalizeDeliveryStatus(row.event);
     if (!status || status === "queued") continue;
-    const mid = normalizeProviderMessageId(row.messageId);
     const key =
       mid ??
       `email:${(row.email ?? "").trim().toLowerCase()}|${normalizeSubject(row.subject)}`;
@@ -109,12 +127,20 @@ async function runSync(opts: {
         updated += 1;
         continue;
       }
-      // Known CRM row already at/past this status — stop.
-      if (byId.found) continue;
+      if (byId.found) {
+        // Undo earlier false Opened from privacy-proxy pixels.
+        if (row.status === "delivered" && realOpenByMid.get(mid) !== true) {
+          if (await demoteFalseProxyOpen(mid)) updated += 1;
+        }
+        continue;
+      }
       // Message id present but not in CRM: do NOT fall back to "latest reply
       // for this email" — that wrongly marks unrelated new drafts as opened.
       continue;
     }
+
+    // Opens without a Brevo message id are too ambiguous — skip subject fallback.
+    if (row.status === "opened") continue;
 
     const recipient = row.email?.trim().toLowerCase();
     if (!recipient || !normalizeSubject(row.subject)) continue;
