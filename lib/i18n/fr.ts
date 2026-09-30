@@ -459,6 +459,7 @@ export const fr: Messages = {
       noMessage: "(aucun message)",
       deleteMessage: "Supprimer le message",
       messageActions: "Actions du message",
+      selectedCount: "{n} sélectionné(s)",
       deleteAttachment: "Supprimer le document",
       deleteAttachmentConfirm: "Supprimer ce document de la conversation ?",
       attachmentDeleted: "Document supprimé",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChatterMessage } from "@/components/inbox/chatter-message";
+import { ChatterMessage, MessageSelectionBar, getMessagePlainText } from "@/components/inbox/chatter-message";
 import {
   MessageCompose,
   type MessageComposePayload,
@@ -76,10 +76,17 @@ export function SaleChatPanel({
   const [mail, setMail] = useState<MailMessage[]>([]);
   const [replies, setReplies] = useState<MailReply[]>([]);
   const [ownAddresses, setOwnAddresses] = useState<(string | null)[]>([]);
-  const [brevoReady, setBrevoReady] = useState(false);
+  const [brevoReady, setBrevoReady] = useState<boolean | null>(null);
   const [sending, setSending] = useState(false);
   const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [copyFlash, setCopyFlash] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setSelectedKeys([]);
+    setBrevoReady(null);
+  }, [email]);
 
   const canLoad = isClientEmail(email);
   const youLabel = t("pages.inbox.youPrefix").replace(/:\s*$/, "").trim() || "You";
@@ -216,39 +223,78 @@ export function SaleChatPanel({
     }
   }
 
-  async function deleteMessage(messageKey: string) {
+  async function deleteSelectedMessages() {
+    if (selectedKeys.length === 0) return;
     if (!window.confirm(t("pages.inbox.deleteMessageConfirm"))) return;
-    setDeletingMessageKey(messageKey);
+    const keys = [...selectedKeys];
+    setDeletingMessageKey(keys[0] ?? null);
     try {
-      const res = await fetch("/api/inbox/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "message", key: messageKey }),
-      });
-      const parsed = await readApiJson(res);
-      if (!parsed.ok) {
-        pushToast(parsed.error || t("pages.inbox.deleteFailed"));
-        return;
+      for (const key of keys) {
+        const res = await fetch("/api/inbox/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "message", key }),
+        });
+        const parsed = await readApiJson(res);
+        if (!parsed.ok) {
+          pushToast(parsed.error || t("pages.inbox.deleteFailed"));
+          return;
+        }
       }
       pushToast(t("pages.inbox.messageDeleted"));
+      setSelectedKeys([]);
       await loadConversation({ silent: true });
     } finally {
       setDeletingMessageKey(null);
     }
   }
 
+  async function copySelectedMessages() {
+    if (selectedKeys.length === 0) return;
+    const chunks = messages
+      .filter((message) => selectedKeys.includes(message.key))
+      .map((message) => getMessagePlainText(message))
+      .filter(Boolean);
+    if (!chunks.length) return;
+    try {
+      await navigator.clipboard.writeText(chunks.join("\n\n"));
+      setCopyFlash(true);
+      window.setTimeout(() => setCopyFlash(false), 1200);
+      setSelectedKeys([]);
+    } catch {
+      pushToast(t("pages.inbox.deleteFailed"));
+    }
+  }
+
+  function toggleMessageSelect(key: string) {
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((row) => row !== key) : [...prev, key],
+    );
+  }
+
   const displayName = displayContactName(customerName, email);
 
   return (
     <aside className="flex h-full min-h-0 min-w-0 flex-col border-l-0 bg-panel lg:border-l lg:border-line">
-      <header className="shrink-0 border-b border-line px-4 py-2.5">
-        <p className="text-[13px] font-semibold text-ink">
-          {title || t("pages.sales.clientMessages")}
-        </p>
-        {email ? (
-          <p className="mt-0.5 truncate text-xs text-mute">{email}</p>
-        ) : null}
-      </header>
+      {selectedKeys.length > 0 ? (
+        <MessageSelectionBar
+          count={selectedKeys.length}
+          copying={copyFlash}
+          deleting={!!deletingMessageKey}
+          onClear={() => setSelectedKeys([])}
+          onCopy={() => void copySelectedMessages()}
+          onDelete={() => void deleteSelectedMessages()}
+        />
+      ) : (
+        <header className="shrink-0 border-b border-line px-4 py-2.5">
+          <p className="text-[13px] font-semibold text-ink">
+            {title || t("pages.sales.clientMessages")}
+          </p>
+          {email ? (
+            <p className="mt-0.5 truncate text-xs text-mute">{email}</p>
+          ) : null}
+        </header>
+      )}
 
       <div
         ref={threadRef}
@@ -273,15 +319,16 @@ export function SaleChatPanel({
               key={message.key}
               message={message}
               youLabel={youLabel}
-              deleting={deletingMessageKey === message.key}
-              onDelete={() => void deleteMessage(message.key)}
+              selected={selectedKeys.includes(message.key)}
+              selectionActive={selectedKeys.length > 0}
+              onToggleSelect={() => toggleMessageSelect(message.key)}
             />
           ))
         )}
       </div>
 
       <footer className="shrink-0 border-t border-line bg-ash/40 p-3 sm:p-4">
-        {canLoad && brevoReady ? (
+        {selectedKeys.length > 0 || !canLoad ? null : brevoReady === true ? (
           <MessageCompose
             placeholder={t("pages.inbox.messagePlaceholder", { name: displayName })}
             sending={sending}
@@ -289,7 +336,7 @@ export function SaleChatPanel({
             sendTone="danger"
             onSend={sendMessage}
           />
-        ) : canLoad ? (
+        ) : brevoReady === false ? (
           <p className="text-xs text-gold">{t("pages.inbox.sendingMissing")}</p>
         ) : null}
       </footer>

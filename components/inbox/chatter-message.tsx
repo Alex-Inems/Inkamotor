@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { MessageAttachments } from "@/components/inbox/message-attachments";
 import { LinkifiedText } from "@/components/inbox/linkified-text";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
@@ -17,6 +17,9 @@ const AVATAR_TONES = [
   "bg-[#6b8f3a]",
   "bg-[#a85a5a]",
 ];
+
+const LONG_PRESS_MS = 420;
+const MOVE_CANCEL_PX = 10;
 
 export function chatterAvatarTone(seed: string) {
   let hash = 0;
@@ -45,7 +48,6 @@ function deliveryLabel(
   return t("pages.inbox.deliverySent");
 }
 
-/** Strong, distinct colors so status is obvious on the dark CRM chrome. */
 function deliveryTone(status: DeliveryStatus | null | undefined): {
   className: string;
   filled: boolean;
@@ -70,7 +72,6 @@ export function MailTrackingIcon({
     RoomMessage,
     "mine" | "deliveryStatus" | "deliveredAt" | "openedAt" | "at"
   >;
-  /** When true, show “Sent / Delivered / Opened” next to the icon. */
   showLabel?: boolean;
 }) {
   const { t, locale } = useLocale();
@@ -122,13 +123,115 @@ export function MailTrackingIcon({
   );
 }
 
-function messageCopyText(message: RoomMessage, text: string) {
+export function getMessagePlainText(
+  message: RoomMessage,
+  showOriginal = false,
+) {
+  if (showOriginal) return message.raw?.trim() || "";
+  const text =
+    message.clean.text?.trim() ||
+    previewOf(message.clean, message.raw?.trim() || "");
   const parts: string[] = [];
-  if (text.trim()) parts.push(text.trim());
+  if (text) parts.push(text);
   for (const file of message.attachments ?? []) {
     parts.push(file.fileName);
   }
   return parts.join("\n");
+}
+
+/** Top bar shown while messages are selected (WhatsApp-style). */
+export function MessageSelectionBar({
+  count,
+  copying = false,
+  deleting = false,
+  canCopy = true,
+  canDelete = true,
+  onClear,
+  onCopy,
+  onDelete,
+}: {
+  count: number;
+  copying?: boolean;
+  deleting?: boolean;
+  canCopy?: boolean;
+  canDelete?: boolean;
+  onClear: () => void;
+  onCopy: () => void;
+  onDelete: () => void;
+}) {
+  const { t } = useLocale();
+  return (
+    <div className="wa-sender-bar flex shrink-0 items-center gap-1 px-1 py-1 sm:gap-2 sm:px-3 sm:py-2">
+      <button
+        type="button"
+        aria-label={t("common.close")}
+        onClick={onClear}
+        className="flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          aria-hidden
+        >
+          <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
+      <p className="min-w-0 flex-1 truncate px-1 text-[15px] font-semibold text-cream">
+        {t("pages.inbox.selectedCount", { n: count })}
+      </p>
+      {canCopy ? (
+        <button
+          type="button"
+          disabled={copying || count === 0}
+          onClick={onCopy}
+          className="flex h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-cream/95 hover:text-cream disabled:opacity-40"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <rect x="9" y="9" width="11" height="11" rx="1.5" />
+            <path d="M5 15V5h10" />
+          </svg>
+          {copying ? t("common.copied") : t("common.copy")}
+        </button>
+      ) : null}
+      {canDelete ? (
+        <button
+          type="button"
+          disabled={deleting || count === 0}
+          onClick={onDelete}
+          className="flex h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-[#ffb4b4] hover:text-white disabled:opacity-40"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M4 7h16" />
+            <path d="M9 7V5h6v2" />
+            <path d="M8 7v12h8V7" />
+          </svg>
+          {deleting ? t("common.deleting") : t("common.delete")}
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 /** WhatsApp-style chat bubble used on Sales, Contacts, and Inbox. */
@@ -136,20 +239,23 @@ export function ChatterMessage({
   message,
   youLabel,
   showOriginal = false,
-  deleting = false,
-  onDelete,
+  selected = false,
+  selectionActive = false,
+  onToggleSelect,
 }: {
   message: RoomMessage;
   youLabel: string;
   showOriginal?: boolean;
-  deleting?: boolean;
-  onDelete?: () => void;
+  selected?: boolean;
+  selectionActive?: boolean;
+  /** Long-press or tap-while-selecting. */
+  onToggleSelect?: () => void;
 }) {
   const { t, locale } = useLocale();
   const [showQuoted, setShowQuoted] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const pressTimer = useRef<number | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+  const didLongPress = useRef(false);
   const text =
     message.clean.text?.trim() ||
     previewOf(message.clean, message.raw?.trim() || "");
@@ -168,52 +274,94 @@ export function ChatterMessage({
     !/^note$/i.test(message.subject) &&
     !/^update$/i.test(message.subject);
   const timeLabel = formatTime(message.at, locale);
-  const canCopy = hasText || hasAtt || showOriginal;
+  const selectable = !!onToggleSelect;
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onPointerDown(event: MouseEvent | TouchEvent) {
-      const target = event.target as Node | null;
-      if (menuRef.current && target && !menuRef.current.contains(target)) {
-        setMenuOpen(false);
-      }
+  function clearPressTimer() {
+    if (pressTimer.current != null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
     }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("touchstart", onPointerDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("touchstart", onPointerDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
+  }
 
-  async function copyMessage() {
-    const payload = showOriginal
-      ? message.raw
-      : messageCopyText(message, text);
-    if (!payload.trim()) return;
-    try {
-      await navigator.clipboard.writeText(payload);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1400);
-      setMenuOpen(false);
-    } catch {
-      setMenuOpen(false);
+  function onPointerDown(event: PointerEvent<HTMLElement>) {
+    if (!selectable || event.button !== 0) return;
+    didLongPress.current = false;
+    pressOrigin.current = { x: event.clientX, y: event.clientY };
+    clearPressTimer();
+    pressTimer.current = window.setTimeout(() => {
+      didLongPress.current = true;
+      onToggleSelect?.();
+    }, LONG_PRESS_MS);
+  }
+
+  function onPointerMove(event: PointerEvent<HTMLElement>) {
+    if (!pressOrigin.current || pressTimer.current == null) return;
+    const dx = event.clientX - pressOrigin.current.x;
+    const dy = event.clientY - pressOrigin.current.y;
+    if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) clearPressTimer();
+  }
+
+  function onPointerUp() {
+    clearPressTimer();
+    pressOrigin.current = null;
+  }
+
+  function onClick(event: MouseEvent<HTMLElement>) {
+    if (!selectable) return;
+    if (didLongPress.current) {
+      didLongPress.current = false;
+      event.preventDefault();
+      return;
     }
+    if (selectionActive) {
+      event.preventDefault();
+      onToggleSelect?.();
+    }
+  }
+
+  function onContextMenu(event: MouseEvent<HTMLElement>) {
+    if (!selectable) return;
+    event.preventDefault();
+    onToggleSelect?.();
   }
 
   return (
     <article
-      className={`flex w-full gap-2 px-1 py-0.5 ${
+      className={`relative flex w-full gap-2 px-1 py-0.5 transition-colors ${
         message.mine ? "justify-end" : "justify-start"
-      }`}
+      } ${selected ? "bg-[#00a884]/22" : selectionActive ? "hover:bg-white/5" : ""}`}
       role="group"
       aria-label={author}
+      aria-selected={selected}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onClick={onClick}
+      onContextMenu={onContextMenu}
+      style={{ WebkitTouchCallout: "none", userSelect: selectionActive ? "none" : undefined }}
     >
+      {selected ? (
+        <span
+          className={`absolute top-1/2 z-[1] flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full bg-[#00a884] text-white ${
+            message.mine ? "left-1" : "right-1"
+          }`}
+          aria-hidden
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-3 w-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M5 12l5 5L20 7" />
+          </svg>
+        </span>
+      ) : null}
+
       {!message.mine ? (
         <span
           className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${chatterAvatarTone(author)}`}
@@ -243,107 +391,10 @@ export function ChatterMessage({
         )}
 
         <div
-          className={`wa-bubble wa-tail group/msg relative w-fit max-w-full text-[13.5px] leading-snug ${
+          className={`wa-bubble wa-tail relative w-fit max-w-full text-[13.5px] leading-snug ${
             message.mine ? "wa-bubble-out" : "wa-bubble-in"
           }`}
         >
-          {canCopy || onDelete ? (
-            <div
-              ref={menuRef}
-              className={`absolute top-1 z-20 ${
-                message.mine ? "left-1" : "right-1"
-              }`}
-            >
-              <button
-                type="button"
-                aria-label={t("pages.inbox.messageActions")}
-                aria-expanded={menuOpen}
-                aria-haspopup="menu"
-                disabled={deleting}
-                onClick={() => setMenuOpen((open) => !open)}
-                className={`flex h-6 w-6 items-center justify-center rounded-full transition-opacity hover:bg-black/10 ${
-                  message.mine ? "text-[#0f1f1e]/55" : "text-white/55"
-                } ${
-                  menuOpen
-                    ? "opacity-100"
-                    : "opacity-70 sm:opacity-0 sm:group-hover/msg:opacity-100"
-                } ${deleting ? "opacity-40" : ""}`}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-3.5 w-3.5"
-                  fill="currentColor"
-                  aria-hidden
-                >
-                  <circle cx="12" cy="5" r="1.6" />
-                  <circle cx="12" cy="12" r="1.6" />
-                  <circle cx="12" cy="19" r="1.6" />
-                </svg>
-              </button>
-
-              {menuOpen ? (
-                <div
-                  role="menu"
-                  className={`absolute top-7 min-w-[8.5rem] overflow-hidden rounded-md border border-line bg-panel py-1 shadow-[0_10px_30px_rgba(0,0,0,0.35)] ${
-                    message.mine ? "left-0" : "right-0"
-                  }`}
-                >
-                  {canCopy ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-ink hover:bg-ash"
-                      onClick={() => void copyMessage()}
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-3.5 w-3.5 shrink-0 text-mute"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <rect x="9" y="9" width="11" height="11" rx="1.5" />
-                        <path d="M5 15V5h10" />
-                      </svg>
-                      {copied ? t("common.copied") : t("common.copy")}
-                    </button>
-                  ) : null}
-                  {onDelete ? (
-                    <button
-                      type="button"
-                      role="menuitem"
-                      disabled={deleting}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-pink hover:bg-ash disabled:opacity-40"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onDelete();
-                      }}
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-3.5 w-3.5 shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <path d="M4 7h16" />
-                        <path d="M9 7V5h6v2" />
-                        <path d="M8 7v12h8V7" />
-                      </svg>
-                      {deleting ? t("common.deleting") : t("common.delete")}
-                    </button>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
           {showOriginal ? (
             <pre
               className={`whitespace-pre-wrap wrap-break-word text-xs ${
@@ -413,7 +464,10 @@ export function ChatterMessage({
                 <>
                   <button
                     type="button"
-                    onClick={() => setShowQuoted((v) => !v)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setShowQuoted((v) => !v);
+                    }}
                     className={`mt-1 text-[11px] font-semibold underline-offset-2 hover:underline ${
                       message.mine ? "text-[#0f1f1e]/70" : "text-white/70"
                     }`}
