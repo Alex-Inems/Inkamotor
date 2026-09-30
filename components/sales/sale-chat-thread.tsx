@@ -79,9 +79,6 @@ export function SaleChatPanel({
   const [brevoReady, setBrevoReady] = useState(false);
   const [sending, setSending] = useState(false);
   const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
-  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(
-    null,
-  );
   const threadRef = useRef<HTMLDivElement>(null);
 
   const canLoad = isClientEmail(email);
@@ -240,25 +237,6 @@ export function SaleChatPanel({
     }
   }
 
-  async function deleteAttachment(attachmentId: string) {
-    if (!window.confirm(t("pages.inbox.deleteAttachmentConfirm"))) return;
-    setDeletingAttachmentId(attachmentId);
-    try {
-      const res = await fetch(`/api/inbox/attachments/${attachmentId}`, {
-        method: "DELETE",
-      });
-      const parsed = await readApiJson(res);
-      if (!parsed.ok) {
-        pushToast(parsed.error || t("pages.inbox.deleteFailed"));
-        return;
-      }
-      pushToast(t("pages.inbox.attachmentDeleted"));
-      await loadConversation({ silent: true });
-    } finally {
-      setDeletingAttachmentId(null);
-    }
-  }
-
   const displayName = displayContactName(customerName, email);
 
   return (
@@ -297,8 +275,6 @@ export function SaleChatPanel({
               youLabel={youLabel}
               deleting={deletingMessageKey === message.key}
               onDelete={() => void deleteMessage(message.key)}
-              onDeleteAttachment={(id) => void deleteAttachment(id)}
-              deletingAttachmentId={deletingAttachmentId}
             />
           ))
         )}

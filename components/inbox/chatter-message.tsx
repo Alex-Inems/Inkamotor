@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MessageAttachments } from "@/components/inbox/message-attachments";
 import { LinkifiedText } from "@/components/inbox/linkified-text";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
@@ -122,6 +122,15 @@ export function MailTrackingIcon({
   );
 }
 
+function messageCopyText(message: RoomMessage, text: string) {
+  const parts: string[] = [];
+  if (text.trim()) parts.push(text.trim());
+  for (const file of message.attachments ?? []) {
+    parts.push(file.fileName);
+  }
+  return parts.join("\n");
+}
+
 /** WhatsApp-style chat bubble used on Sales, Contacts, and Inbox. */
 export function ChatterMessage({
   message,
@@ -129,19 +138,18 @@ export function ChatterMessage({
   showOriginal = false,
   deleting = false,
   onDelete,
-  onDeleteAttachment,
-  deletingAttachmentId,
 }: {
   message: RoomMessage;
   youLabel: string;
   showOriginal?: boolean;
   deleting?: boolean;
   onDelete?: () => void;
-  onDeleteAttachment?: (attachmentId: string) => void;
-  deletingAttachmentId?: string | null;
 }) {
   const { t, locale } = useLocale();
   const [showQuoted, setShowQuoted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const text =
     message.clean.text?.trim() ||
     previewOf(message.clean, message.raw?.trim() || "");
@@ -160,6 +168,43 @@ export function ChatterMessage({
     !/^note$/i.test(message.subject) &&
     !/^update$/i.test(message.subject);
   const timeLabel = formatTime(message.at, locale);
+  const canCopy = hasText || hasAtt || showOriginal;
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      const target = event.target as Node | null;
+      if (menuRef.current && target && !menuRef.current.contains(target)) {
+        setMenuOpen(false);
+      }
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("touchstart", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("touchstart", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  async function copyMessage() {
+    const payload = showOriginal
+      ? message.raw
+      : messageCopyText(message, text);
+    if (!payload.trim()) return;
+    try {
+      await navigator.clipboard.writeText(payload);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+      setMenuOpen(false);
+    } catch {
+      setMenuOpen(false);
+    }
+  }
 
   return (
     <article
@@ -198,22 +243,105 @@ export function ChatterMessage({
         )}
 
         <div
-          className={`wa-bubble wa-tail group/msg w-fit max-w-full text-[13.5px] leading-snug ${
+          className={`wa-bubble wa-tail group/msg relative w-fit max-w-full text-[13.5px] leading-snug ${
             message.mine ? "wa-bubble-out" : "wa-bubble-in"
           }`}
         >
-          {onDelete ? (
-            <button
-              type="button"
-              aria-label={t("pages.inbox.deleteMessage")}
-              disabled={deleting}
-              onClick={onDelete}
-              className={`absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full text-[13px] leading-none opacity-70 transition-opacity hover:bg-black/15 hover:opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 ${
-                message.mine ? "text-[#0f1f1e]/70" : "text-white/60"
-              } ${deleting ? "opacity-40" : ""}`}
+          {canCopy || onDelete ? (
+            <div
+              ref={menuRef}
+              className={`absolute top-1 z-20 ${
+                message.mine ? "left-1" : "right-1"
+              }`}
             >
-              ×
-            </button>
+              <button
+                type="button"
+                aria-label={t("pages.inbox.messageActions")}
+                aria-expanded={menuOpen}
+                aria-haspopup="menu"
+                disabled={deleting}
+                onClick={() => setMenuOpen((open) => !open)}
+                className={`flex h-6 w-6 items-center justify-center rounded-full transition-opacity hover:bg-black/10 ${
+                  message.mine ? "text-[#0f1f1e]/55" : "text-white/55"
+                } ${
+                  menuOpen
+                    ? "opacity-100"
+                    : "opacity-70 sm:opacity-0 sm:group-hover/msg:opacity-100"
+                } ${deleting ? "opacity-40" : ""}`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-3.5 w-3.5"
+                  fill="currentColor"
+                  aria-hidden
+                >
+                  <circle cx="12" cy="5" r="1.6" />
+                  <circle cx="12" cy="12" r="1.6" />
+                  <circle cx="12" cy="19" r="1.6" />
+                </svg>
+              </button>
+
+              {menuOpen ? (
+                <div
+                  role="menu"
+                  className={`absolute top-7 min-w-[8.5rem] overflow-hidden rounded-md border border-line bg-panel py-1 shadow-[0_10px_30px_rgba(0,0,0,0.35)] ${
+                    message.mine ? "left-0" : "right-0"
+                  }`}
+                >
+                  {canCopy ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-ink hover:bg-ash"
+                      onClick={() => void copyMessage()}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-3.5 w-3.5 shrink-0 text-mute"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <rect x="9" y="9" width="11" height="11" rx="1.5" />
+                        <path d="M5 15V5h10" />
+                      </svg>
+                      {copied ? t("common.copied") : t("common.copy")}
+                    </button>
+                  ) : null}
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={deleting}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-pink hover:bg-ash disabled:opacity-40"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete();
+                      }}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="h-3.5 w-3.5 shrink-0"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <path d="M4 7h16" />
+                        <path d="M9 7V5h6v2" />
+                        <path d="M8 7v12h8V7" />
+                      </svg>
+                      {deleting ? t("common.deleting") : t("common.delete")}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           {showOriginal ? (
@@ -260,8 +388,6 @@ export function ChatterMessage({
                   attachments={message.attachments!}
                   mine={message.mine}
                   tone={message.mine ? "dark" : "light"}
-                  onDeleteAttachment={onDeleteAttachment}
-                  deletingAttachmentId={deletingAttachmentId}
                 />
               ) : null}
 

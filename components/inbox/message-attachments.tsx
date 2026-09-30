@@ -23,9 +23,7 @@ function isImageFile(file: ReplyAttachment) {
 }
 
 function isPdfFile(file: ReplyAttachment) {
-  return (
-    file.mimeType.includes("pdf") || extOf(file.fileName) === "pdf"
-  );
+  return file.mimeType.includes("pdf") || extOf(file.fileName) === "pdf";
 }
 
 function isTextFile(file: ReplyAttachment) {
@@ -75,34 +73,24 @@ function isAudioFile(file: ReplyAttachment) {
   );
 }
 
-function GenericEmbedPreview({
-  url,
-  mimeType,
-  fileName,
-}: {
-  url: string;
-  mimeType: string;
-  fileName: string;
-}) {
-  const { t } = useLocale();
+function fileKindLabel(file: ReplyAttachment) {
+  if (isPdfFile(file)) return "PDF";
+  if (isImageFile(file)) return "image";
+  if (isVideoFile(file)) return "video";
+  if (isAudioFile(file)) return "audio";
+  if (isOfficeDoc(file)) return "document";
+  if (isTextFile(file)) return "text";
+  const ext = extOf(file.fileName);
+  return ext ? ext.toUpperCase() : "file";
+}
+
+function canInlinePreview(file: ReplyAttachment) {
   return (
-    <div className="border-t border-line/60 bg-ash/30">
-      <object
-        data={url}
-        type={mimeType || "application/octet-stream"}
-        className="h-48 w-full bg-white"
-        aria-label={fileName}
-      >
-        <iframe
-          src={url}
-          title={fileName}
-          className="h-48 w-full border-0 bg-white"
-        />
-      </object>
-      <p className="px-3 py-2 text-center text-[11px] text-mute">
-        {t("pages.inbox.previewFallback")}
-      </p>
-    </div>
+    isPdfFile(file) ||
+    isImageFile(file) ||
+    isTextFile(file) ||
+    isVideoFile(file) ||
+    isAudioFile(file)
   );
 }
 
@@ -268,36 +256,78 @@ function TextFilePreview({ url, fileName }: { url: string; fileName: string }) {
   );
 }
 
+function OnDemandPreview({ file, url }: { file: ReplyAttachment; url: string }) {
+  const { t } = useLocale();
+  if (isPdfFile(file)) {
+    return <PdfCanvasPreview url={url} fileName={file.fileName} />;
+  }
+  if (isImageFile(file)) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt={file.fileName}
+        className="max-h-64 w-full border-t border-line/60 bg-white object-contain"
+        loading="lazy"
+      />
+    );
+  }
+  if (isVideoFile(file)) {
+    return (
+      <video
+        src={url}
+        controls
+        preload="metadata"
+        className="max-h-64 w-full border-t border-line/60 bg-black"
+      >
+        {t("pages.inbox.previewFallback")}
+      </video>
+    );
+  }
+  if (isAudioFile(file)) {
+    return (
+      <div className="border-t border-line/60 px-3 py-3">
+        <audio src={url} controls preload="metadata" className="w-full">
+          {t("pages.inbox.previewFallback")}
+        </audio>
+      </div>
+    );
+  }
+  if (isTextFile(file)) {
+    return <TextFilePreview url={url} fileName={file.fileName} />;
+  }
+  return (
+    <p className="border-t border-line/60 px-3 py-3 text-center text-xs text-mute">
+      {t("pages.inbox.previewFallback")}
+    </p>
+  );
+}
+
 export function MessageAttachments({
   attachments,
   mine,
   tone = "dark",
-  onDeleteAttachment,
-  deletingAttachmentId,
 }: {
   attachments: ReplyAttachment[];
   mine: boolean;
   tone?: "dark" | "light";
-  onDeleteAttachment?: (attachmentId: string) => void;
-  deletingAttachmentId?: string | null;
 }) {
   const { t } = useLocale();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const visible = attachments.filter((file) => !isJunkAttachment(file));
   if (visible.length === 0) return null;
   const light = tone === "light";
 
   return (
-    <div className="mt-2 space-y-2">
+    <div className="mt-2 space-y-1.5">
       {visible.map((file) => {
         const previewUrl = `/api/inbox/attachments/${file.id}`;
         const downloadUrl = `${previewUrl}?download=1`;
-        const pdf = isPdfFile(file);
-        const image = isImageFile(file);
-        const text = isTextFile(file);
-        const office = isOfficeDoc(file);
-        const video = isVideoFile(file);
-        const audio = isAudioFile(file);
-        const deleting = deletingAttachmentId === file.id;
+        const previewable = canInlinePreview(file);
+        const expanded = expandedId === file.id;
+        const linkClass = `font-semibold underline-offset-2 hover:underline ${
+          light ? "text-[#017e84]" : ""
+        }`;
 
         return (
           <div
@@ -321,77 +351,55 @@ export function MessageAttachments({
             >
               <div className="min-w-0">
                 <p className="truncate font-medium">{file.fileName}</p>
-                <p className={light ? "text-black/55" : mine ? "text-chat-out-text/65" : "text-mute"}>
-                  {formatBytes(file.byteSize)}
-                  {office && !pdf ? " · document" : null}
-                  {video ? " · video" : null}
-                  {audio ? " · audio" : null}
+                <p
+                  className={
+                    light
+                      ? "text-black/55"
+                      : mine
+                        ? "text-chat-out-text/65"
+                        : "text-mute"
+                  }
+                >
+                  {formatBytes(file.byteSize)} · {fileKindLabel(file)}
                 </p>
               </div>
               <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <a
-                  href={previewUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`font-semibold underline-offset-2 hover:underline ${light ? "text-[#017e84]" : ""}`}
-                >
-                  {t("pages.inbox.openAttachment")}
-                </a>
+                {previewable ? (
+                  <button
+                    type="button"
+                    className={linkClass}
+                    onClick={() =>
+                      setExpandedId((current) =>
+                        current === file.id ? null : file.id,
+                      )
+                    }
+                  >
+                    {expanded
+                      ? t("pages.inbox.hidePreview")
+                      : t("pages.inbox.openAttachment")}
+                  </button>
+                ) : (
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={linkClass}
+                  >
+                    {t("pages.inbox.openAttachment")}
+                  </a>
+                )}
                 <a
                   href={downloadUrl}
                   download={file.fileName}
-                  className={`font-semibold underline-offset-2 hover:underline ${light ? "text-[#017e84]" : ""}`}
+                  className={linkClass}
                 >
                   {t("pages.inbox.downloadAttachment")}
                 </a>
-                {onDeleteAttachment ? (
-                  <button
-                    type="button"
-                    disabled={deleting}
-                    onClick={() => onDeleteAttachment(file.id)}
-                    className={`font-semibold underline-offset-2 hover:underline disabled:opacity-40 ${
-                      light ? "text-[#a85a5a]" : mine ? "text-[#5a1f1f]" : "text-pink"
-                    }`}
-                  >
-                    {deleting ? t("common.deleting") : t("pages.inbox.deleteAttachment")}
-                  </button>
-                ) : null}
               </div>
             </div>
-            {pdf ? (
-              <PdfCanvasPreview url={previewUrl} fileName={file.fileName} />
-            ) : image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={previewUrl}
-                alt={file.fileName}
-                className="max-h-64 w-full bg-white object-contain"
-                loading="lazy"
-              />
-            ) : video ? (
-              <video
-                src={previewUrl}
-                controls
-                preload="metadata"
-                className="max-h-64 w-full bg-black"
-              >
-                {t("pages.inbox.previewFallback")}
-              </video>
-            ) : audio ? (
-              <div className="border-t border-line/60 px-3 py-3">
-                <audio src={previewUrl} controls preload="metadata" className="w-full">
-                  {t("pages.inbox.previewFallback")}
-                </audio>
-              </div>
-            ) : text ? (
-              <TextFilePreview url={previewUrl} fileName={file.fileName} />
-            ) : (
-              <GenericEmbedPreview
-                url={previewUrl}
-                mimeType={file.mimeType}
-                fileName={file.fileName}
-              />
-            )}
+            {expanded && previewable ? (
+              <OnDemandPreview file={file} url={previewUrl} />
+            ) : null}
           </div>
         );
       })}

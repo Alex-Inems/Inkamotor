@@ -1,20 +1,20 @@
 ---
-description: Always show inline previews for documents (quotes, invoices, mail attachments)
+description: Document previews for quotes, invoices, and mail attachments
 alwaysApply: true
 ---
 
 # Document previews
 
-Whenever a document is created, sent, attached, or shown in the CRM (quotes, invoices, PDFs, mail attachments, email HTML), the user must see an **inline preview** — not only a filename, download chip, or “Open” link.
+Documents in the CRM must remain previewable — not download-only — but **chat attachments must not auto-load or auto-download** (that disrupts scrolling and UX).
 
 ## Required behavior
 
-- Mail/chat attachments: render an inline preview in the bubble (PDF pages, image, text body, or iframe/`object` embed). Never ship header-only attachment rows for previewable files.
-- Quotes/invoices: keep the existing preview modal/document view wired and opening correctly; PDF attachments saved to chat history must use `application/pdf` so the canvas preview runs.
+- Mail/chat attachments: show a compact file row (name, size, type) with **Preview** / **Download**. Load PDF/image/text/media **only after** the user clicks Preview. Never auto-embed `object`/`iframe` for office or unknown types (browsers often force a download).
+- Quotes/invoices: keep the existing preview modal/document view wired and opening correctly; PDF attachments saved to chat history must use `application/pdf` so the on-demand canvas preview can run.
 - Newsletter/email editors: the live preview iframe (or equivalent) must reflect the document the user is editing.
-- If a format cannot be rendered natively, still show a visible preview panel (embed attempt + clear fallback), not an empty gap.
 
 ## Do not
 
-- Leave documents as download-only when a preview path already exists in the codebase (`MessageAttachments`, `QuoteDocument`, `InvoiceDocument`, mailing preview iframe).
+- Auto-fetch or auto-render attachment bytes when a chat bubble mounts.
+- Leave documents as download-only when a preview path already exists (`MessageAttachments` Preview toggle, `QuoteDocument`, `InvoiceDocument`, mailing preview iframe).
 - Save quote/invoice PDFs without persisting them as reply attachments with a PDF mime type.
