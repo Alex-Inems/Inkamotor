@@ -4,12 +4,12 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
-import { btnPrimary, btnSecondary, inputClass, Modal } from "@/components/modal";
 import { useT } from "@/lib/i18n";
 
 export type ConfirmOptions = {
@@ -45,6 +45,95 @@ type PendingPrompt = PromptOptions & {
   resolve: (value: string | null) => void;
 };
 
+function DialogShell({
+  open,
+  onClose,
+  children,
+  labelledBy,
+}: {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  labelledBy: string;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end justify-center p-3 sm:items-center sm:p-6">
+      <button
+        type="button"
+        aria-label="Close"
+        className="absolute inset-0 bg-ash/70 backdrop-blur-[2px] transition-opacity"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        className="relative z-10 w-full max-w-[22rem] overflow-hidden rounded-2xl border border-line/80 bg-panel shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:max-w-[24rem]"
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function WarningIcon({ danger }: { danger?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+        danger
+          ? "bg-sale/15 text-pink"
+          : "bg-accent/20 text-chat-out"
+      }`}
+    >
+      {danger ? (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+          <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+        </svg>
+      ) : (
+        <svg
+          viewBox="0 0 24 24"
+          className="h-5 w-5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 8v5" />
+          <path d="M12 16h.01" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const t = useT();
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(
@@ -54,6 +143,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [promptValue, setPromptValue] = useState("");
   const confirmSeq = useRef(0);
   const promptSeq = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const confirm = useCallback((options: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
@@ -72,94 +162,123 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo(() => ({ confirm, prompt }), [confirm, prompt]);
 
-  function closeConfirm(result: boolean) {
-    pendingConfirm?.resolve(result);
-    setPendingConfirm(null);
-  }
+  const closeConfirm = useCallback((result: boolean) => {
+    setPendingConfirm((current) => {
+      current?.resolve(result);
+      return null;
+    });
+  }, []);
 
-  function closePrompt(result: string | null) {
-    pendingPrompt?.resolve(result);
-    setPendingPrompt(null);
+  const closePrompt = useCallback((result: string | null) => {
+    setPendingPrompt((current) => {
+      current?.resolve(result);
+      return null;
+    });
     setPromptValue("");
-  }
+  }, []);
+
+  useEffect(() => {
+    if (!pendingPrompt) return;
+    const id = window.setTimeout(() => inputRef.current?.focus(), 40);
+    return () => window.clearTimeout(id);
+  }, [pendingPrompt]);
 
   return (
     <ConfirmContext.Provider value={api}>
       {children}
-      <Modal
-        open={!!pendingConfirm}
-        title={pendingConfirm?.title ?? ""}
-        onClose={() => closeConfirm(false)}
-        footer={
-          <div className="flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              className={btnSecondary}
-              onClick={() => closeConfirm(false)}
-            >
-              {pendingConfirm?.cancelLabel ?? t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              className={
-                pendingConfirm?.danger
-                  ? "inline-flex min-h-11 items-center justify-center bg-sale px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.08em] text-white transition-colors hover:bg-pink-deep disabled:opacity-50"
-                  : btnPrimary
-              }
-              onClick={() => closeConfirm(true)}
-            >
-              {pendingConfirm?.confirmLabel ?? t("common.confirm")}
-            </button>
-          </div>
-        }
-      >
-        <p className="text-sm leading-relaxed text-ink/90">
-          {pendingConfirm?.message}
-        </p>
-      </Modal>
 
-      <Modal
-        open={!!pendingPrompt}
-        title={pendingPrompt?.title ?? ""}
-        onClose={() => closePrompt(null)}
-        footer={
-          <div className="flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              className={btnSecondary}
-              onClick={() => closePrompt(null)}
-            >
-              {pendingPrompt?.cancelLabel ?? t("common.cancel")}
-            </button>
-            <button
-              type="button"
-              className={btnPrimary}
-              onClick={() => closePrompt(promptValue.trim() || null)}
-            >
-              {pendingPrompt?.confirmLabel ?? t("common.confirm")}
-            </button>
-          </div>
-        }
+      <DialogShell
+        open={!!pendingConfirm}
+        onClose={() => closeConfirm(false)}
+        labelledBy="confirm-dialog-title"
       >
-        {pendingPrompt?.message ? (
-          <p className="mb-3 text-sm leading-relaxed text-ink/90">
-            {pendingPrompt.message}
-          </p>
-        ) : null}
-        <input
-          className={inputClass}
-          value={promptValue}
-          placeholder={pendingPrompt?.placeholder}
-          autoFocus
-          onChange={(event) => setPromptValue(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              event.preventDefault();
-              closePrompt(promptValue.trim() || null);
-            }
-          }}
-        />
-      </Modal>
+        <div className="px-5 pb-2 pt-5">
+          <div className="flex items-start gap-3.5">
+            <WarningIcon danger={pendingConfirm?.danger} />
+            <div className="min-w-0 flex-1 pt-0.5">
+              <h2
+                id="confirm-dialog-title"
+                className="font-display text-[1.35rem] leading-tight tracking-wide text-ink"
+              >
+                {pendingConfirm?.title}
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-mute">
+                {pendingConfirm?.message}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 px-5 pb-5 pt-4">
+          <button
+            type="button"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line bg-ash/40 px-3 text-sm font-semibold text-ink transition-colors hover:bg-ash"
+            onClick={() => closeConfirm(false)}
+          >
+            {pendingConfirm?.cancelLabel ?? t("common.cancel")}
+          </button>
+          <button
+            type="button"
+            autoFocus
+            className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-xl px-3 text-sm font-semibold text-white transition-colors ${
+              pendingConfirm?.danger
+                ? "bg-sale hover:bg-pink-deep"
+                : "bg-accent hover:bg-accent-deep"
+            }`}
+            onClick={() => closeConfirm(true)}
+          >
+            {pendingConfirm?.confirmLabel ?? t("common.confirm")}
+          </button>
+        </div>
+      </DialogShell>
+
+      <DialogShell
+        open={!!pendingPrompt}
+        onClose={() => closePrompt(null)}
+        labelledBy="prompt-dialog-title"
+      >
+        <div className="px-5 pb-2 pt-5">
+          <h2
+            id="prompt-dialog-title"
+            className="font-display text-[1.35rem] leading-tight tracking-wide text-ink"
+          >
+            {pendingPrompt?.title}
+          </h2>
+          {pendingPrompt?.message ? (
+            <p className="mt-2 text-sm leading-relaxed text-mute">
+              {pendingPrompt.message}
+            </p>
+          ) : null}
+          <input
+            ref={inputRef}
+            className="mt-4 w-full rounded-xl border border-line bg-canvas px-3.5 py-3 text-sm text-ink outline-none transition-colors placeholder:text-mute/70 focus:border-gold"
+            value={promptValue}
+            placeholder={pendingPrompt?.placeholder}
+            onChange={(event) => setPromptValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                closePrompt(promptValue.trim() || null);
+              }
+            }}
+          />
+        </div>
+        <div className="flex gap-2 px-5 pb-5 pt-4">
+          <button
+            type="button"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line bg-ash/40 px-3 text-sm font-semibold text-ink transition-colors hover:bg-ash"
+            onClick={() => closePrompt(null)}
+          >
+            {pendingPrompt?.cancelLabel ?? t("common.cancel")}
+          </button>
+          <button
+            type="button"
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl bg-accent px-3 text-sm font-semibold text-white transition-colors hover:bg-accent-deep"
+            onClick={() => closePrompt(promptValue.trim() || null)}
+          >
+            {pendingPrompt?.confirmLabel ?? t("common.confirm")}
+          </button>
+        </div>
+      </DialogShell>
     </ConfirmContext.Provider>
   );
 }
