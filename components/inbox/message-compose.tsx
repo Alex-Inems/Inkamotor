@@ -110,15 +110,19 @@ export function MessageCompose({
     }
     if (!draft.trim() && attachments.length === 0) return;
 
-    const needsUpload = attachments.some(
+    // Snapshot now; keep the compose box unchanged until upload + send both succeed.
+    const messageText = draft.trim();
+    const filesToSend = attachments;
+    const needsUpload = filesToSend.some(
       (file) => file.byteSize > 3 * 1024 * 1024,
     );
+
     setPreparing(true);
     let progressToastId: number | null = null;
     if (needsUpload) {
       progressToastId = pushToast({
         message: t("pages.inbox.uploadingAttachment"),
-        detail: attachments[0]?.fileName,
+        detail: filesToSend[0]?.fileName,
         tone: "info",
         progress: 0,
         sticky: true,
@@ -127,8 +131,9 @@ export function MessageCompose({
 
     let outbound;
     try {
+      // Stage / compress attachments fully before the reply text is submitted.
       outbound = await pendingToOutbound(
-        attachments,
+        filesToSend,
         progressToastId == null
           ? undefined
           : (progress) => {
@@ -142,17 +147,6 @@ export function MessageCompose({
               });
             },
       );
-      if (progressToastId != null) {
-        updateToast(progressToastId, {
-          message: t("pages.inbox.uploadingAttachment"),
-          detail: undefined,
-          progress: 100,
-        });
-        window.setTimeout(() => {
-          if (progressToastId != null) dismissToast(progressToastId);
-        }, 500);
-        progressToastId = null;
-      }
     } catch (err) {
       if (progressToastId != null) dismissToast(progressToastId);
       pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
@@ -160,16 +154,36 @@ export function MessageCompose({
       return;
     }
 
+    if (progressToastId != null) {
+      updateToast(progressToastId, {
+        message: t("common.sending"),
+        detail: undefined,
+        progress: 95,
+      });
+    }
+
     try {
       await onSend({
-        message: draft.trim(),
+        message: messageText,
         attachments: outbound,
       });
     } catch {
       // Keep draft so the user can retry; caller shows the error toast.
+      if (progressToastId != null) dismissToast(progressToastId);
       setPreparing(false);
       return;
     }
+
+    if (progressToastId != null) {
+      updateToast(progressToastId, {
+        message: t("common.sending"),
+        progress: 100,
+      });
+      const doneId = progressToastId;
+      progressToastId = null;
+      window.setTimeout(() => dismissToast(doneId), 400);
+    }
+
     setDraft("");
     setAttachments([]);
     setLinkOpen(false);

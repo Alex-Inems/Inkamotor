@@ -283,13 +283,14 @@ export async function pendingToOutbound(
   let completedBytes = 0;
 
   const report = (fileName: string, fileIndex: number, withinFile = 0) => {
+    // Reserve the last 10% for the actual send — never report complete here.
     const raw =
-      ((completedBytes + withinFile) / approxTotalBytes) * 100;
+      ((completedBytes + withinFile) / approxTotalBytes) * 90;
     onProgress?.({
       fileName,
       fileIndex,
       fileCount,
-      percent: Math.max(0, Math.min(99, Math.round(raw))),
+      percent: Math.max(0, Math.min(90, Math.round(raw))),
     });
   };
 
@@ -357,7 +358,7 @@ export async function pendingToOutbound(
     fileName: files[files.length - 1]?.fileName ?? "",
     fileIndex: Math.max(0, fileCount - 1),
     fileCount,
-    percent: 100,
+    percent: 90,
   });
 
   return out;

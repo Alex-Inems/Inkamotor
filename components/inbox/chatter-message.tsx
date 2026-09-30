@@ -251,12 +251,20 @@ export function ChatterMessage({
                 </dl>
               ) : null}
 
+              {hasAtt ? (
+                <MessageAttachments
+                  attachments={message.attachments!}
+                  mine={message.mine}
+                  tone={message.mine ? "dark" : "light"}
+                />
+              ) : null}
+
               {hasText ? (
                 <LinkifiedText
                   text={text}
                   className={`whitespace-pre-wrap wrap-break-word ${
-                    message.mine ? "text-[#0f1f1e]" : "text-white"
-                  }`}
+                    hasAtt ? "mt-1.5 " : ""
+                  }${message.mine ? "text-[#0f1f1e]" : "text-white"}`}
                   linkClassName="font-medium underline underline-offset-2"
                 />
               ) : !hasFields && !hasAtt ? (
@@ -294,14 +302,6 @@ export function ChatterMessage({
                     </pre>
                   ) : null}
                 </>
-              ) : null}
-
-              {hasAtt ? (
-                <MessageAttachments
-                  attachments={message.attachments!}
-                  mine={message.mine}
-                  tone={message.mine ? "dark" : "light"}
-                />
               ) : null}
             </>
           )}
