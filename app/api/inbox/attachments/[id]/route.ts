@@ -1,5 +1,8 @@
 import { jsonError } from "@/lib/api";
-import { getReplyAttachmentFile } from "@/lib/mail/attachments";
+import {
+  deleteReplyAttachment,
+  getReplyAttachmentFile,
+} from "@/lib/mail/attachments";
 import { missingSupabaseEnv } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -39,4 +42,22 @@ export async function GET(request: Request, { params }: Params) {
       Accept: "*/*",
     },
   });
+}
+
+export async function DELETE(_request: Request, { params }: Params) {
+  const missing = missingSupabaseEnv();
+  if (missing.length > 0) {
+    return jsonError(503, {
+      error: "Supabase is not configured",
+      code: "missing_credentials",
+      missing,
+    });
+  }
+
+  const { id } = await params;
+  const ok = await deleteReplyAttachment(id);
+  if (!ok) {
+    return jsonError(404, { error: "Attachment not found", code: "send_failed" });
+  }
+  return Response.json({ ok: true });
 }

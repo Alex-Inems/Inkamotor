@@ -272,10 +272,14 @@ export function MessageAttachments({
   attachments,
   mine,
   tone = "dark",
+  onDeleteAttachment,
+  deletingAttachmentId,
 }: {
   attachments: ReplyAttachment[];
   mine: boolean;
   tone?: "dark" | "light";
+  onDeleteAttachment?: (attachmentId: string) => void;
+  deletingAttachmentId?: string | null;
 }) {
   const { t } = useLocale();
   const visible = attachments.filter((file) => !isJunkAttachment(file));
@@ -293,6 +297,7 @@ export function MessageAttachments({
         const office = isOfficeDoc(file);
         const video = isVideoFile(file);
         const audio = isAudioFile(file);
+        const deleting = deletingAttachmentId === file.id;
 
         return (
           <div
@@ -323,7 +328,7 @@ export function MessageAttachments({
                   {audio ? " · audio" : null}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <a
                   href={previewUrl}
                   target="_blank"
@@ -339,6 +344,18 @@ export function MessageAttachments({
                 >
                   {t("pages.inbox.downloadAttachment")}
                 </a>
+                {onDeleteAttachment ? (
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={() => onDeleteAttachment(file.id)}
+                    className={`font-semibold underline-offset-2 hover:underline disabled:opacity-40 ${
+                      light ? "text-[#a85a5a]" : mine ? "text-[#5a1f1f]" : "text-pink"
+                    }`}
+                  >
+                    {deleting ? t("common.deleting") : t("pages.inbox.deleteAttachment")}
+                  </button>
+                ) : null}
               </div>
             </div>
             {pdf ? (

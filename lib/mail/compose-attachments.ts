@@ -104,19 +104,6 @@ export function resolveMimeType(mimeType: string | undefined, fileName: string) 
   return mimeFromFileName(fileName);
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read file"));
-    reader.onload = () => {
-      const result = String(reader.result ?? "");
-      const comma = result.indexOf(",");
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.readAsDataURL(blob);
-  });
-}
-
 /** Raster photos we can shrink; keep GIF/SVG as-is. */
 export function isCompressibleImage(mime: string, fileName = "") {
   const m = resolveMimeType(mime, fileName).toLowerCase();
@@ -322,18 +309,7 @@ export async function pendingToOutbound(
       );
     }
 
-    if (prepared.blob.size <= COMPOSE_MAX_FILE_BYTES) {
-      out.push({
-        fileName: prepared.fileName,
-        mimeType: prepared.mimeType,
-        base64: await blobToBase64(prepared.blob),
-        blob: prepared.blob,
-      });
-      completedBytes += file.byteSize;
-      report(file.fileName, fileIndex, 0);
-      continue;
-    }
-
+    // Always stage — keeps /api/inbox/reply under the platform body limit.
     const stagedId = await stageBlob({
       blob: prepared.blob,
       fileName: prepared.fileName,

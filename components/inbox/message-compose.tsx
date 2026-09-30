@@ -113,9 +113,7 @@ export function MessageCompose({
     // Snapshot now; keep the compose box unchanged until upload + send both succeed.
     const messageText = draft.trim();
     const filesToSend = attachments;
-    const needsUpload = filesToSend.some(
-      (file) => file.byteSize > 3 * 1024 * 1024,
-    );
+    const needsUpload = filesToSend.length > 0;
 
     setPreparing(true);
     let progressToastId: number | null = null;

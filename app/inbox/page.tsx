@@ -173,6 +173,9 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
   const [deletingConversation, setDeletingConversation] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(
+    null,
+  );
   const [opened, setOpened] = useState<string[]>([]);
   const threadRef = useRef<HTMLDivElement>(null);
   const pendingChat = useRef<string | null>(null);
@@ -457,6 +460,25 @@ export default function InboxPage() {
     }
   }
 
+  async function deleteAttachment(attachmentId: string) {
+    if (!window.confirm(t("pages.inbox.deleteAttachmentConfirm"))) return;
+    setDeletingAttachmentId(attachmentId);
+    try {
+      const res = await fetch(`/api/inbox/attachments/${attachmentId}`, {
+        method: "DELETE",
+      });
+      const json = (await res.json().catch(() => ({}))) as ApiError;
+      if (!res.ok) {
+        pushToast(json.error || t("pages.inbox.deleteFailed"));
+        return;
+      }
+      pushToast(t("pages.inbox.attachmentDeleted"));
+      await Promise.all([loadMail(), loadReplies()]);
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  }
+
   async function deleteConversation() {
     if (!active) return;
     if (
@@ -718,6 +740,8 @@ export default function InboxPage() {
                       showOriginal={showOriginal}
                       deleting={deletingMessageKey === message.key}
                       onDelete={() => void deleteMessage(message.key)}
+                      onDeleteAttachment={(id) => void deleteAttachment(id)}
+                      deletingAttachmentId={deletingAttachmentId}
                     />
                   </div>
                 );

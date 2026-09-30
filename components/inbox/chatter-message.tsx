@@ -129,12 +129,16 @@ export function ChatterMessage({
   showOriginal = false,
   deleting = false,
   onDelete,
+  onDeleteAttachment,
+  deletingAttachmentId,
 }: {
   message: RoomMessage;
   youLabel: string;
   showOriginal?: boolean;
   deleting?: boolean;
   onDelete?: () => void;
+  onDeleteAttachment?: (attachmentId: string) => void;
+  deletingAttachmentId?: string | null;
 }) {
   const { t, locale } = useLocale();
   const [showQuoted, setShowQuoted] = useState(false);
@@ -256,6 +260,8 @@ export function ChatterMessage({
                   attachments={message.attachments!}
                   mine={message.mine}
                   tone={message.mine ? "dark" : "light"}
+                  onDeleteAttachment={onDeleteAttachment}
+                  deletingAttachmentId={deletingAttachmentId}
                 />
               ) : null}
 

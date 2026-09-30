@@ -15,6 +15,25 @@ export function parseInboxMessageKey(key: string) {
 
 async function deleteReplyAttachments(sb: ReturnType<typeof getSupabase>, replyIds: string[]) {
   if (replyIds.length === 0) return;
+  const { data } = await sb
+    .from("mail_reply_attachments")
+    .select("id, storage_path")
+    .in("reply_id", replyIds);
+
+  const paths = (data ?? [])
+    .map((row) =>
+      typeof (row as { storage_path?: string }).storage_path === "string"
+        ? (row as { storage_path: string }).storage_path.trim()
+        : "",
+    )
+    .filter(Boolean);
+  if (paths.length) {
+    await sb.storage
+      .from("mail-attachments")
+      .remove(paths)
+      .catch(() => undefined);
+  }
+
   const { error } = await sb
     .from("mail_reply_attachments")
     .delete()
@@ -45,6 +64,9 @@ export async function deleteInboxMessage(messageKey: string) {
     .eq("id", parsed.id)
     .maybeSingle();
   if (findErr) throw new Error(findErr.message);
+
+  // Attachments for inbound/Odoo messages are keyed by mail_messages.id.
+  await deleteReplyAttachments(sb, [parsed.id]);
 
   const { error } = await sb.from("mail_messages").delete().eq("id", parsed.id);
   if (error) throw new Error(error.message);

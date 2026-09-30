@@ -1,5 +1,6 @@
 import { encodeByteaHex, decodeBytea } from "@/lib/mail/bytea";
 import { isMissingColumnError } from "@/lib/mail/schema-compat";
+import { supabaseHttps } from "@/lib/supabase/https";
 import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
 
 export type StagedFile = {
@@ -16,22 +17,107 @@ function isMissingTable(message: string) {
   return /relation .* does not exist|could not find the table/i.test(message);
 }
 
-function isMissingBucket(message: string) {
-  return /bucket|not found|row-level security/i.test(message);
-}
-
 function safeStorageName(name: string) {
   return name.replace(/[^\w.\-()+ ]/g, "_").slice(0, 120) || "file.bin";
 }
 
+function authHeaders() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
+  return {
+    Authorization: `Bearer ${key}`,
+    apikey: key,
+  };
+}
+
+function supabaseBaseUrl() {
+  return (process.env.SUPABASE_URL?.trim() ?? "").replace(/\/$/, "");
+}
+
 async function ensureBucket() {
-  const sb = getSupabase();
-  const { data } = await sb.storage.listBuckets();
-  if (data?.some((b) => b.name === BUCKET || b.id === BUCKET)) return;
-  await sb.storage.createBucket(BUCKET, {
-    public: false,
-    fileSizeLimit: 15 * 1024 * 1024,
-  });
+  const baseUrl = supabaseBaseUrl();
+  if (!baseUrl) return;
+
+  try {
+    const list = await supabaseHttps({
+      url: `${baseUrl}/storage/v1/bucket`,
+      method: "GET",
+      headers: { ...authHeaders(), Accept: "application/json" },
+    });
+    if (list.status < 400) {
+      const buckets = JSON.parse(list.text) as { name?: string; id?: string }[];
+      if (buckets.some((b) => b.name === BUCKET || b.id === BUCKET)) return;
+    }
+  } catch {
+    /* create below */
+  }
+
+  try {
+    await supabaseHttps({
+      url: `${baseUrl}/storage/v1/bucket`,
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: BUCKET,
+        name: BUCKET,
+        public: false,
+        file_size_limit: 15 * 1024 * 1024,
+      }),
+    });
+  } catch {
+    /* upload may still work if bucket already exists */
+  }
+}
+
+async function uploadToStorage(
+  storagePath: string,
+  bytes: Buffer,
+  mimeType: string,
+): Promise<{ ok: true } | { error: string }> {
+  const baseUrl = supabaseBaseUrl();
+  if (!baseUrl) return { error: "Supabase is not configured" };
+
+  await ensureBucket();
+  try {
+    const uploaded = await supabaseHttps({
+      url: `${baseUrl}/storage/v1/object/${BUCKET}/${storagePath
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`,
+      method: "POST",
+      headers: {
+        ...authHeaders(),
+        "Content-Type": mimeType || "application/octet-stream",
+        "x-upsert": "true",
+      },
+      body: bytes,
+    });
+    if (uploaded.status >= 400) {
+      return {
+        error: `Storage upload failed (${uploaded.status}): ${uploaded.text.slice(0, 200)}`,
+      };
+    }
+    return { ok: true };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Storage upload failed",
+    };
+  }
+}
+
+async function downloadFromStorage(storagePath: string): Promise<Buffer | null> {
+  try {
+    const { data, error } = await getSupabase()
+      .storage.from(BUCKET)
+      .download(storagePath);
+    if (error || !data) return null;
+    return Buffer.from(await data.arrayBuffer());
+  } catch {
+    return null;
+  }
 }
 
 export async function saveStagedFile(input: {
@@ -48,52 +134,33 @@ export async function saveStagedFile(input: {
   const id = crypto.randomUUID();
   const storagePath = `${id}/${safeStorageName(input.fileName)}`;
 
-  try {
-    await ensureBucket();
-    const { error: upError } = await sb.storage.from(BUCKET).upload(
-      storagePath,
-      input.bytes,
-      {
-        contentType: input.mimeType || "application/octet-stream",
-        upsert: true,
-      },
-    );
-    if (upError) {
-      // Fall back to bytea if storage bucket is not available.
-      if (!isMissingBucket(upError.message)) {
-        return { error: upError.message };
-      }
-    } else {
-      const { error } = await sb.from("mail_staged_files").insert({
-        id,
-        file_name: input.fileName,
-        mime_type: input.mimeType || "application/octet-stream",
-        storage_path: storagePath,
-        byte_size: input.bytes.length,
-      });
-      if (error) {
-        if (isMissingTable(error.message)) {
-          return {
-            error:
-              "Run supabase/mail_staged_files.sql in Supabase to enable large attachments.",
-          };
-        }
-        // Older table without storage_path — still keep the storage object and
-        // fall through to bytea metadata insert.
-        if (!isMissingColumnError(error)) {
-          return { error: error.message };
-        }
-      } else {
-        return { id };
-      }
+  const uploaded = await uploadToStorage(
+    storagePath,
+    input.bytes,
+    input.mimeType,
+  );
+  if ("ok" in uploaded) {
+    const { error } = await sb.from("mail_staged_files").insert({
+      id,
+      file_name: input.fileName,
+      mime_type: input.mimeType || "application/octet-stream",
+      storage_path: storagePath,
+      byte_size: input.bytes.length,
+    });
+    if (!error) return { id };
+    if (isMissingTable(error.message)) {
+      return {
+        error:
+          "Run supabase/mail_staged_files.sql in Supabase to enable large attachments.",
+      };
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Upload failed";
-    if (!isMissingBucket(message)) {
-      /* try bytea below */
+    // Older table without storage_path — fall through to bytea.
+    if (!isMissingColumnError(error)) {
+      // Storage object exists; still try bytea metadata as last resort below.
     }
   }
 
+  // Always fall back to bytea when storage is unavailable.
   const { data, error } = await sb
     .from("mail_staged_files")
     .insert({
@@ -112,7 +179,11 @@ export async function saveStagedFile(input: {
           "Run supabase/mail_staged_files.sql in Supabase to enable large attachments.",
       };
     }
-    return { error: error.message };
+    return {
+      error:
+        ("error" in uploaded ? uploaded.error : null) ||
+        error.message,
+    };
   }
   return { id: String(data.id) };
 }
@@ -129,7 +200,6 @@ export async function loadStagedFiles(ids: string[]): Promise<StagedFile[]> {
     .in("id", unique);
 
   if (error || !data) {
-    // Retry without storage_path for older schemas.
     const retry = await sb
       .from("mail_staged_files")
       .select("id, file_name, mime_type, byte_size, file_data")
@@ -143,12 +213,20 @@ export async function loadStagedFiles(ids: string[]): Promise<StagedFile[]> {
     const storagePath =
       typeof row.storage_path === "string" ? row.storage_path.trim() : "";
     if (storagePath) {
-      const { data: blob, error: dlError } = await sb.storage
-        .from(BUCKET)
-        .download(storagePath);
-      if (dlError || !blob) continue;
-      const buffer = Buffer.from(await blob.arrayBuffer());
-      if (!buffer.length) continue;
+      const buffer = await downloadFromStorage(storagePath);
+      if (!buffer?.length) {
+        // Fall back to bytea column if present.
+        const fromBytea = decodeBytea(row.file_data);
+        if (!fromBytea?.length) continue;
+        out.push({
+          id: String(row.id),
+          fileName: String(row.file_name),
+          mimeType: String(row.mime_type ?? "application/octet-stream"),
+          byteSize: Number(row.byte_size ?? fromBytea.length),
+          base64: fromBytea.toString("base64"),
+        });
+        continue;
+      }
       out.push({
         id: String(row.id),
         fileName: String(row.file_name),
@@ -207,16 +285,16 @@ export async function deleteStagedFiles(ids: string[]) {
     .filter(Boolean);
 
   if (paths.length) {
-    await sb.storage.from(BUCKET).remove(paths);
+    await sb.storage.from(BUCKET).remove(paths).catch(() => undefined);
   }
 
-  // Also remove any leftover chunk objects for these ids.
   for (const id of unique) {
     const { data: listed } = await sb.storage.from(BUCKET).list(id);
     if (listed?.length) {
       await sb.storage
         .from(BUCKET)
-        .remove(listed.map((f) => `${id}/${f.name}`));
+        .remove(listed.map((f) => `${id}/${f.name}`))
+        .catch(() => undefined);
     }
   }
 

@@ -26,3 +26,6 @@ insert into storage.buckets (id, name, public, file_size_limit)
 values ('mail-staging', 'mail-staging', false, 15728640)
 on conflict (id) do update
   set file_size_limit = excluded.file_size_limit;
+
+-- After this, also run supabase/mail_attachments_storage.sql so sent
+-- documents stay visible (and deletable) in the chat thread.

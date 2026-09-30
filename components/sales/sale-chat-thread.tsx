@@ -78,6 +78,10 @@ export function SaleChatPanel({
   const [ownAddresses, setOwnAddresses] = useState<(string | null)[]>([]);
   const [brevoReady, setBrevoReady] = useState(false);
   const [sending, setSending] = useState(false);
+  const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(
+    null,
+  );
   const threadRef = useRef<HTMLDivElement>(null);
 
   const canLoad = isClientEmail(email);
@@ -215,6 +219,46 @@ export function SaleChatPanel({
     }
   }
 
+  async function deleteMessage(messageKey: string) {
+    if (!window.confirm(t("pages.inbox.deleteMessageConfirm"))) return;
+    setDeletingMessageKey(messageKey);
+    try {
+      const res = await fetch("/api/inbox/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "message", key: messageKey }),
+      });
+      const parsed = await readApiJson(res);
+      if (!parsed.ok) {
+        pushToast(parsed.error || t("pages.inbox.deleteFailed"));
+        return;
+      }
+      pushToast(t("pages.inbox.messageDeleted"));
+      await loadConversation({ silent: true });
+    } finally {
+      setDeletingMessageKey(null);
+    }
+  }
+
+  async function deleteAttachment(attachmentId: string) {
+    if (!window.confirm(t("pages.inbox.deleteAttachmentConfirm"))) return;
+    setDeletingAttachmentId(attachmentId);
+    try {
+      const res = await fetch(`/api/inbox/attachments/${attachmentId}`, {
+        method: "DELETE",
+      });
+      const parsed = await readApiJson(res);
+      if (!parsed.ok) {
+        pushToast(parsed.error || t("pages.inbox.deleteFailed"));
+        return;
+      }
+      pushToast(t("pages.inbox.attachmentDeleted"));
+      await loadConversation({ silent: true });
+    } finally {
+      setDeletingAttachmentId(null);
+    }
+  }
+
   const displayName = displayContactName(customerName, email);
 
   return (
@@ -251,6 +295,10 @@ export function SaleChatPanel({
               key={message.key}
               message={message}
               youLabel={youLabel}
+              deleting={deletingMessageKey === message.key}
+              onDelete={() => void deleteMessage(message.key)}
+              onDeleteAttachment={(id) => void deleteAttachment(id)}
+              deletingAttachmentId={deletingAttachmentId}
             />
           ))
         )}

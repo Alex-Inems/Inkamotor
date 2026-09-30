@@ -455,6 +455,9 @@ export const es: Messages = {
       youPrefix: "Tú: ",
       noMessage: "(sin mensaje)",
       deleteMessage: "Eliminar mensaje",
+      deleteAttachment: "Eliminar documento",
+      deleteAttachmentConfirm: "¿Eliminar este documento de la conversación?",
+      attachmentDeleted: "Documento eliminado",
       deleteConversation: "Eliminar conversación",
       deleteMessageConfirm: "¿Eliminar este mensaje?",
       deleteConversationConfirm:
