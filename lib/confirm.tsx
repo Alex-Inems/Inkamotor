@@ -19,6 +19,11 @@ export type ConfirmOptions = {
   cancelLabel?: string;
   /** Use danger styling for destructive actions. */
   danger?: boolean;
+  /**
+   * Run while the dialog stays open (shows busy state).
+   * Dialog closes only after this resolves; reject to keep it open / fail.
+   */
+  run?: () => Promise<void>;
 };
 
 export type PromptOptions = {
@@ -141,13 +146,17 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   );
   const [pendingPrompt, setPendingPrompt] = useState<PendingPrompt | null>(null);
   const [promptValue, setPromptValue] = useState("");
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const confirmSeq = useRef(0);
   const promptSeq = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const busyRef = useRef(false);
 
   const confirm = useCallback((options: ConfirmOptions) => {
     return new Promise<boolean>((resolve) => {
       confirmSeq.current += 1;
+      setConfirmBusy(false);
+      busyRef.current = false;
       setPendingConfirm({ ...options, resolve });
     });
   }, []);
@@ -163,11 +172,37 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const api = useMemo(() => ({ confirm, prompt }), [confirm, prompt]);
 
   const closeConfirm = useCallback((result: boolean) => {
+    if (busyRef.current) return;
     setPendingConfirm((current) => {
       current?.resolve(result);
       return null;
     });
+    setConfirmBusy(false);
   }, []);
+
+  const acceptConfirm = useCallback(async () => {
+    const current = pendingConfirm;
+    if (!current || busyRef.current) return;
+    if (!current.run) {
+      current.resolve(true);
+      setPendingConfirm(null);
+      return;
+    }
+    busyRef.current = true;
+    setConfirmBusy(true);
+    try {
+      await current.run();
+      current.resolve(true);
+      setPendingConfirm(null);
+    } catch {
+      // Keep dialog open so the caller toast can explain the failure.
+      current.resolve(false);
+      setPendingConfirm(null);
+    } finally {
+      busyRef.current = false;
+      setConfirmBusy(false);
+    }
+  }, [pendingConfirm]);
 
   const closePrompt = useCallback((result: string | null) => {
     setPendingPrompt((current) => {
@@ -211,7 +246,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
         <div className="flex gap-2 px-5 pb-5 pt-4">
           <button
             type="button"
-            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line bg-ash/40 px-3 text-sm font-semibold text-ink transition-colors hover:bg-ash"
+            disabled={confirmBusy}
+            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-xl border border-line bg-ash/40 px-3 text-sm font-semibold text-ink transition-colors hover:bg-ash disabled:opacity-50"
             onClick={() => closeConfirm(false)}
           >
             {pendingConfirm?.cancelLabel ?? t("common.cancel")}
@@ -219,14 +255,19 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           <button
             type="button"
             autoFocus
-            className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-xl px-3 text-sm font-semibold text-white transition-colors ${
+            disabled={confirmBusy}
+            className={`inline-flex min-h-11 flex-1 items-center justify-center rounded-xl px-3 text-sm font-semibold text-white transition-colors disabled:opacity-70 ${
               pendingConfirm?.danger
                 ? "bg-sale hover:bg-pink-deep"
                 : "bg-accent hover:bg-accent-deep"
             }`}
-            onClick={() => closeConfirm(true)}
+            onClick={() => void acceptConfirm()}
           >
-            {pendingConfirm?.confirmLabel ?? t("common.confirm")}
+            {confirmBusy
+              ? pendingConfirm?.danger
+                ? t("common.deleting")
+                : t("common.loading")
+              : pendingConfirm?.confirmLabel ?? t("common.confirm")}
           </button>
         </div>
       </DialogShell>

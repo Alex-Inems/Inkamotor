@@ -195,8 +195,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const ms =
       payload.ms ??
       (tone === "success" ? 9000 : tone === "error" ? 7000 : 3200);
-    setToasts((prev) =>
-      [
+    setToasts((prev) => {
+      const next = [
         ...prev,
         {
           id,
@@ -208,8 +208,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               ? Math.max(0, Math.min(100, payload.progress))
               : undefined,
         },
-      ].slice(-4),
-    );
+      ];
+      if (next.length <= 4) return next;
+      // Never drop an in-flight upload progress toast.
+      const sticky = next.filter((row) => typeof row.progress === "number");
+      const rest = next.filter((row) => typeof row.progress !== "number");
+      const keepRest = Math.max(0, 4 - sticky.length);
+      return [...sticky, ...rest.slice(-keepRest)];
+    });
     if (!sticky) {
       window.setTimeout(() => {
         setToasts((prev) => prev.filter((t) => t.id !== id));

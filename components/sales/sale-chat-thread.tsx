@@ -80,7 +80,6 @@ export function SaleChatPanel({
   const [ownAddresses, setOwnAddresses] = useState<(string | null)[]>([]);
   const [brevoReady, setBrevoReady] = useState<boolean | null>(null);
   const [sending, setSending] = useState(false);
-  const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [copyFlash, setCopyFlash] = useState(false);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -216,7 +215,8 @@ export function SaleChatPanel({
           prev.some((row) => row.id === saved.id) ? prev : [saved, ...prev],
         );
       }
-      await loadConversation({ silent: true });
+      // Refresh quietly after the UI already shows Sent — don't block progress close.
+      void loadConversation({ silent: true });
     } catch (err) {
       pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
       throw err;
@@ -227,34 +227,42 @@ export function SaleChatPanel({
 
   async function deleteSelectedMessages() {
     if (selectedKeys.length === 0) return;
+    const keys = [...selectedKeys];
     const ok = await confirm({
       title: t("pages.inbox.deleteMessage"),
       message: t("pages.inbox.deleteMessageConfirm"),
       confirmLabel: t("common.delete"),
       danger: true,
+      run: async () => {
+        for (const key of keys) {
+          const res = await fetch("/api/inbox/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "message", key }),
+          });
+          const parsed = await readApiJson(res);
+          if (!parsed.ok) {
+            pushToast(parsed.error || t("pages.inbox.deleteFailed"));
+            throw new Error(parsed.error || t("pages.inbox.deleteFailed"));
+          }
+        }
+        // Drop from the thread in the same moment the dialog closes.
+        setReplies((prev) =>
+          prev.filter((row) => !keys.includes(`out-${row.id}`)),
+        );
+        setMail((prev) =>
+          prev.filter(
+            (row) =>
+              !keys.includes(`in-${row.id}`) &&
+              !keys.includes(`out-mail-${row.id}`),
+          ),
+        );
+        setSelectedKeys([]);
+        pushToast(t("pages.inbox.messageDeleted"));
+        void loadConversation({ silent: true });
+      },
     });
     if (!ok) return;
-    const keys = [...selectedKeys];
-    setDeletingMessageKey(keys[0] ?? null);
-    try {
-      for (const key of keys) {
-        const res = await fetch("/api/inbox/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "message", key }),
-        });
-        const parsed = await readApiJson(res);
-        if (!parsed.ok) {
-          pushToast(parsed.error || t("pages.inbox.deleteFailed"));
-          return;
-        }
-      }
-      pushToast(t("pages.inbox.messageDeleted"));
-      setSelectedKeys([]);
-      await loadConversation({ silent: true });
-    } finally {
-      setDeletingMessageKey(null);
-    }
   }
 
   async function copySelectedMessages() {
@@ -288,7 +296,6 @@ export function SaleChatPanel({
         <MessageSelectionBar
           count={selectedKeys.length}
           copying={copyFlash}
-          deleting={!!deletingMessageKey}
           onClear={() => setSelectedKeys([])}
           onCopy={() => void copySelectedMessages()}
           onDelete={() => void deleteSelectedMessages()}

@@ -127,6 +127,20 @@ export function MessageCompose({
       });
     }
 
+    const finishProgress = (ok: boolean) => {
+      if (progressToastId == null) return;
+      const id = progressToastId;
+      progressToastId = null;
+      if (ok) {
+        updateToast(id, {
+          message: t("common.sending"),
+          detail: undefined,
+          progress: 100,
+        });
+      }
+      dismissToast(id);
+    };
+
     let outbound;
     try {
       // Stage / compress attachments fully before the reply text is submitted.
@@ -135,18 +149,19 @@ export function MessageCompose({
         progressToastId == null
           ? undefined
           : (progress) => {
-              updateToast(progressToastId!, {
+              if (progressToastId == null) return;
+              updateToast(progressToastId, {
                 message: t("pages.inbox.uploadingAttachment"),
                 detail:
                   progress.fileCount > 1
                     ? `${progress.fileName} · ${progress.fileIndex + 1}/${progress.fileCount}`
                     : progress.fileName,
-                progress: progress.percent,
+                progress: Math.min(85, progress.percent),
               });
             },
       );
     } catch (err) {
-      if (progressToastId != null) dismissToast(progressToastId);
+      finishProgress(false);
       pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
       setPreparing(false);
       return;
@@ -156,7 +171,7 @@ export function MessageCompose({
       updateToast(progressToastId, {
         message: t("common.sending"),
         detail: undefined,
-        progress: 95,
+        progress: 90,
       });
     }
 
@@ -167,21 +182,13 @@ export function MessageCompose({
       });
     } catch {
       // Keep draft so the user can retry; caller shows the error toast.
-      if (progressToastId != null) dismissToast(progressToastId);
+      finishProgress(false);
       setPreparing(false);
       return;
     }
 
-    if (progressToastId != null) {
-      updateToast(progressToastId, {
-        message: t("common.sending"),
-        progress: 100,
-      });
-      const doneId = progressToastId;
-      progressToastId = null;
-      window.setTimeout(() => dismissToast(doneId), 400);
-    }
-
+    // Close progress in the same turn the message lands in the thread.
+    finishProgress(true);
     setDraft("");
     setAttachments([]);
     setLinkOpen(false);

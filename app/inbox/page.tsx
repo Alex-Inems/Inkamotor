@@ -173,8 +173,6 @@ export default function InboxPage() {
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [sending, setSending] = useState(false);
-  const [deletingMessageKey, setDeletingMessageKey] = useState<string | null>(null);
-  const [deletingConversation, setDeletingConversation] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [copyFlash, setCopyFlash] = useState(false);
   const [opened, setOpened] = useState<string[]>([]);
@@ -438,7 +436,8 @@ export default function InboxPage() {
           prev.some((r) => r.id === saved.id) ? prev : [saved, ...prev],
         );
       }
-      await loadReplies();
+      // Don't hold the upload progress open while lists refresh.
+      void loadReplies();
       void loadMail();
     } finally {
       setSending(false);
@@ -447,34 +446,43 @@ export default function InboxPage() {
 
   async function deleteSelectedMessages() {
     if (selectedKeys.length === 0) return;
+    const keys = [...selectedKeys];
     const ok = await confirm({
       title: t("pages.inbox.deleteMessage"),
       message: t("pages.inbox.deleteMessageConfirm"),
       confirmLabel: t("common.delete"),
       danger: true,
+      run: async () => {
+        for (const key of keys) {
+          const res = await fetch("/api/inbox/delete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "message", key }),
+          });
+          const json = (await res.json()) as ApiError;
+          if (!res.ok) {
+            pushToast(json.error || t("pages.inbox.deleteFailed"));
+            throw new Error(json.error || t("pages.inbox.deleteFailed"));
+          }
+        }
+        // Remove from the open thread at the same time the dialog closes.
+        setReplies((prev) =>
+          prev.filter((row) => !keys.includes(`out-${row.id}`)),
+        );
+        setMail((prev) =>
+          prev.filter(
+            (row) =>
+              !keys.includes(`in-${row.id}`) &&
+              !keys.includes(`out-mail-${row.id}`),
+          ),
+        );
+        setSelectedKeys([]);
+        pushToast(t("pages.inbox.messageDeleted"));
+        void loadReplies();
+        void loadMail();
+      },
     });
     if (!ok) return;
-    const keys = [...selectedKeys];
-    setDeletingMessageKey(keys[0] ?? null);
-    try {
-      for (const key of keys) {
-        const res = await fetch("/api/inbox/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "message", key }),
-        });
-        const json = (await res.json()) as ApiError;
-        if (!res.ok) {
-          pushToast(json.error || t("pages.inbox.deleteFailed"));
-          return;
-        }
-      }
-      pushToast(t("pages.inbox.messageDeleted"));
-      setSelectedKeys([]);
-      await Promise.all([loadMail(), loadReplies()]);
-    } finally {
-      setDeletingMessageKey(null);
-    }
   }
 
   async function copySelectedMessages() {
@@ -502,33 +510,40 @@ export default function InboxPage() {
 
   async function deleteConversation() {
     if (!active) return;
+    const email = active.email;
     const ok = await confirm({
       title: t("pages.inbox.deleteConversation"),
-      message: t("pages.inbox.deleteConversationConfirm", {
-        email: active.email,
-      }),
+      message: t("pages.inbox.deleteConversationConfirm", { email }),
       confirmLabel: t("common.delete"),
       danger: true,
+      run: async () => {
+        const res = await fetch("/api/inbox/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "conversation", email }),
+        });
+        const json = (await res.json()) as ApiError;
+        if (!res.ok) {
+          pushToast(json.error || t("pages.inbox.deleteFailed"));
+          throw new Error(json.error || t("pages.inbox.deleteFailed"));
+        }
+        setReplies((prev) =>
+          prev.filter((row) => row.toEmail.toLowerCase() !== email.toLowerCase()),
+        );
+        setMail((prev) =>
+          prev.filter(
+            (row) =>
+              row.fromEmail.toLowerCase() !== email.toLowerCase() &&
+              (row.toEmail ?? "").toLowerCase() !== email.toLowerCase(),
+          ),
+        );
+        closeThread();
+        pushToast(t("pages.inbox.conversationDeleted"));
+        void loadReplies();
+        void loadMail();
+      },
     });
     if (!ok) return;
-    setDeletingConversation(true);
-    try {
-      const res = await fetch("/api/inbox/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "conversation", email: active.email }),
-      });
-      const json = (await res.json()) as ApiError;
-      if (!res.ok) {
-        pushToast(json.error || t("pages.inbox.deleteFailed"));
-        return;
-      }
-      pushToast(t("pages.inbox.conversationDeleted"));
-      closeThread();
-      await Promise.all([loadMail(), loadReplies()]);
-    } finally {
-      setDeletingConversation(false);
-    }
   }
 
   const activeName = active ? displayName(active.name, active.email) : "";
@@ -675,7 +690,6 @@ export default function InboxPage() {
               <MessageSelectionBar
                 count={selectedKeys.length}
                 copying={copyFlash}
-                deleting={!!deletingMessageKey}
                 onClear={() => setSelectedKeys([])}
                 onCopy={() => void copySelectedMessages()}
                 onDelete={() => void deleteSelectedMessages()}
@@ -911,11 +925,7 @@ export default function InboxPage() {
                 }
               />
               <DetailAction
-                label={
-                  deletingConversation
-                    ? t("common.deleting")
-                    : t("pages.inbox.deleteConversation")
-                }
+                label={t("pages.inbox.deleteConversation")}
                 onClick={() => void deleteConversation()}
               />
             </div>
