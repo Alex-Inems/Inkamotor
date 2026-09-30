@@ -242,6 +242,8 @@ export function ChatterMessage({
   selected = false,
   selectionActive = false,
   onToggleSelect,
+  onEdit,
+  onTranslate,
 }: {
   message: RoomMessage;
   youLabel: string;
@@ -250,9 +252,12 @@ export function ChatterMessage({
   selectionActive?: boolean;
   /** Long-press or tap-while-selecting. */
   onToggleSelect?: () => void;
+  onEdit?: (message: RoomMessage) => void;
+  onTranslate?: (message: RoomMessage) => void;
 }) {
   const { t, locale } = useLocale();
   const [showQuoted, setShowQuoted] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const pressTimer = useRef<number | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   const didLongPress = useRef(false);
@@ -270,11 +275,13 @@ export function ChatterMessage({
   const sentBy = message.mine ? message.sentByName?.trim() : "";
   const showSubject =
     !message.mine &&
+    !message.isNote &&
     message.subject.trim() &&
     !/^note$/i.test(message.subject) &&
     !/^update$/i.test(message.subject);
   const timeLabel = formatTime(message.at, locale);
   const selectable = !!onToggleSelect;
+  const canAct = !!(onEdit || onTranslate);
 
   function clearPressTimer() {
     if (pressTimer.current != null) {
@@ -392,9 +399,63 @@ export function ChatterMessage({
 
         <div
           className={`wa-bubble wa-tail relative w-fit max-w-full text-[13.5px] leading-snug ${
-            message.mine ? "wa-bubble-out" : "wa-bubble-in"
+            message.isNote
+              ? "border border-dashed border-gold/50 bg-[#3a3428] text-[#f4e5c1]"
+              : message.mine
+                ? "wa-bubble-out"
+                : "wa-bubble-in"
           }`}
         >
+          {message.isNote ? (
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gold">
+              {t("pages.inbox.internalNote")}
+            </p>
+          ) : null}
+          {canAct ? (
+            <div className="absolute right-1 top-1 z-[2]">
+              <button
+                type="button"
+                className="rounded px-1.5 py-0.5 text-[11px] text-mute/80 hover:bg-black/20 hover:text-ink"
+                aria-label={t("pages.inbox.messageActions")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen((v) => !v);
+                }}
+              >
+                ⋮
+              </button>
+              {menuOpen ? (
+                <div className="absolute right-0 top-full mt-1 min-w-[8rem] overflow-hidden rounded-lg border border-line bg-panel shadow-lg">
+                  {onEdit && message.editableId ? (
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-xs text-ink hover:bg-ash"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpen(false);
+                        onEdit(message);
+                      }}
+                    >
+                      {t("pages.inbox.editMessage")}
+                    </button>
+                  ) : null}
+                  {onTranslate ? (
+                    <button
+                      type="button"
+                      className="block w-full px-3 py-2 text-left text-xs text-ink hover:bg-ash"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpen(false);
+                        onTranslate(message);
+                      }}
+                    >
+                      {t("pages.inbox.translateMessage")}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {showOriginal ? (
             <pre
               className={`whitespace-pre-wrap wrap-break-word text-xs ${

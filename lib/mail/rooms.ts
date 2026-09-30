@@ -71,6 +71,11 @@ export type RoomMessage = {
   /** CRM user who sent (session) — internal only; clients always see Inkamoto. */
   sentByName?: string | null;
   attachments?: ReplyAttachment[];
+  /** Internal log note (not emailed). */
+  isNote?: boolean;
+  /** Outbound reply/note id for edit. */
+  editableId?: string;
+  editableKind?: "reply" | "note";
 };
 
 export type MailRoom = {
@@ -281,6 +286,8 @@ export function groupMailRooms(input: {
       openedAt: r.openedAt ?? null,
       sentByName: r.sentByName?.trim() || null,
       attachments: r.attachments?.length ? r.attachments : undefined,
+      editableId: r.id,
+      editableKind: "reply",
     });
   }
 

@@ -14,9 +14,12 @@ export type MailReply = {
   toEmail: string;
   subject: string;
   bodyText: string;
+  bodyHtml: string;
+  ccEmails: string[];
   relatedMailId: string | null;
   relatedInquiryId: string | null;
   sentAt: string;
+  editedAt: string | null;
   providerMessageId: string | null;
   deliveryStatus: DeliveryStatus | null;
   deliveredAt: string | null;
@@ -53,15 +56,22 @@ function mapRow(
   attachments: MailReplyAttachment[] = [],
 ): MailReply {
   const status = row.delivery_status;
+  const ccRaw = row.cc_emails;
+  const ccEmails = Array.isArray(ccRaw)
+    ? ccRaw.map((v) => String(v)).filter(Boolean)
+    : [];
   return {
     id: String(row.id),
     toName: (row.to_name as string) || null,
     toEmail: String(row.to_email),
     subject: String(row.subject ?? ""),
     bodyText: String(row.body_text ?? ""),
+    bodyHtml: String(row.body_html ?? ""),
+    ccEmails,
     relatedMailId: (row.related_mail_id as string) || null,
     relatedInquiryId: (row.related_inquiry_id as string) || null,
     sentAt: String(row.sent_at),
+    editedAt: (row.edited_at as string) || null,
     providerMessageId: (row.provider_message_id as string) || null,
     deliveryStatus: normalizeDeliveryStatus(
       typeof status === "string" ? status : null,
@@ -142,6 +152,8 @@ type SaveInput = {
   toName?: string | null;
   subject: string;
   bodyText: string;
+  bodyHtml?: string | null;
+  ccEmails?: string[] | null;
   relatedMailId?: string | null;
   relatedInquiryId?: string | null;
   providerMessageId?: string | null;
@@ -182,6 +194,12 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
     related_inquiry_id: input.relatedInquiryId ?? null,
     sent_at: sentAt,
   };
+  const richPayload = {
+    body_html: input.bodyHtml?.trim() || "",
+    cc_emails: (input.ccEmails ?? [])
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+  };
   const deliveryPayload = {
     provider_message_id: providerMessageId,
     delivery_status: deliveryStatus,
@@ -192,19 +210,27 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
 
   async function insertReply(
     related: string | null,
-    mode: "full" | "delivery" | "base",
+    mode: "rich" | "full" | "delivery" | "base",
   ) {
     const payload =
-      mode === "full"
+      mode === "rich"
         ? {
             ...basePayload,
             related_mail_id: related,
+            ...richPayload,
             ...deliveryPayload,
             ...actorPayload,
           }
-        : mode === "delivery"
-          ? { ...basePayload, related_mail_id: related, ...deliveryPayload }
-          : { ...basePayload, related_mail_id: related };
+        : mode === "full"
+          ? {
+              ...basePayload,
+              related_mail_id: related,
+              ...deliveryPayload,
+              ...actorPayload,
+            }
+          : mode === "delivery"
+            ? { ...basePayload, related_mail_id: related, ...deliveryPayload }
+            : { ...basePayload, related_mail_id: related };
     return supabase
       .from("mail_replies")
       .insert(payload)
@@ -213,8 +239,11 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
   }
 
   let reply: MailReply | null = null;
-  let inserted = await insertReply(relatedMailId, "full");
+  let inserted = await insertReply(relatedMailId, "rich");
 
+  if (inserted.error && isMissingColumnError(inserted.error)) {
+    inserted = await insertReply(relatedMailId, "full");
+  }
   if (inserted.error && isMissingColumnError(inserted.error)) {
     inserted = await insertReply(relatedMailId, "delivery");
   }
@@ -223,7 +252,10 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
   }
 
   if (inserted.error && relatedMailId) {
-    let retry = await insertReply(null, "full");
+    let retry = await insertReply(null, "rich");
+    if (retry.error && isMissingColumnError(retry.error)) {
+      retry = await insertReply(null, "full");
+    }
     if (retry.error && isMissingColumnError(retry.error)) {
       retry = await insertReply(null, "delivery");
     }
@@ -237,6 +269,8 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
         delivery_status: deliveryStatus,
         sent_by_email: actor?.email ?? null,
         sent_by_name: actor?.name ?? null,
+        body_html: input.bodyHtml?.trim() || "",
+        cc_emails: input.ccEmails ?? [],
       });
     }
   } else if (!inserted.error && inserted.data) {
@@ -246,6 +280,8 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
       delivery_status: deliveryStatus,
       sent_by_email: actor?.email ?? null,
       sent_by_name: actor?.name ?? null,
+      body_html: input.bodyHtml?.trim() || "",
+      cc_emails: input.ccEmails ?? [],
     });
   }
 
@@ -294,9 +330,12 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
       toEmail,
       subject: input.subject,
       bodyText: input.bodyText,
+      bodyHtml: input.bodyHtml?.trim() || "",
+      ccEmails: (input.ccEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean),
       relatedMailId,
       relatedInquiryId: input.relatedInquiryId ?? null,
       sentAt,
+      editedAt: null,
       providerMessageId,
       deliveryStatus,
       deliveredAt: null,
@@ -306,4 +345,38 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
       attachments: [],
     }
   );
+}
+
+/** Edit outbound reply body locally — does not re-send email. */
+export async function updateMailReplyBody(
+  id: string,
+  bodyText: string,
+  bodyHtml?: string,
+): Promise<MailReply> {
+  if (missingSupabaseEnv().length) {
+    throw new Error("Supabase is not configured");
+  }
+  const sb = getSupabase();
+  const editedAt = new Date().toISOString();
+  let result = await sb
+    .from("mail_replies")
+    .update({
+      body_text: bodyText.trim(),
+      body_html: bodyHtml?.trim() || "",
+      edited_at: editedAt,
+    })
+    .eq("id", id)
+    .select(REPLY_SELECT_FULL)
+    .single();
+
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await sb
+      .from("mail_replies")
+      .update({ body_text: bodyText.trim() })
+      .eq("id", id)
+      .select(REPLY_SELECT_BASE)
+      .single();
+  }
+  if (result.error) throw new Error(result.error.message);
+  return mapRow(result.data as Record<string, unknown>);
 }

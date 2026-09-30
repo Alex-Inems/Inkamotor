@@ -691,6 +691,7 @@ export async function sendTransactionalEmail(input: {
   textContent?: string;
   tags?: string[];
   attachments?: { name: string; content: string }[];
+  ccEmails?: string[];
 }): Promise<{ messageId: string | null }> {
   const tags = (input.tags ?? [])
     .map((tag) =>
@@ -707,6 +708,9 @@ export async function sendTransactionalEmail(input: {
   const attachments = (input.attachments ?? []).filter(
     (file) => file.name?.trim() && file.content?.trim(),
   );
+  const cc = (input.ccEmails ?? [])
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email && email !== input.toEmail.trim().toLowerCase());
 
   // Brevo returns "missing_parameter" if optional fields are sent empty
   // (e.g. attachment: [] or name: ""). Only include what we actually have.
@@ -720,6 +724,7 @@ export async function sendTransactionalEmail(input: {
     subject: input.subject,
     htmlContent: input.htmlContent,
   };
+  if (cc.length) body.cc = cc.map((email) => ({ email }));
   if (textContent) body.textContent = textContent;
   if (tags.length) body.tags = tags;
   if (attachments.length) {

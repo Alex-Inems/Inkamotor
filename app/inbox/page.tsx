@@ -13,6 +13,12 @@ import {
   MessageCompose,
   type MessageComposePayload,
 } from "@/components/inbox/message-compose";
+import { FullComposerModal } from "@/components/inbox/full-composer-modal";
+import {
+  ChatterToolbar,
+  type ChatterMode,
+} from "@/components/inbox/chatter-toolbar";
+import { ScheduleActivityModal } from "@/components/inbox/schedule-activity-modal";
 import { useCrm } from "@/lib/crm-store";
 import { useConfirm } from "@/lib/confirm";
 import { readApiJson } from "@/lib/api-client";
@@ -174,6 +180,14 @@ export default function InboxPage() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [sending, setSending] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [composeMode, setComposeMode] = useState<ChatterMode>("message");
+  const [fullOpen, setFullOpen] = useState(false);
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [followersOpen, setFollowersOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [threadSearch, setThreadSearch] = useState("");
+  const [following, setFollowing] = useState(false);
   const [copyFlash, setCopyFlash] = useState(false);
   const [opened, setOpened] = useState<string[]>([]);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -413,11 +427,31 @@ export default function InboxPage() {
     if (!active || (!payload.message && payload.attachments.length === 0)) return;
     setSending(true);
     try {
+      if (composeMode === "note") {
+        const res = await fetch("/api/inbox/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            threadEmail: active.email,
+            bodyText: payload.message,
+          }),
+        });
+        const parsed = await readApiJson(res);
+        if (!parsed.ok) {
+          pushToast(parsed.error || t("pages.inbox.sendFailed"));
+          throw new Error(parsed.error || t("pages.inbox.sendFailed"));
+        }
+        pushToast(t("pages.inbox.internalNote"));
+        return;
+      }
       const form = buildReplyFormData({
         toEmail: active.email,
         toName: active.name || undefined,
+        subject: payload.subject,
         inReplyToSubject: active.lastSubject,
         message: payload.message,
+        messageHtml: payload.messageHtml,
+        ccEmails: payload.ccEmails,
         relatedMailId: active.lastMailId,
         attachments: payload.attachments,
       });
@@ -796,20 +830,105 @@ export default function InboxPage() {
             </div>
 
             <footer className="shrink-0 bg-panel/90 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:border-t sm:border-line sm:bg-panel sm:px-5 sm:py-3 sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              {selectedKeys.length > 0 ? null : conn?.brevo.ready ? (
-                <MessageCompose
-                  variant="chatter"
-                  sendTone="danger"
-                  placeholder={t("pages.inbox.messagePlaceholder", { name: activeName })}
-                  sending={sending}
-                  onSend={send}
-                />
-              ) : conn && !conn.brevo.ready ? (
-                <p className="px-1 pb-1 text-xs text-gold">
-                  {t("pages.inbox.sendingMissing")}
-                </p>
-              ) : null}
+              {selectedKeys.length > 0 ? null : (
+                <>
+                  <ChatterToolbar
+                    mode={composeMode}
+                    onModeChange={setComposeMode}
+                    searchOpen={searchOpen}
+                    onToggleSearch={() => setSearchOpen((v) => !v)}
+                    followersOpen={followersOpen}
+                    onToggleFollowers={() => setFollowersOpen((v) => !v)}
+                    filesOpen={filesOpen}
+                    onToggleFiles={() => setFilesOpen((v) => !v)}
+                    following={following}
+                    onToggleFollow={() => {
+                      setFollowing((v) => !v);
+                      if (!following && active) {
+                        void fetch("/api/inbox/followers", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            threadEmail: active.email,
+                            partnerEmail: active.email,
+                            partnerName: active.name || "",
+                          }),
+                        });
+                      } else if (active) {
+                        void fetch(
+                          `/api/inbox/followers?email=${encodeURIComponent(active.email)}&partner=${encodeURIComponent(active.email)}`,
+                          { method: "DELETE" },
+                        );
+                      }
+                    }}
+                    onScheduleActivity={() => setActivityOpen(true)}
+                  />
+                  {searchOpen ? (
+                    <input
+                      className="mb-2 mt-2 w-full rounded-xl border border-line/80 bg-canvas px-3 py-2.5 text-sm text-ink outline-none transition-[border-color,box-shadow] placeholder:text-mute/70 focus:border-gold/80 focus:shadow-[0_0_0_3px_rgba(236,187,90,0.12)]"
+                      value={threadSearch}
+                      onChange={(e) => setThreadSearch(e.target.value)}
+                      placeholder={t("pages.inbox.searchMessagesPlaceholder")}
+                    />
+                  ) : null}
+                  {composeMode === "note" || conn?.brevo.ready ? (
+                    <MessageCompose
+                      variant="chatter"
+                      sendTone="danger"
+                      mode={composeMode}
+                      recipientName={activeName}
+                      templateModels={["res.partner", "crm.lead", "sale.order"]}
+                      placeholder={
+                        composeMode === "note"
+                          ? t("pages.inbox.notePlaceholder")
+                          : t("pages.inbox.messagePlaceholder", {
+                              name: activeName,
+                            })
+                      }
+                      sending={sending}
+                      onOpenFullComposer={
+                        composeMode === "message"
+                          ? () => setFullOpen(true)
+                          : undefined
+                      }
+                      onSend={send}
+                    />
+                  ) : conn && !conn.brevo.ready ? (
+                    <p className="px-1 pb-1 text-xs text-gold">
+                      {t("pages.inbox.sendingMissing")}
+                    </p>
+                  ) : null}
+                </>
+              )}
             </footer>
+            {active ? (
+              <>
+                <FullComposerModal
+                  open={fullOpen}
+                  onClose={() => setFullOpen(false)}
+                  initialToEmail={active.email}
+                  initialToName={active.name || undefined}
+                  initialSubject={active.lastSubject}
+                  templateModels={["res.partner", "crm.lead", "sale.order"]}
+                  onSend={async (payload) => {
+                    await send({
+                      message: payload.message,
+                      messageHtml: payload.messageHtml,
+                      subject: payload.subject,
+                      ccEmails: payload.ccEmails,
+                      attachments: payload.attachments,
+                    });
+                  }}
+                />
+                <ScheduleActivityModal
+                  open={activityOpen}
+                  onClose={() => setActivityOpen(false)}
+                  relatedTo={activeName || active.email}
+                  relatedType="lead"
+                  relatedId={active.email}
+                />
+              </>
+            ) : null}
           </>
         )}
       </section>

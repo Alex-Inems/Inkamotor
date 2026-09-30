@@ -414,7 +414,12 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
         </div>
 
         <div className="flex min-h-0 flex-col overflow-hidden border-t border-line lg:border-t-0">
-          <SaleChatPanel email={sale.email} customerName={sale.customer} />
+          <SaleChatPanel
+            email={sale.email}
+            customerName={sale.customer}
+            relatedType="sale"
+            relatedId={sale.id}
+          />
         </div>
       </div>
 

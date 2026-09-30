@@ -9,6 +9,65 @@
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
+.compose-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--mute) 45%, transparent) transparent;
+}
+
+.compose-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.compose-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.compose-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--mute) 40%, transparent);
+  border-radius: 999px;
+}
+
+.compose-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@keyframes crm-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes crm-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.crm-modal-backdrop {
+  animation: crm-backdrop-in 160ms ease-out;
+}
+
+.crm-modal-panel {
+  animation: crm-modal-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-modal-backdrop,
+  .crm-modal-panel {
+    animation: none;
+  }
+}
+
 :root {
   /* inkamototours.com brand tokens */
   --canvas: #1c1b19;

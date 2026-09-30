@@ -367,6 +367,8 @@ export function buildReplyFormData(input: {
   subject?: string;
   inReplyToSubject?: string;
   message: string;
+  messageHtml?: string;
+  ccEmails?: string[];
   relatedMailId?: string;
   relatedInquiryId?: string;
   attachments: OutboundAttachment[];
@@ -377,6 +379,10 @@ export function buildReplyFormData(input: {
   if (input.subject) form.set("subject", input.subject);
   if (input.inReplyToSubject) form.set("inReplyToSubject", input.inReplyToSubject);
   form.set("message", input.message);
+  if (input.messageHtml) form.set("messageHtml", input.messageHtml);
+  for (const cc of input.ccEmails ?? []) {
+    if (cc.trim()) form.append("ccEmails", cc.trim());
+  }
   if (input.relatedMailId) form.set("relatedMailId", input.relatedMailId);
   if (input.relatedInquiryId) form.set("relatedInquiryId", input.relatedInquiryId);
 

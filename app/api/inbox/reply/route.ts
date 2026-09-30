@@ -30,6 +30,8 @@ type Body = {
   toName?: string;
   subject?: string;
   message?: string;
+  messageHtml?: string;
+  ccEmails?: string[];
   /** Original subject for Re: prefix */
   inReplyToSubject?: string;
   relatedMailId?: string;
@@ -87,6 +89,11 @@ async function parseRequest(request: Request): Promise<{
       toName: String(form.get("toName") ?? "") || undefined,
       subject: String(form.get("subject") ?? "") || undefined,
       message: String(form.get("message") ?? ""),
+      messageHtml: String(form.get("messageHtml") ?? "") || undefined,
+      ccEmails: form
+        .getAll("ccEmails")
+        .map((v) => String(v).trim())
+        .filter(Boolean),
       inReplyToSubject: String(form.get("inReplyToSubject") ?? "") || undefined,
       relatedMailId: String(form.get("relatedMailId") ?? "") || undefined,
       relatedInquiryId: String(form.get("relatedInquiryId") ?? "") || undefined,
@@ -193,18 +200,31 @@ export async function POST(request: Request) {
     });
   }
 
-  const baseSubject =
-    body.subject?.trim() ||
-    body.inReplyToSubject?.trim() ||
-    "Message from Inkamoto Tours";
-  const subject = /^re:/i.test(baseSubject) ? baseSubject : `Re: ${baseSubject}`;
+  const explicitSubject = body.subject?.trim();
+  const fallbackSubject =
+    body.inReplyToSubject?.trim() || "Message from Inkamoto Tours";
+  const subject = explicitSubject
+    ? explicitSubject
+    : /^re:/i.test(fallbackSubject)
+      ? fallbackSubject
+      : `Re: ${fallbackSubject}`;
 
   const bodyText =
     message ||
     attachments.map((file) => file.fileName).join(", ");
+  const messageHtml = body.messageHtml?.trim() || "";
+  const ccEmails = (body.ccEmails ?? [])
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  const htmlInner = messageHtml
+    ? messageHtml
+    : message
+      ? messageParagraphsToHtml(message)
+      : "";
 
   const html = `<div style="font-family:Georgia,serif;line-height:1.5;color:#1c1b19">
-    ${message ? messageParagraphsToHtml(message) : ""}
+    ${htmlInner}
     ${
       attachments.length
         ? `<p style="margin-top:1rem;color:#666;font-size:13px">${attachments.length} attachment(s): ${attachments
@@ -224,6 +244,7 @@ export async function POST(request: Request) {
       htmlContent: html,
       textContent: bodyText,
       tags: ["inbox-reply"],
+      ccEmails,
       attachments: attachments.map((file) => ({
         name: file.fileName,
         content: file.base64,
@@ -247,6 +268,8 @@ export async function POST(request: Request) {
         toName: body.toName,
         subject,
         bodyText,
+        bodyHtml: messageHtml,
+        ccEmails,
         relatedMailId: body.relatedMailId,
         relatedInquiryId: body.relatedInquiryId,
         providerMessageId,
@@ -281,9 +304,12 @@ export async function POST(request: Request) {
         toEmail: to,
         subject,
         bodyText,
+        bodyHtml: messageHtml,
+        ccEmails,
         relatedMailId: body.relatedMailId ?? null,
         relatedInquiryId: body.relatedInquiryId ?? null,
         sentAt: new Date().toISOString(),
+        editedAt: null,
         providerMessageId,
         deliveryStatus: "sent" as const,
         deliveredAt: null,

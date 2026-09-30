@@ -315,6 +315,9 @@ export function ContactDetail({ contactId }: { contactId: string }) {
             email={chatEmail}
             customerName={chatName}
             title={t("pages.contacts.messages")}
+            phone={form.phone}
+            relatedType="lead"
+            relatedId={contactId}
           />
         </div>
       </div>
