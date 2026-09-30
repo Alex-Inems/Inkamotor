@@ -64,6 +64,7 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 | `supabase/newsletter_mailings.sql` | Email marketing drafts |
 | `supabase/crm_users.sql` | Login directory (password + Google) |
 | `supabase/actor_attribution.sql` | `sent_by_*` / `created_by_*` for multi-user attribution |
+| `supabase/mail_staged_files.sql` | Large chat attachments (chunked upload) |
 | `supabase/billing_and_templates.sql` | Saved newsletter templates |
 
 New installs that run a current `schema.sql` already include core mail reply + delivery fields; run the extras if a feature is missing.

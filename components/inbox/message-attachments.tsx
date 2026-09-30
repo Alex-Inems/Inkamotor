@@ -48,12 +48,61 @@ function isOfficeDoc(file: ReplyAttachment) {
     mime.includes("officedocument") ||
     mime.includes("msword") ||
     mime.includes("opendocument") ||
-    mime.includes("rtf")
+    mime.includes("rtf") ||
+    mime.includes("excel") ||
+    mime.includes("powerpoint") ||
+    mime.includes("spreadsheet") ||
+    mime.includes("presentation")
   ) {
     return true;
   }
-  return ["doc", "docx", "odt", "rtf", "xls", "xlsx", "ppt", "pptx"].includes(
+  return ["doc", "docx", "odt", "rtf", "xls", "xlsx", "ppt", "pptx", "ods", "odp"].includes(
     extOf(file.fileName),
+  );
+}
+
+function isVideoFile(file: ReplyAttachment) {
+  if (file.mimeType.startsWith("video/")) return true;
+  return ["mp4", "mov", "webm", "avi", "mkv", "m4v", "3gp"].includes(
+    extOf(file.fileName),
+  );
+}
+
+function isAudioFile(file: ReplyAttachment) {
+  if (file.mimeType.startsWith("audio/")) return true;
+  return ["mp3", "wav", "ogg", "m4a", "aac", "flac", "wma"].includes(
+    extOf(file.fileName),
+  );
+}
+
+function GenericEmbedPreview({
+  url,
+  mimeType,
+  fileName,
+}: {
+  url: string;
+  mimeType: string;
+  fileName: string;
+}) {
+  const { t } = useLocale();
+  return (
+    <div className="border-t border-line/60 bg-ash/30">
+      <object
+        data={url}
+        type={mimeType || "application/octet-stream"}
+        className="h-48 w-full bg-white"
+        aria-label={fileName}
+      >
+        <iframe
+          src={url}
+          title={fileName}
+          className="h-48 w-full border-0 bg-white"
+        />
+      </object>
+      <p className="px-3 py-2 text-center text-[11px] text-mute">
+        {t("pages.inbox.previewFallback")}
+      </p>
+    </div>
   );
 }
 
@@ -242,6 +291,8 @@ export function MessageAttachments({
         const image = isImageFile(file);
         const text = isTextFile(file);
         const office = isOfficeDoc(file);
+        const video = isVideoFile(file);
+        const audio = isAudioFile(file);
 
         return (
           <div
@@ -268,6 +319,8 @@ export function MessageAttachments({
                 <p className={light ? "text-black/55" : mine ? "text-chat-out-text/65" : "text-mute"}>
                   {formatBytes(file.byteSize)}
                   {office && !pdf ? " · document" : null}
+                  {video ? " · video" : null}
+                  {audio ? " · audio" : null}
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -298,9 +351,30 @@ export function MessageAttachments({
                 className="max-h-64 w-full bg-white object-contain"
                 loading="lazy"
               />
+            ) : video ? (
+              <video
+                src={previewUrl}
+                controls
+                preload="metadata"
+                className="max-h-64 w-full bg-black"
+              >
+                {t("pages.inbox.previewFallback")}
+              </video>
+            ) : audio ? (
+              <div className="border-t border-line/60 px-3 py-3">
+                <audio src={previewUrl} controls preload="metadata" className="w-full">
+                  {t("pages.inbox.previewFallback")}
+                </audio>
+              </div>
             ) : text ? (
               <TextFilePreview url={previewUrl} fileName={file.fileName} />
-            ) : null}
+            ) : (
+              <GenericEmbedPreview
+                url={previewUrl}
+                mimeType={file.mimeType}
+                fileName={file.fileName}
+              />
+            )}
           </div>
         );
       })}

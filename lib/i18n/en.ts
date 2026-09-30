@@ -464,6 +464,8 @@ export const en = {
       deliveryBounced: "Bounced",
       deliveryError: "Failed",
       sentBy: "by {name}",
+      previewFallback: "Preview unavailable — use Open or Download.",
+      uploadingAttachment: "Uploading attachment… this can take a minute for large files.",
     },
     followUps: {
       title: "Follow-ups",

@@ -7,8 +7,10 @@ import {
   type MessageComposePayload,
 } from "@/components/inbox/message-compose";
 import { EmptyHint } from "@/components/ui";
+import { readApiJson } from "@/lib/api-client";
 import { useCrm } from "@/lib/crm-store";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
+import { buildReplyFormData } from "@/lib/mail/compose-attachments";
 import { displayContactName, groupMailRooms } from "@/lib/mail/rooms";
 import { useLocale } from "@/lib/i18n";
 
@@ -182,27 +184,23 @@ export function SaleChatPanel({
     if ((!payload.message && payload.attachments.length === 0) || !canLoad) return;
     setSending(true);
     try {
+      const form = buildReplyFormData({
+        toEmail: email.trim().toLowerCase(),
+        toName: customerName.trim() || undefined,
+        inReplyToSubject: room?.lastSubject,
+        message: payload.message,
+        relatedMailId: room?.lastMailId,
+        attachments: payload.attachments,
+      });
       const res = await fetch("/api/inbox/reply", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toEmail: email.trim().toLowerCase(),
-          toName: customerName.trim() || undefined,
-          inReplyToSubject: room?.lastSubject,
-          message: payload.message,
-          relatedMailId: room?.lastMailId,
-          attachments:
-        payload.attachments.length > 0 ? payload.attachments : undefined,
-        }),
+        body: form,
       });
-      const json = (await res.json()) as {
-        error?: string;
-        reply?: MailReply | null;
-      };
-      if (!res.ok) {
-        throw new Error(json.error || t("pages.inbox.sendFailed"));
+      const parsed = await readApiJson<{ reply?: MailReply | null }>(res);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || t("pages.inbox.sendFailed"));
       }
-      const saved = json.reply;
+      const saved = parsed.data.reply;
       if (saved) {
         setReplies((prev) =>
           prev.some((row) => row.id === saved.id) ? prev : [saved, ...prev],

@@ -29,7 +29,7 @@ export async function GET(request: Request, { params }: Params) {
 
   return new Response(body, {
     headers: {
-      "Content-Type": file.meta.mimeType || "application/pdf",
+      "Content-Type": file.meta.mimeType || "application/octet-stream",
       "Content-Length": String(body.byteLength),
       "Content-Disposition": `${
         download ? "attachment" : "inline"

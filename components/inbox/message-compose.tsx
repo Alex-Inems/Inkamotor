@@ -5,6 +5,7 @@ import {
   COMPOSE_MAX_FILES,
   formatAttachmentBytes,
   pendingToOutbound,
+  resolveMimeType,
   validatePendingAttachments,
   type OutboundAttachment,
   type PendingAttachment,
@@ -42,9 +43,11 @@ export function MessageCompose({
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
+  const [preparing, setPreparing] = useState(false);
 
+  const busy = sending || preparing;
   const canSend =
-    !disabled && !sending && (draft.trim().length > 0 || attachments.length > 0);
+    !disabled && !busy && (draft.trim().length > 0 || attachments.length > 0);
 
   function resizeTextarea(el: HTMLTextAreaElement) {
     el.style.height = "auto";
@@ -78,7 +81,7 @@ export function MessageCompose({
         id: crypto.randomUUID(),
         file,
         fileName: file.name,
-        mimeType: file.type || "application/octet-stream",
+        mimeType: resolveMimeType(file.type, file.name),
         byteSize: file.size,
       });
     }
@@ -99,6 +102,7 @@ export function MessageCompose({
   }
 
   async function handleSend() {
+    if (busy) return;
     const error = validatePendingAttachments(attachments, t);
     if (error) {
       pushToast(error);
@@ -106,7 +110,23 @@ export function MessageCompose({
     }
     if (!draft.trim() && attachments.length === 0) return;
 
-    const outbound = await pendingToOutbound(attachments);
+    const large = attachments.some(
+      (file) => file.byteSize > 3 * 1024 * 1024,
+    );
+    setPreparing(true);
+    if (large) {
+      pushToast(t("pages.inbox.uploadingAttachment"));
+    }
+
+    let outbound;
+    try {
+      outbound = await pendingToOutbound(attachments);
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
+      setPreparing(false);
+      return;
+    }
+
     try {
       await onSend({
         message: draft.trim(),
@@ -114,11 +134,13 @@ export function MessageCompose({
       });
     } catch {
       // Keep draft so the user can retry; caller shows the error toast.
+      setPreparing(false);
       return;
     }
     setDraft("");
     setAttachments([]);
     setLinkOpen(false);
+    setPreparing(false);
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -227,6 +249,7 @@ export function MessageCompose({
               id={fileInputId}
               type="file"
               multiple
+              accept="*/*"
               className="sr-only"
               onChange={(e) => {
                 addFiles(e.target.files);
@@ -260,7 +283,7 @@ export function MessageCompose({
             ref={textareaRef}
             rows={variant === "default" ? 2 : 1}
             value={draft}
-            disabled={disabled || sending}
+            disabled={disabled || busy}
             onChange={(e) => {
               setDraft(e.target.value);
               resizeTextarea(e.target);
@@ -284,16 +307,16 @@ export function MessageCompose({
           className={sendButtonClass}
         >
           {variant === "chatter" ? (
-            sending ? "…" : <SendIcon />
+            busy ? "…" : <SendIcon />
           ) : variant === "inbox" ? (
             <>
-              <span className="sm:hidden">{sending ? "…" : <SendIcon />}</span>
+              <span className="sm:hidden">{busy ? "…" : <SendIcon />}</span>
               <span className="hidden sm:inline">
-                {sending ? "…" : t("pages.inbox.send")}
+                {busy ? "…" : t("pages.inbox.send")}
               </span>
             </>
           ) : (
-            (sending ? "…" : t("pages.inbox.send"))
+            (busy ? "…" : t("pages.inbox.send"))
           )}
         </button>
       </div>

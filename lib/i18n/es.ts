@@ -468,6 +468,8 @@ export const es: Messages = {
       deliveryBounced: "Rebotado",
       deliveryError: "Error",
       sentBy: "por {name}",
+      previewFallback: "Vista previa no disponible — usa Abrir o Descargar.",
+      uploadingAttachment: "Subiendo archivo… puede tardar un minuto si es grande.",
     },
     followUps: {
       title: "Seguimientos",

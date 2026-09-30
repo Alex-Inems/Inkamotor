@@ -14,7 +14,9 @@ import {
   type MessageComposePayload,
 } from "@/components/inbox/message-compose";
 import { useCrm } from "@/lib/crm-store";
+import { readApiJson } from "@/lib/api-client";
 import { quickSaleInput } from "@/lib/quotation-form-data";
+import { buildReplyFormData } from "@/lib/mail/compose-attachments";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { localeMeta, useLocale } from "@/lib/i18n";
@@ -404,27 +406,24 @@ export default function InboxPage() {
     if (!active || (!payload.message && payload.attachments.length === 0)) return;
     setSending(true);
     try {
+      const form = buildReplyFormData({
+        toEmail: active.email,
+        toName: active.name || undefined,
+        inReplyToSubject: active.lastSubject,
+        message: payload.message,
+        relatedMailId: active.lastMailId,
+        attachments: payload.attachments,
+      });
       const res = await fetch("/api/inbox/reply", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          toEmail: active.email,
-          toName: active.name || undefined,
-          inReplyToSubject: active.lastSubject,
-          message: payload.message,
-          relatedMailId: active.lastMailId,
-          attachments:
-            payload.attachments.length > 0 ? payload.attachments : undefined,
-        }),
+        body: form,
       });
-      const json = await res.json();
-      if (!res.ok) {
-        pushToast((json as ApiError).error || t("pages.inbox.sendFailed"));
-        throw new Error(
-          (json as ApiError).error || t("pages.inbox.sendFailed"),
-        );
+      const parsed = await readApiJson<{ reply?: MailReply | null }>(res);
+      if (!parsed.ok) {
+        pushToast(parsed.error || t("pages.inbox.sendFailed"));
+        throw new Error(parsed.error || t("pages.inbox.sendFailed"));
       }
-      const saved = (json as { reply?: MailReply | null }).reply;
+      const saved = parsed.data.reply;
       if (saved) {
         setReplies((prev) =>
           prev.some((r) => r.id === saved.id) ? prev : [saved, ...prev],
