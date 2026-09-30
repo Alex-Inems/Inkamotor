@@ -8,6 +8,7 @@ import { Topbar } from "./topbar";
 import { ToastStack } from "./toast-stack";
 import { FirstRunTour } from "./first-run-tour";
 import { CrmProvider } from "@/lib/crm-store";
+import { ConfirmProvider } from "@/lib/confirm";
 import { QuoteTemplatesProvider } from "@/lib/quote-templates-store";
 import { LocaleProvider, type Locale } from "@/lib/i18n";
 import { InboxNotificationsProvider } from "@/lib/inbox-notifications";
@@ -32,11 +33,13 @@ export function CrmShell({
     <LocaleProvider initialLocale={locale}>
       <SessionUserProvider user={user}>
         <CrmProvider>
+          <ConfirmProvider>
           <QuoteTemplatesProvider>
             <InboxNotificationsProvider>
               <CrmShellInner>{children}</CrmShellInner>
             </InboxNotificationsProvider>
           </QuoteTemplatesProvider>
+          </ConfirmProvider>
         </CrmProvider>
       </SessionUserProvider>
     </LocaleProvider>

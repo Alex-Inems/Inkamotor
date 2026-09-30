@@ -10,6 +10,7 @@ import {
 } from "@/components/modal";
 import { QuotationLinesEditor } from "@/components/sales/quotation-lines-editor";
 import { useCrm } from "@/lib/crm-store";
+import { useConfirm } from "@/lib/confirm";
 import type { SaleLine } from "@/lib/demo-data";
 import {
   PAYMENT_TERMS,
@@ -46,6 +47,7 @@ export function BulkQuoteByTagModal({
 }) {
   const { t, locale } = useLocale();
   const { products, pushToast, refreshCrm } = useCrm();
+  const confirm = useConfirm();
   const { templates } = useQuoteTemplates();
   const defaultTemplate = templates[0] ?? null;
 
@@ -199,9 +201,11 @@ export function BulkQuoteByTagModal({
       return;
     }
     if (
-      !window.confirm(
-        t("pages.sales.bulkQuoteConfirm", { n: queue.length, tag }),
-      )
+      !(await confirm({
+        title: t("pages.sales.bulkQuoteTitle"),
+        message: t("pages.sales.bulkQuoteConfirm", { n: queue.length, tag }),
+        confirmLabel: t("common.confirm"),
+      }))
     ) {
       return;
     }

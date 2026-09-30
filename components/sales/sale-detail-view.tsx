@@ -18,6 +18,7 @@ import { OdooFormToolbar } from "@/components/sales/odoo-form-toolbar";
 import { SalesSubnav } from "@/components/sales/sales-subnav";
 import { EmptyHint, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
+import { useConfirm } from "@/lib/confirm";
 import { type Invoice, type Sale, type SaleStatus } from "@/lib/demo-data";
 import { enrichSale } from "@/lib/sale-quote";
 import { orderQuotationDocumentLines } from "@/lib/quote-templates";
@@ -39,6 +40,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
     pushToast,
   } = useCrm();
   const { t, locale } = useLocale();
+  const confirm = useConfirm();
 
   const [quotePreview, setQuotePreview] = useState<Sale | null>(null);
   const [invoicePreview, setInvoicePreview] = useState<Invoice | null>(null);
@@ -94,13 +96,13 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
 
   async function deleteSaleOrder() {
     if (!sale) return;
-    if (
-      !window.confirm(
-        t("pages.sales.deleteSaleConfirm", { number: sale.number }),
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: t("common.delete"),
+      message: t("pages.sales.deleteSaleConfirm", { number: sale.number }),
+      confirmLabel: t("common.delete"),
+      danger: true,
+    });
+    if (!ok) return;
     setDeleting(true);
     try {
       await deleteSale(sale.id);

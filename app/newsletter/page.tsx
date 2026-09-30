@@ -13,6 +13,7 @@ import {
 import { EmailMarketingSubnav } from "@/components/email-marketing/email-marketing-subnav";
 import { EmptyHint, FormNotice, KpiCard, PageHeader, Panel, StatusBadge } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
+import { useConfirm } from "@/lib/confirm";
 import { formatDate, formatNumber, formatPercent } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
 import { HtmlEditor } from "@/components/html-editor";
@@ -94,6 +95,7 @@ export default function NewsletterPage() {
 
 function NewsletterPageInner() {
   const { pushToast } = useCrm();
+  const confirm = useConfirm();
   const { t, locale } = useLocale();
   const searchParams = useSearchParams();
   const [campaigns, setCampaigns] = useState<LiveCampaign[]>([]);
@@ -446,10 +448,15 @@ function NewsletterPageInner() {
     }
   }
 
-  function applyTemplate(id: string) {
+  async function applyTemplate(id: string) {
     if (
       templateDirty &&
-      !window.confirm(t("pages.newsletter.unsavedTemplate"))
+      !(await confirm({
+        title: t("common.unsavedChanges"),
+        message: t("pages.newsletter.unsavedTemplate"),
+        confirmLabel: t("common.confirm"),
+        danger: true,
+      }))
     ) {
       return;
     }

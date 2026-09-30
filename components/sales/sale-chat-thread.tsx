@@ -9,6 +9,7 @@ import {
 import { EmptyHint } from "@/components/ui";
 import { readApiJson } from "@/lib/api-client";
 import { useCrm } from "@/lib/crm-store";
+import { useConfirm } from "@/lib/confirm";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { buildReplyFormData } from "@/lib/mail/compose-attachments";
 import { displayContactName, groupMailRooms } from "@/lib/mail/rooms";
@@ -72,6 +73,7 @@ export function SaleChatPanel({
 }) {
   const { t, locale } = useLocale();
   const { pushToast } = useCrm();
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(false);
   const [mail, setMail] = useState<MailMessage[]>([]);
   const [replies, setReplies] = useState<MailReply[]>([]);
@@ -225,7 +227,13 @@ export function SaleChatPanel({
 
   async function deleteSelectedMessages() {
     if (selectedKeys.length === 0) return;
-    if (!window.confirm(t("pages.inbox.deleteMessageConfirm"))) return;
+    const ok = await confirm({
+      title: t("pages.inbox.deleteMessage"),
+      message: t("pages.inbox.deleteMessageConfirm"),
+      confirmLabel: t("common.delete"),
+      danger: true,
+    });
+    if (!ok) return;
     const keys = [...selectedKeys];
     setDeletingMessageKey(keys[0] ?? null);
     try {

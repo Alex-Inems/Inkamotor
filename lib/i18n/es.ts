@@ -66,6 +66,7 @@ export const es: Messages = {
     unsavedChanges:
       "Tienes cambios sin guardar. ¿Salir de esta página de todos modos?",
     cancel: "Cancelar",
+    confirm: "Confirmar",
     search: "Buscar",
     status: "Estado",
     all: "Todos",

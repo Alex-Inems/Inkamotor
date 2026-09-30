@@ -14,6 +14,7 @@ import {
   type MessageComposePayload,
 } from "@/components/inbox/message-compose";
 import { useCrm } from "@/lib/crm-store";
+import { useConfirm } from "@/lib/confirm";
 import { readApiJson } from "@/lib/api-client";
 import { quickSaleInput } from "@/lib/quotation-form-data";
 import { buildReplyFormData } from "@/lib/mail/compose-attachments";
@@ -157,6 +158,7 @@ function dayLabel(
 export default function InboxPage() {
   const { addSale, leads, pushToast, refreshCrm } = useCrm();
   const { t, locale } = useLocale();
+  const confirm = useConfirm();
   const loc = localeMeta[locale].bcp47;
   const [mail, setMail] = useState<MailMessage[]>([]);
   const [replies, setReplies] = useState<MailReply[]>([]);
@@ -445,7 +447,13 @@ export default function InboxPage() {
 
   async function deleteSelectedMessages() {
     if (selectedKeys.length === 0) return;
-    if (!window.confirm(t("pages.inbox.deleteMessageConfirm"))) return;
+    const ok = await confirm({
+      title: t("pages.inbox.deleteMessage"),
+      message: t("pages.inbox.deleteMessageConfirm"),
+      confirmLabel: t("common.delete"),
+      danger: true,
+    });
+    if (!ok) return;
     const keys = [...selectedKeys];
     setDeletingMessageKey(keys[0] ?? null);
     try {
@@ -494,13 +502,15 @@ export default function InboxPage() {
 
   async function deleteConversation() {
     if (!active) return;
-    if (
-      !window.confirm(
-        t("pages.inbox.deleteConversationConfirm", { email: active.email }),
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: t("pages.inbox.deleteConversation"),
+      message: t("pages.inbox.deleteConversationConfirm", {
+        email: active.email,
+      }),
+      confirmLabel: t("common.delete"),
+      danger: true,
+    });
+    if (!ok) return;
     setDeletingConversation(true);
     try {
       const res = await fetch("/api/inbox/delete", {

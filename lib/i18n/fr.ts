@@ -66,6 +66,7 @@ export const fr: Messages = {
     unsavedChanges:
       "Vous avez des modifications non enregistrées. Quitter cette page ?",
     cancel: "Annuler",
+    confirm: "Confirmer",
     search: "Rechercher",
     status: "Statut",
     all: "Tous",

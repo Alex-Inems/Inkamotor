@@ -10,6 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import { usePromptDialog } from "@/lib/confirm";
 import { useT } from "@/lib/i18n";
 
 const FONT_FACES = [
@@ -389,6 +390,7 @@ export function RichTextToolbar({
   className = "",
 }: ToolbarProps) {
   const t = useT();
+  const promptDialog = usePromptDialog();
   const [menu, setMenu] = useState<MenuKey>(null);
   const [histTick, setHistTick] = useState(0);
 
@@ -458,9 +460,14 @@ export function RichTextToolbar({
     setMenu((prev) => (prev === key ? null : key));
   }
 
-  function addLink() {
+  async function addLink() {
     if (disabled) return;
-    const url = window.prompt(t("pages.newsletter.linkPrompt"), "https://");
+    const url = await promptDialog({
+      title: t("pages.newsletter.linkPrompt"),
+      defaultValue: "https://",
+      placeholder: "https://",
+      confirmLabel: t("common.confirm"),
+    });
     if (url?.trim()) run("createLink", url.trim());
   }
 

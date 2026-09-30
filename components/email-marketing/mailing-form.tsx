@@ -37,6 +37,7 @@ import {
   resetHtmlHistory,
 } from "@/components/rich-text-toolbar";
 import { useCrm } from "@/lib/crm-store";
+import { useConfirm } from "@/lib/confirm";
 import { isGenericActorName } from "@/lib/auth-actor";
 import { formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
@@ -546,6 +547,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   const { t, locale } = useLocale();
   const sessionUser = useSessionUser();
   const { pushToast } = useCrm();
+  const confirm = useConfirm();
   const router = useRouter();
   const isNew = mailingId === "new";
 
@@ -1974,7 +1976,13 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
 
   async function deleteMailing() {
     if (isNew || !mailing) return;
-    if (!window.confirm(t("pages.emailMarketing.deleteConfirm"))) return;
+    const ok = await confirm({
+      title: t("common.delete"),
+      message: t("pages.emailMarketing.deleteConfirm"),
+      confirmLabel: t("common.delete"),
+      danger: true,
+    });
+    if (!ok) return;
     const res = await fetch(
       `/api/newsletter/mailings?id=${encodeURIComponent(mailing.id)}`,
       { method: "DELETE" },

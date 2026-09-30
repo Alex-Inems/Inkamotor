@@ -64,6 +64,7 @@ export const en = {
     unsavedChanges:
       "You have unsaved changes. Leave this page anyway?",
     cancel: "Cancel",
+    confirm: "Confirm",
     search: "Search",
     status: "Status",
     all: "All",

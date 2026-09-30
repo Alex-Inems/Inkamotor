@@ -12,6 +12,7 @@ import {
 import { QuotationLinesEditor } from "@/components/sales/quotation-lines-editor";
 import { EmptyHint } from "@/components/ui";
 import { useCrm } from "@/lib/crm-store";
+import { useConfirm } from "@/lib/confirm";
 import {
   defaultTemplateBoilerplate,
   nextQuoteTemplateId,
@@ -44,6 +45,7 @@ export function QuoteTemplatesPanel({
 }) {
   const { t } = useLocale();
   const { products, pushToast } = useCrm();
+  const confirm = useConfirm();
   const { templates, upsertTemplate, deleteTemplate, resetToSeed } = useQuoteTemplates();
   const newDraft = useNewQuoteTemplateDraft();
   const [query, setQuery] = useState("");
@@ -178,8 +180,14 @@ export function QuoteTemplatesPanel({
             products={products}
             onCancel={() => setSelected(null)}
             onSave={() => saveForm(editForm, () => setSelected(null))}
-            onDelete={() => {
-              if (!window.confirm(t("pages.quoteTemplates.deleteConfirm"))) return;
+            onDelete={async () => {
+              const ok = await confirm({
+                title: t("common.delete"),
+                message: t("pages.quoteTemplates.deleteConfirm"),
+                confirmLabel: t("common.delete"),
+                danger: true,
+              });
+              if (!ok) return;
               deleteTemplate(selected.id);
               pushToast(t("pages.quoteTemplates.deleted"));
               setSelected(null);
@@ -204,7 +212,7 @@ function TemplateForm({
   products: ReturnType<typeof useCrm>["products"];
   onCancel: () => void;
   onSave: () => void;
-  onDelete?: () => void;
+  onDelete?: () => void | Promise<void>;
 }) {
   const { t } = useLocale();
 
