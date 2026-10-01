@@ -141,6 +141,147 @@ body {
   touch-action: manipulation;
 }
 
+/* Dimensional app atmosphere — soft orbs + grain over the flat canvas.
+   Do NOT set position here — overlays use `fixed` and must not be forced to relative. */
+.crm-atmosphere {
+  background:
+    radial-gradient(
+      ellipse 95% 60% at 6% -12%,
+      color-mix(in srgb, var(--accent) 42%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 75% 50% at 98% 0%,
+      color-mix(in srgb, var(--gold) 18%, transparent),
+      transparent 52%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 82% 78%,
+      color-mix(in srgb, var(--accent-soft) 48%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 12% 92%,
+      color-mix(in srgb, var(--wine) 16%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(
+      168deg,
+      #2a2622 0%,
+      var(--canvas) 40%,
+      #12110f 100%
+    );
+}
+
+.crm-atmosphere::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 28% 36%,
+      color-mix(in srgb, var(--cream) 8%, transparent),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 72% 28%,
+      color-mix(in srgb, var(--accent) 24%, transparent),
+      transparent 34%
+    );
+  animation: crm-atmosphere-breathe 14s ease-in-out infinite;
+}
+
+.crm-atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("/grain.svg");
+  background-size: 240px;
+}
+
+@keyframes crm-atmosphere-breathe {
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Chat / message column — recessed stage so bubbles feel lifted */
+.crm-chat-stage {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      color-mix(in srgb, var(--accent) 18%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 60% 40% at 100% 80%,
+      color-mix(in srgb, var(--gold) 7%, transparent),
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 50% 35% at 0% 90%,
+      color-mix(in srgb, var(--wine) 8%, transparent),
+      transparent 45%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #121110 70%, var(--canvas)) 0%,
+      var(--ash) 48%,
+      color-mix(in srgb, #1a1816 80%, var(--canvas)) 100%
+    );
+}
+
+.crm-chat-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image:
+    radial-gradient(
+      circle at 1px 1px,
+      color-mix(in srgb, var(--cream) 55%, transparent) 1px,
+      transparent 0
+    );
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 40%, #000 20%, transparent 75%);
+}
+
+.crm-chat-stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  box-shadow:
+    inset 0 28px 48px rgba(0, 0, 0, 0.28),
+    inset 0 -36px 56px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px color-mix(in srgb, var(--gold) 6%, transparent);
+}
+
+.crm-chat-stage > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-atmosphere::before {
+    animation: none;
+  }
+}
+
 img {
   max-width: 100%;
   height: auto;
@@ -188,6 +329,26 @@ button {
   max-width: 100%;
 }
 
+/* Fixed-layout list tables: scroll horizontally instead of crushing columns. */
+.crm-list-table {
+  width: 100%;
+  min-width: 40rem;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: left;
+}
+
+.crm-list-table-wide {
+  min-width: 52rem;
+}
+
+/* Quote/sale totals box — full width on phones, compact on larger screens. */
+.crm-money-box {
+  width: 100%;
+  max-width: 18rem;
+  margin-left: auto;
+}
+
 .quotation-lines-editor textarea {
   field-sizing: content;
 }
@@ -202,6 +363,12 @@ button {
 
 .data-table-contacts {
   min-width: 86rem;
+}
+
+@media (max-width: 1023px) {
+  .data-table-contacts {
+    min-width: 64rem;
+  }
 }
 
 .data-table thead th {
@@ -282,10 +449,17 @@ button {
   display: inline-block;
   max-width: 100%;
   padding: 6px 8px 6px 10px;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 2px 8px rgba(0, 0, 0, 0.28),
+    0 10px 24px -16px rgba(0, 0, 0, 0.55);
 }
 .wa-bubble-in {
-  background: var(--chat-in);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--chat-in) 88%, #5a564f) 0%,
+    var(--chat-in) 100%
+  );
   color: var(--ink);
   border-radius: 14px 14px 14px 4px;
 }
@@ -300,7 +474,11 @@ button {
   clip-path: polygon(100% 0, 100% 100%, 0 100%);
 }
 .wa-bubble-out {
-  background: var(--chat-out);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--chat-out) 82%, #fff) 0%,
+    var(--chat-out) 100%
+  );
   color: var(--chat-out-text);
   border-radius: 14px 14px 4px 14px;
 }
@@ -327,11 +505,108 @@ button {
 }
 
 .wa-sender-bar {
-  background: linear-gradient(180deg, #3d6f74 0%, #31595d 100%);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, #4a858b 70%, #3d6f74) 0%,
+    #31595d 55%,
+    #2a4e52 100%
+  );
   min-height: 56px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--cream) 12%, transparent) inset,
+    0 8px 28px -12px rgba(0, 0, 0, 0.55);
   padding-left: max(0.15rem, env(safe-area-inset-left));
   padding-right: max(0.15rem, env(safe-area-inset-right));
+}
+
+@keyframes crm-app-tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Inbox conversation rows */
+.crm-room-row {
+  position: relative;
+  margin: 0.2rem 0.45rem;
+  border-radius: 0.9rem;
+  border: 1px solid transparent;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+.crm-room-row:hover {
+  background: color-mix(in srgb, var(--ash) 55%, transparent);
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+}
+.crm-room-row-active {
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--panel));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--gold) 10%, transparent),
+    0 10px 28px -18px rgba(0, 0, 0, 0.65);
+}
+.crm-room-row-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  bottom: 0.55rem;
+  width: 3px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--gold), var(--accent));
+}
+
+/* Soft glass surfaces */
+.crm-glass {
+  background: color-mix(in srgb, var(--ash) 78%, transparent);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--cream) 8%, transparent) inset,
+    0 12px 36px -24px rgba(0, 0, 0, 0.7);
+}
+
+.crm-panel-lift {
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--cream) 6%, transparent) inset,
+    0 18px 40px -28px rgba(0, 0, 0, 0.55);
+}
+
+.crm-app-tile {
+  animation: crm-app-tile-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.crm-app-tile:nth-child(1) { animation-delay: 30ms; }
+.crm-app-tile:nth-child(2) { animation-delay: 60ms; }
+.crm-app-tile:nth-child(3) { animation-delay: 90ms; }
+.crm-app-tile:nth-child(4) { animation-delay: 120ms; }
+.crm-app-tile:nth-child(5) { animation-delay: 150ms; }
+.crm-app-tile:nth-child(6) { animation-delay: 180ms; }
+.crm-app-tile:nth-child(7) { animation-delay: 210ms; }
+.crm-app-tile:nth-child(8) { animation-delay: 240ms; }
+.crm-app-tile:nth-child(9) { animation-delay: 270ms; }
+.crm-app-tile:nth-child(10) { animation-delay: 300ms; }
+.crm-app-tile:nth-child(11) { animation-delay: 330ms; }
+.crm-app-tile:nth-child(12) { animation-delay: 360ms; }
+
+.crm-compose-shell {
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--cream) 8%, transparent) inset,
+    0 14px 40px -22px rgba(0, 0, 0, 0.65),
+    0 0 0 1px color-mix(in srgb, var(--gold) 8%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crm-app-tile {
+    animation: none;
+  }
 }
 
 @media (max-width: 1023px) {
@@ -371,6 +646,19 @@ button {
   .data-table th,
   .data-table td {
     padding: 0.7rem 0.75rem;
+  }
+
+  .crm-list-table {
+    min-width: 36rem;
+    font-size: 0.8125rem;
+  }
+
+  .crm-list-table-wide {
+    min-width: 44rem;
+  }
+
+  .crm-money-box {
+    max-width: none;
   }
 }
 

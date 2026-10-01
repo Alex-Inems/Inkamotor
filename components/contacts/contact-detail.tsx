@@ -69,6 +69,9 @@ export function ContactDetail({ contactId }: { contactId: string }) {
   const [pipeline, setPipeline] = useState<PipelineStage[]>(defaultPipelineStages);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [mobilePane, setMobilePane] = useState<"details" | "messages">(
+    "details",
+  );
 
   useEffect(() => {
     const local = readPipelineFromStorage();
@@ -239,12 +242,41 @@ export function ContactDetail({ contactId }: { contactId: string }) {
         </p>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 overflow-hidden border border-line bg-panel max-lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-        <div className="min-h-0 overflow-y-auto overscroll-contain">
-          <header className="border-b border-line bg-gradient-to-b from-ash/30 to-transparent px-5 py-5 sm:px-6">
-            <div className="flex items-start gap-4">
+      <div className="flex shrink-0 border border-b-0 border-line bg-panel lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobilePane("details")}
+          className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
+            mobilePane === "details"
+              ? "border-b-2 border-gold text-ink"
+              : "border-b-2 border-transparent text-mute"
+          }`}
+        >
+          {t("common.details")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane("messages")}
+          className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
+            mobilePane === "messages"
+              ? "border-b-2 border-gold text-ink"
+              : "border-b-2 border-transparent text-mute"
+          }`}
+        >
+          {t("common.messages")}
+        </button>
+      </div>
+
+      <div className="grid min-h-0 flex-1 overflow-hidden border border-line bg-panel max-lg:grid-rows-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+        <div
+          className={`min-h-0 overflow-y-auto overscroll-contain ${
+            mobilePane === "details" ? "block" : "hidden"
+          } lg:block`}
+        >
+          <header className="border-b border-line bg-gradient-to-b from-ash/30 to-transparent px-4 py-4 sm:px-6 sm:py-5">
+            <div className="flex items-start gap-3 sm:gap-4">
               <span
-                className={`inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-semibold text-white shadow-sm ring-2 ring-line/60 ${avatarTone(title)}`}
+                className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white shadow-sm ring-2 ring-line/60 sm:h-16 sm:w-16 sm:text-xl ${avatarTone(title)}`}
                 aria-hidden
               >
                 {initials(title, chatEmail)}
@@ -310,7 +342,11 @@ export function ContactDetail({ contactId }: { contactId: string }) {
           />
         </div>
 
-        <div className="flex min-h-0 flex-col overflow-hidden border-t border-line lg:border-t-0">
+        <div
+          className={`min-h-0 flex-col overflow-hidden border-t border-line lg:border-t-0 ${
+            mobilePane === "messages" ? "flex" : "hidden"
+          } lg:flex`}
+        >
           <SaleChatPanel
             email={chatEmail}
             customerName={chatName}

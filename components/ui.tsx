@@ -104,7 +104,9 @@ export function Panel({
           <h2 className="min-w-0 font-display text-base leading-snug tracking-wide break-words sm:text-lg">
             {title}
           </h2>
-          {action ? <div className="shrink-0">{action}</div> : null}
+          {action ? (
+            <div className="min-w-0 w-full sm:w-auto sm:shrink-0">{action}</div>
+          ) : null}
         </div>
       ) : null}
       <div className="px-5 py-4 sm:px-6 sm:py-5">{children}</div>

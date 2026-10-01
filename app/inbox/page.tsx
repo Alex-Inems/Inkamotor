@@ -19,6 +19,7 @@ import {
   type ChatterMode,
 } from "@/components/inbox/chatter-toolbar";
 import { ScheduleActivityModal } from "@/components/inbox/schedule-activity-modal";
+import { EditMessageModal } from "@/components/inbox/edit-message-modal";
 import { useCrm } from "@/lib/crm-store";
 import { useConfirm } from "@/lib/confirm";
 import { readApiJson } from "@/lib/api-client";
@@ -184,12 +185,12 @@ export default function InboxPage() {
   const [fullOpen, setFullOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [followersOpen, setFollowersOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [threadSearch, setThreadSearch] = useState("");
-  const [following, setFollowing] = useState(false);
   const [copyFlash, setCopyFlash] = useState(false);
   const [opened, setOpened] = useState<string[]>([]);
+  const [editTarget, setEditTarget] = useState<RoomMessage | null>(null);
+  const [editText, setEditText] = useState("");
   const threadRef = useRef<HTMLDivElement>(null);
   const pendingChat = useRef<string | null>(null);
 
@@ -584,12 +585,66 @@ export default function InboxPage() {
   const activeLead = active
     ? leads.find((l) => l.email.toLowerCase() === active.email) ?? null
     : null;
+  const whatsappUrl = (() => {
+    const phone = activeLead?.phone?.trim();
+    if (!phone) return null;
+    const digits = phone.replace(/\D/g, "");
+    if (digits.length < 8) return null;
+    return `https://wa.me/${digits}`;
+  })();
+
+  async function saveEdit() {
+    if (!editTarget?.editableId || !editText.trim()) return;
+    try {
+      const res = await fetch("/api/inbox/edit-reply", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editTarget.editableId,
+          bodyText: editText,
+        }),
+      });
+      const parsed = await readApiJson<{ reply?: MailReply }>(res);
+      if (!parsed.ok) throw new Error(parsed.error);
+      if (parsed.data.reply) {
+        setReplies((prev) =>
+          prev.map((r) =>
+            r.id === parsed.data.reply!.id ? { ...r, ...parsed.data.reply! } : r,
+          ),
+        );
+      }
+      setEditTarget(null);
+      pushToast(t("pages.inbox.messageUpdated"));
+    } catch (err) {
+      pushToast(err instanceof Error ? err.message : t("pages.inbox.editFailed"));
+    }
+  }
+
+  async function translateMessage(message: RoomMessage) {
+    try {
+      const res = await fetch("/api/inbox/translate-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: message.clean.text || message.raw,
+          locale,
+        }),
+      });
+      const parsed = await readApiJson<{ translated?: string }>(res);
+      if (!parsed.ok) throw new Error(parsed.error);
+      pushToast(parsed.data.translated || t("pages.inbox.translateMessage"));
+    } catch (err) {
+      pushToast(
+        err instanceof Error ? err.message : t("pages.inbox.translateFailed"),
+      );
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full min-w-0 overflow-hidden">
       {/* Rooms */}
       <aside
-        className={`min-h-0 min-w-0 flex-col border-r border-line bg-panel ${
+        className={`min-h-0 min-w-0 flex-col border-r border-line/80 crm-panel-lift ${
           !active
             ? "flex w-full"
             : detailsOpen
@@ -613,7 +668,7 @@ export default function InboxPage() {
         />
       </div>
 
-        <div className="grid grid-cols-4 border-b border-line">
+        <div className="flex gap-0 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(
             [
               { id: "inbox" as const, label: t("pages.inbox.all"), count: tabCounts.inbox, alert: tabCounts.inbox > 0 },
@@ -632,9 +687,9 @@ export default function InboxPage() {
               },
             ] as const
           ).map((tab) => (
-                        <button
+            <button
               key={tab.id}
-                          type="button"
+              type="button"
               onClick={() => setFilter(tab.id)}
               title={
                 tab.id === "promos"
@@ -646,7 +701,7 @@ export default function InboxPage() {
                     ? t("pages.inbox.unreadChats", { n: tab.count })
                     : undefined
               }
-              className={`flex min-w-0 items-center justify-center gap-0.5 px-0.5 py-2.5 text-[10px] font-semibold min-[400px]:gap-1 min-[400px]:px-1 min-[400px]:text-[11px] sm:text-xs ${
+              className={`inline-flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1 px-2 py-2.5 text-[11px] font-semibold whitespace-nowrap sm:text-xs ${
                 filter === tab.id
                   ? "border-b-2 border-gold text-ink"
                   : "border-b-2 border-transparent text-mute hover:text-ink"
@@ -656,9 +711,9 @@ export default function InboxPage() {
               {tab.count > 0 ? (
                 <CountBadge count={tab.count} tone={tab.alert ? "gold" : "mute"} />
               ) : null}
-                        </button>
-                  ))}
-            </div>
+            </button>
+          ))}
+        </div>
 
         {conn && !conn.namecheap.ready ? (
           <p className="border-y border-line bg-gold/10 px-4 py-2 text-xs text-gold">
@@ -710,7 +765,7 @@ export default function InboxPage() {
 
       {/* Thread */}
       <section
-        className={`min-h-0 min-w-0 flex-1 flex-col bg-canvas ${
+        className={`crm-chat-stage min-h-0 min-w-0 flex-1 flex-col ${
           !active || detailsOpen ? "hidden lg:flex" : "flex"
         }`}
       >
@@ -737,6 +792,16 @@ export default function InboxPage() {
                 onClick={() => closeThread()}
               >
                 <BackIcon />
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("apps.openApps")}
+                  className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream lg:hidden"
+                  onClick={() =>
+                    window.dispatchEvent(new Event("crm:open-apps"))
+                  }
+                >
+                  <AppsGridIcon />
                 </button>
                 <button
                   type="button"
@@ -806,7 +871,7 @@ export default function InboxPage() {
                   <div key={message.key}>
                     {newDay ? (
                       <div className="flex justify-center py-4">
-                        <span className="bg-panel px-3 py-1 text-[11px] font-semibold tracking-wide text-mute">
+                        <span className="rounded-full border border-line/60 bg-panel/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-mute shadow-[0_8px_20px_-14px_rgba(0,0,0,0.7)] backdrop-blur-sm">
                           {dayLabel(
                             message.at,
                             loc,
@@ -823,6 +888,11 @@ export default function InboxPage() {
                       selected={selectedKeys.includes(message.key)}
                       selectionActive={selectedKeys.length > 0}
                       onToggleSelect={() => toggleMessageSelect(message.key)}
+                      onEdit={(m) => {
+                        setEditTarget(m);
+                        setEditText(m.clean.text || m.raw);
+                      }}
+                      onTranslate={(m) => void translateMessage(m)}
                     />
                   </div>
                 );
@@ -837,31 +907,10 @@ export default function InboxPage() {
                     onModeChange={setComposeMode}
                     searchOpen={searchOpen}
                     onToggleSearch={() => setSearchOpen((v) => !v)}
-                    followersOpen={followersOpen}
-                    onToggleFollowers={() => setFollowersOpen((v) => !v)}
                     filesOpen={filesOpen}
                     onToggleFiles={() => setFilesOpen((v) => !v)}
-                    following={following}
-                    onToggleFollow={() => {
-                      setFollowing((v) => !v);
-                      if (!following && active) {
-                        void fetch("/api/inbox/followers", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            threadEmail: active.email,
-                            partnerEmail: active.email,
-                            partnerName: active.name || "",
-                          }),
-                        });
-                      } else if (active) {
-                        void fetch(
-                          `/api/inbox/followers?email=${encodeURIComponent(active.email)}&partner=${encodeURIComponent(active.email)}`,
-                          { method: "DELETE" },
-                        );
-                      }
-                    }}
                     onScheduleActivity={() => setActivityOpen(true)}
+                    whatsappUrl={whatsappUrl}
                   />
                   {searchOpen ? (
                     <input
@@ -925,7 +974,15 @@ export default function InboxPage() {
                   onClose={() => setActivityOpen(false)}
                   relatedTo={activeName || active.email}
                   relatedType="lead"
-                  relatedId={active.email}
+                  relatedId={activeLead?.id || active.email}
+                />
+                <EditMessageModal
+                  open={!!editTarget}
+                  onClose={() => setEditTarget(null)}
+                  value={editText}
+                  onChange={setEditText}
+                  onSave={() => void saveEdit()}
+                  isNote={editTarget?.isNote}
                 />
               </>
             ) : null}
@@ -1074,8 +1131,8 @@ function RoomRow({
   const unread = room.unread > 0;
   return (
     <div
-      className={`group flex items-center gap-2.5 px-3 py-3 transition-colors sm:gap-3 sm:py-2.5 ${
-        active ? "bg-accent-soft" : "hover:bg-ash/50"
+      className={`crm-room-row group flex items-center gap-2.5 px-3 py-3 sm:gap-3 sm:py-2.5 ${
+        active ? "crm-room-row-active" : ""
       }`}
     >
       <button
@@ -1247,6 +1304,22 @@ function BackIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function AppsGridIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden>
+      <rect x="1" y="1" width="4" height="4" fill="currentColor" />
+      <rect x="7" y="1" width="4" height="4" fill="currentColor" />
+      <rect x="13" y="1" width="4" height="4" fill="currentColor" />
+      <rect x="1" y="7" width="4" height="4" fill="currentColor" />
+      <rect x="7" y="7" width="4" height="4" fill="currentColor" />
+      <rect x="13" y="7" width="4" height="4" fill="currentColor" />
+      <rect x="1" y="13" width="4" height="4" fill="currentColor" />
+      <rect x="7" y="13" width="4" height="4" fill="currentColor" />
+      <rect x="13" y="13" width="4" height="4" fill="currentColor" />
     </svg>
   );
 }

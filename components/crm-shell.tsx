@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AppSwitcher } from "./app-switcher";
 import { ColorStripe } from "./brand";
@@ -34,11 +34,11 @@ export function CrmShell({
       <SessionUserProvider user={user}>
         <CrmProvider>
           <ConfirmProvider>
-          <QuoteTemplatesProvider>
-            <InboxNotificationsProvider>
-              <CrmShellInner>{children}</CrmShellInner>
-            </InboxNotificationsProvider>
-          </QuoteTemplatesProvider>
+            <QuoteTemplatesProvider>
+              <InboxNotificationsProvider>
+                <CrmShellInner>{children}</CrmShellInner>
+              </InboxNotificationsProvider>
+            </QuoteTemplatesProvider>
           </ConfirmProvider>
         </CrmProvider>
       </SessionUserProvider>
@@ -54,10 +54,21 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
     pathname === "/inbox" || isSaleDetail || isContactDetail;
   const wideMain = isSaleDetail || isContactDetail;
   const [navOpen, setNavOpen] = useState(false);
+  const openNav = useCallback(() => setNavOpen(true), []);
+  const closeNav = useCallback(() => setNavOpen(false), []);
+  const toggleNav = useCallback(() => setNavOpen((v) => !v), []);
 
   useEffect(() => {
     setNavOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    function onOpenApps() {
+      setNavOpen(true);
+    }
+    window.addEventListener("crm:open-apps", onOpenApps);
+    return () => window.removeEventListener("crm:open-apps", onOpenApps);
+  }, []);
 
   useEffect(() => {
     if (!fullBleed) return;
@@ -97,19 +108,17 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className={`bg-canvas pt-[6px] text-ink ${
-        fullBleed
+      className={`crm-atmosphere relative pt-[6px] text-ink ${fullBleed
           ? "h-[var(--crm-vvh,100dvh)] overflow-hidden"
           : "min-h-svh"
-      }`}
+        }`}
     >
       <ColorStripe className="fixed inset-x-0 top-0 z-50" />
       <div
-        className={`relative z-30 min-w-0 ${
-          fullBleed
+        className={`relative z-30 min-w-0 ${fullBleed
             ? "flex h-[calc(var(--crm-vvh,100dvh)-6px)] flex-col"
             : ""
-        }`}
+          }`}
       >
         <Suspense
           fallback={
@@ -118,26 +127,26 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
         >
           <Topbar
             menuOpen={navOpen}
-            onMenu={() => setNavOpen((v) => !v)}
+            onMenu={toggleNav}
           />
         </Suspense>
         <main
           className={
             fullBleed
-              ? "min-h-0 flex-1 overflow-hidden"
+              ? "min-h-0 min-w-0 flex-1 overflow-hidden"
               : wideMain
-                ? "mx-auto w-full max-w-none px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8"
-                : "mx-auto w-full max-w-7xl px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8"
+                ? "mx-auto w-full min-w-0 max-w-none px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5 lg:px-8"
+                : "mx-auto w-full min-w-0 max-w-7xl px-[max(0.75rem,env(safe-area-inset-left))] py-4 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-6 lg:px-8 lg:py-8"
           }
         >
           {children}
         </main>
       </div>
       <ToastStack />
-      <AppSwitcher open={navOpen} onClose={() => setNavOpen(false)} />
+      <AppSwitcher open={navOpen} onClose={closeNav} />
       <FirstRunTour
-        onNeedNav={() => setNavOpen(true)}
-        onCloseNav={() => setNavOpen(false)}
+        onNeedNav={openNav}
+        onCloseNav={closeNav}
       />
     </div>
   );

@@ -246,8 +246,8 @@ export function ContactsPanel() {
 
   function renderList(items: ContactRow[]) {
     return (
-      <div className="border border-line">
-        <table className="w-full table-fixed text-left text-sm">
+      <div className="table-wrap border border-line">
+        <table className="crm-list-table text-sm">
           <thead className="bg-ash/40 text-[11px] uppercase tracking-wide text-mute">
             <tr>
               <th className="w-[26%] px-3 py-2.5">{t("common.name")}</th>

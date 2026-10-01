@@ -83,11 +83,13 @@ export function FirstRunTour({
   useEffect(() => {
     if (!active || !step) return;
     if (step.target) onNeedNav();
-    if (!step.target) onCloseNav();
+    else onCloseNav();
     const wait = step.target ? 260 : 50;
     const id = window.setTimeout(() => measure(step), wait);
     return () => window.clearTimeout(id);
-  }, [active, step, measure, onNeedNav, onCloseNav]);
+    // Only re-sync when the tour step changes — not when parent re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [active, step?.id, measure]);
 
   useEffect(() => {
     if (!active) return;

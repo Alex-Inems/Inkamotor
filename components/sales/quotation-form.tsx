@@ -470,7 +470,7 @@ export function QuotationForm() {
             )}
 
             <div className="mt-6 flex justify-end">
-              <div className="min-w-[220px] space-y-1 border border-line bg-ash/30 px-4 py-3 text-sm">
+              <div className="crm-money-box space-y-1 border border-line bg-ash/30 px-4 py-3 text-sm">
                 <div className="flex justify-between text-mute">
                   <span>{t("pages.sales.amountUntaxed")}</span>
                   <SalesAmount amount={total} locale={locale} className="text-right" />

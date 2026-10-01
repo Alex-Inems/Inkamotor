@@ -172,10 +172,10 @@ export default function EmailMarketingPage() {
     }
     if (q) {
       rows = rows.filter((row) =>
-        `${row.name} ${row.subject} ${row.responsible} ${row.status}`
-          .toLowerCase()
-          .includes(q),
-      );
+      `${row.name} ${row.subject} ${row.responsible} ${row.status}`
+        .toLowerCase()
+        .includes(q),
+    );
     }
     return [...rows].sort((a, b) => {
       const draftRank = (status: MailingStatus) => (status === "draft" ? 0 : 1);
@@ -259,8 +259,8 @@ export default function EmailMarketingPage() {
 
   function renderListTable(rows: NewsletterMailing[]) {
     return (
-      <div className="border border-line">
-        <table className="w-full table-fixed text-left text-[12px] sm:text-sm">
+      <div className="table-wrap border border-line">
+        <table className="crm-list-table crm-list-table-wide text-[12px] sm:text-sm">
           <thead className="bg-ash/40 text-[10px] uppercase tracking-wide text-mute sm:text-[11px]">
             <tr>
               <th className="w-[12%] px-2 py-2.5">{t("pages.emailMarketing.colDate")}</th>
@@ -326,7 +326,7 @@ export default function EmailMarketingPage() {
     <div>
       <PageHeader title={t("pages.emailMarketing.title")} />
 
-      <EmailMarketingSubnav />
+        <EmailMarketingSubnav />
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-mute">
@@ -393,11 +393,11 @@ export default function EmailMarketingPage() {
       ) : filtered.length === 0 ? (
         <EmptyHint>{t("pages.emailMarketing.empty")}</EmptyHint>
       ) : view === "kanban" ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 -mx-3 flex gap-3 overflow-x-auto px-3 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 xl:grid-cols-4">
           {STAGES.map((status) => (
             <section
               key={status}
-              className="flex min-w-0 flex-col border border-line bg-panel"
+              className="flex w-[min(16.5rem,78vw)] shrink-0 flex-col border border-line bg-panel sm:w-auto"
             >
               <header className="flex items-center justify-between border-b border-line px-3 py-2.5">
                 <p className="text-sm font-semibold">{stageLabel(status)}</p>
@@ -411,8 +411,8 @@ export default function EmailMarketingPage() {
                     onClick={() => openMailing(mailing.id)}
                   >
                     <p className="line-clamp-2 text-sm font-semibold text-ink">
-                      {mailing.subject || mailing.name}
-                    </p>
+                        {mailing.subject || mailing.name}
+                      </p>
                     <div className="mt-2">
                       <ResponsibleCell name={mailing.responsible} />
                     </div>

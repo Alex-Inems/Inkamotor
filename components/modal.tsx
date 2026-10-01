@@ -167,7 +167,7 @@ export const inputUnderlineClass =
 
 /** Compact row field used in compose sheets (label | control). */
 export const composeRowClass =
-  "grid grid-cols-[4.5rem_1fr] items-center gap-3 border-b border-line/60 px-4 py-2.5 sm:grid-cols-[5.5rem_1fr] sm:px-5";
+  "grid grid-cols-1 items-stretch gap-1.5 border-b border-line/60 px-4 py-2.5 min-[400px]:grid-cols-[4.5rem_1fr] min-[400px]:items-center min-[400px]:gap-3 sm:grid-cols-[5.5rem_1fr] sm:px-5";
 
 export const composeInputClass =
   "w-full border-0 bg-transparent px-0 py-1 text-sm text-ink outline-none placeholder:text-mute/60";

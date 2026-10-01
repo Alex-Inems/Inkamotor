@@ -896,7 +896,7 @@ function NewsletterPageInner() {
               />
               <button
                 type="submit"
-                className={btnPrimary}
+                className={`${btnPrimary} w-full sm:w-auto`}
                 disabled={addingSubscriber || !newSubscriber.email.trim()}
               >
                 {addingSubscriber ? t("common.adding") : t("common.add")}

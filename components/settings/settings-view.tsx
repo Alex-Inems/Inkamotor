@@ -99,24 +99,31 @@ export function SettingsView() {
 
   return (
     <div className="flex min-h-[calc(100vh-8rem)] flex-col border border-line bg-panel">
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2 sm:px-4">
-        <button
-          type="button"
-          className={btnToolbarPrimary}
-          disabled={!dirty}
-          onClick={onSave}
-        >
-          {m("ui.save")}
-        </button>
-        <button
-          type="button"
-          className={btnToolbar}
-          disabled={!dirty}
-          onClick={onDiscard}
-        >
-          {m("ui.discard")}
-        </button>
-        <div className="relative min-w-[12rem] flex-1">
+      <div className="flex flex-col gap-2 border-b border-line px-3 py-2 sm:flex-row sm:flex-wrap sm:items-center sm:px-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={btnToolbarPrimary}
+            disabled={!dirty}
+            onClick={onSave}
+          >
+            {m("ui.save")}
+          </button>
+          <button
+            type="button"
+            className={btnToolbar}
+            disabled={!dirty}
+            onClick={onDiscard}
+          >
+            {m("ui.discard")}
+          </button>
+          {dirty ? (
+            <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
+              {m("ui.dirty")}
+            </span>
+          ) : null}
+        </div>
+        <div className="relative min-w-0 w-full flex-1 sm:min-w-[12rem]">
           <input
             type="search"
             value={query}
@@ -127,11 +134,6 @@ export function SettingsView() {
           />
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-mute" />
         </div>
-        {dirty ? (
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-gold">
-            {m("ui.dirty")}
-          </span>
-        ) : null}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

@@ -54,22 +54,30 @@ export function Topbar({
   }, []);
 
   return (
-    <header className="crm-topbar sticky top-[6px] z-30 border-b border-line bg-ash text-ink shadow-[0_8px_24px_-18px_rgba(0,0,0,0.8)]">
-        <div className="flex h-12 items-stretch gap-0.5 pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] sm:gap-1 sm:pl-2 sm:pr-3">
+    <header className="crm-topbar crm-glass sticky top-[6px] z-40 border-b border-line/80 text-ink">
+        <div className="relative z-10 flex h-12 items-stretch gap-0.5 pl-[max(0.25rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] sm:gap-1 sm:pl-2 sm:pr-3">
           <button
             type="button"
             aria-label={t("apps.openApps")}
             aria-expanded={menuOpen}
-            onClick={onMenu}
-            className="flex h-12 w-11 shrink-0 items-center justify-center text-mute transition-colors hover:bg-panel hover:text-ink"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onMenu();
+            }}
+            className="relative z-20 flex h-12 w-11 shrink-0 items-center justify-center text-mute transition-colors hover:bg-panel hover:text-ink"
           >
             <AppsGridIcon />
           </button>
 
           <button
             type="button"
-            onClick={onMenu}
-            className="flex shrink-0 items-center gap-2 px-2 text-[15px] font-semibold text-ink transition-colors hover:bg-panel"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onMenu();
+            }}
+            className="relative z-20 flex shrink-0 items-center gap-1.5 px-1.5 text-[15px] font-semibold text-ink transition-colors hover:bg-panel sm:gap-2 sm:px-2"
           >
             <span
               className="flex h-7 w-7 items-center justify-center rounded-md text-white"
@@ -78,12 +86,12 @@ export function Topbar({
               <AppIcon className="h-4 w-4" />
             </span>
             <span className="hidden sm:inline">{t(app.labelKey)}</span>
-            <ChevronDown className="text-mute" />
+            <ChevronDown className="hidden text-mute sm:block" />
           </button>
 
           <nav
             aria-label={t(app.labelKey)}
-            className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            className="flex min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             {app.menus.map((item) => {
               const active = item.match
@@ -94,7 +102,7 @@ export function Topbar({
                   key={item.href + item.labelKey}
                   href={item.href}
                   aria-current={active ? "page" : undefined}
-                  className={`flex shrink-0 items-center px-3 text-[14px] font-medium whitespace-nowrap transition-colors sm:px-3.5 sm:text-[15px] ${
+                  className={`flex shrink-0 items-center px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors sm:px-3.5 sm:text-[15px] ${
                     active
                       ? "bg-panel text-ink"
                       : "text-mute hover:bg-panel/80 hover:text-ink"
@@ -291,7 +299,9 @@ export function Topbar({
               {currentWorkspace.name}
             </span>
 
-            <LanguageSwitcher />
+            <span className="hidden md:contents">
+              <LanguageSwitcher />
+            </span>
 
             <div className="relative" ref={userRef}>
               <button
@@ -302,7 +312,7 @@ export function Topbar({
                   setUserOpen((v) => !v);
                   setNotifOpen(false);
                 }}
-                className="flex h-11 items-center gap-2.5 rounded-full border border-line bg-panel py-1 pl-1 pr-2.5 transition-colors hover:border-sand hover:bg-ash"
+                className="flex h-11 items-center gap-2 rounded-full border border-line bg-panel py-1 pl-1 pr-1.5 transition-colors hover:border-sand hover:bg-ash sm:gap-2.5 sm:pr-2.5"
               >
                 <UserAvatar
                   user={currentUser}
@@ -316,7 +326,7 @@ export function Topbar({
                     {t("common.admin")}
                   </span>
                 </span>
-                <ChevronDown className="text-mute" />
+                <ChevronDown className="hidden text-mute sm:block" />
               </button>
 
               {userOpen ? (

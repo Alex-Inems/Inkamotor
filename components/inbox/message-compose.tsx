@@ -357,8 +357,8 @@ export function MessageCompose({
       ) : null}
 
       <div
-        className={`relative overflow-hidden rounded-2xl border bg-panel focus-within:border-gold/70 ${
-          dragOver ? "border-gold bg-ash/30" : "border-line"
+        className={`relative overflow-hidden rounded-2xl border bg-panel/95 crm-compose-shell focus-within:border-gold/70 ${
+          dragOver ? "border-gold bg-ash/30" : "border-line/80"
         }`}
         onDragEnter={(e) => {
           e.preventDefault();

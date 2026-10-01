@@ -31,7 +31,6 @@ import {
 } from "@/lib/mail/rooms";
 import { useLocale } from "@/lib/i18n";
 import type { MailNote } from "@/lib/mail/notes";
-import type { MailFollower } from "@/lib/mail/followers";
 import type { MailThreadFile } from "@/lib/mail/thread-files";
 import { formatAttachmentBytes } from "@/lib/mail/compose-attachments";
 
@@ -113,7 +112,6 @@ export function SaleChatPanel({
   const [mail, setMail] = useState<MailMessage[]>([]);
   const [replies, setReplies] = useState<MailReply[]>([]);
   const [notes, setNotes] = useState<MailNote[]>([]);
-  const [followers, setFollowers] = useState<MailFollower[]>([]);
   const [threadFiles, setThreadFiles] = useState<MailThreadFile[]>([]);
   const [ownAddresses, setOwnAddresses] = useState<(string | null)[]>([]);
   const [brevoReady, setBrevoReady] = useState<boolean | null>(null);
@@ -123,12 +121,9 @@ export function SaleChatPanel({
   const [composeMode, setComposeMode] = useState<ChatterMode>("message");
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [followersOpen, setFollowersOpen] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
   const [fullOpen, setFullOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
-  const [followerEmail, setFollowerEmail] = useState("");
-  const [followerName, setFollowerName] = useState("");
   const [editTarget, setEditTarget] = useState<RoomMessage | null>(null);
   const [editText, setEditText] = useState("");
   const threadRef = useRef<HTMLDivElement>(null);
@@ -153,7 +148,6 @@ export function SaleChatPanel({
         setMail([]);
         setReplies([]);
         setNotes([]);
-        setFollowers([]);
         setThreadFiles([]);
         return;
       }
@@ -162,13 +156,12 @@ export function SaleChatPanel({
       if (!silent) setLoading(true);
       try {
         const emailParam = encodeURIComponent(email.trim());
-        const [statusRes, mailRes, repliesRes, notesRes, followersRes, filesRes] =
+        const [statusRes, mailRes, repliesRes, notesRes, filesRes] =
           await Promise.all([
             fetch("/api/inbox/status"),
             fetch(`/api/inbox/mail?locale=${locale}&email=${emailParam}`),
             fetch(`/api/inbox/replies?locale=${locale}&email=${emailParam}`),
             fetch(`/api/inbox/notes?email=${emailParam}`),
-            fetch(`/api/inbox/followers?email=${emailParam}`),
             fetch(`/api/inbox/thread-files?email=${emailParam}`),
           ]);
 
@@ -197,12 +190,6 @@ export function SaleChatPanel({
         if (notesRes.ok) {
           const json = (await notesRes.json()) as { notes?: MailNote[] };
           setNotes(json.notes ?? []);
-        }
-        if (followersRes.ok) {
-          const json = (await followersRes.json()) as {
-            followers?: MailFollower[];
-          };
-          setFollowers(json.followers ?? []);
         }
         if (filesRes.ok) {
           const json = (await filesRes.json()) as { files?: MailThreadFile[] };
@@ -301,7 +288,6 @@ export function SaleChatPanel({
   }, [messages.length, email, searchQuery]);
 
   const displayName = displayContactName(customerName, email);
-  const followingSelf = followers.some((f) => f.partnerEmail === threadKey);
   const whatsappUrl = phone ? toWhatsAppUrl(phone) : null;
 
   const planned = useMemo(() => {
@@ -347,9 +333,6 @@ export function SaleChatPanel({
 
     setSending(true);
     try {
-      const followerCc = followers
-        .map((f) => f.partnerEmail)
-        .filter((e) => e !== threadKey);
       const form = buildReplyFormData({
         toEmail: threadKey,
         toName: customerName.trim() || undefined,
@@ -357,7 +340,7 @@ export function SaleChatPanel({
         inReplyToSubject: room?.lastSubject,
         message: payload.message,
         messageHtml: payload.messageHtml,
-        ccEmails: [...(payload.ccEmails ?? []), ...followerCc],
+        ccEmails: payload.ccEmails,
         relatedMailId: room?.lastMailId,
         attachments: payload.attachments,
       });
@@ -452,63 +435,6 @@ export function SaleChatPanel({
     }
   }
 
-  async function toggleFollow() {
-    try {
-      if (followingSelf) {
-        await fetch(
-          `/api/inbox/followers?email=${encodeURIComponent(threadKey)}&partner=${encodeURIComponent(threadKey)}`,
-          { method: "DELETE" },
-        );
-        setFollowers((prev) => prev.filter((f) => f.partnerEmail !== threadKey));
-      } else {
-        const res = await fetch("/api/inbox/followers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            threadEmail: threadKey,
-            partnerEmail: threadKey,
-            partnerName: displayName,
-          }),
-        });
-        const parsed = await readApiJson<{ follower?: MailFollower }>(res);
-        if (!parsed.ok) throw new Error(parsed.error);
-        if (parsed.data.follower) {
-          setFollowers((prev) => [...prev, parsed.data.follower!]);
-        }
-      }
-    } catch (err) {
-      pushToast(err instanceof Error ? err.message : t("pages.inbox.followersFailed"));
-    }
-  }
-
-  async function addFollower() {
-    const partnerEmail = followerEmail.trim().toLowerCase();
-    if (!partnerEmail) return;
-    try {
-      const res = await fetch("/api/inbox/followers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          threadEmail: threadKey,
-          partnerEmail,
-          partnerName: followerName.trim(),
-        }),
-      });
-      const parsed = await readApiJson<{ follower?: MailFollower }>(res);
-      if (!parsed.ok) throw new Error(parsed.error);
-      if (parsed.data.follower) {
-        setFollowers((prev) => {
-          if (prev.some((f) => f.id === parsed.data.follower!.id)) return prev;
-          return [...prev, parsed.data.follower!];
-        });
-      }
-      setFollowerEmail("");
-      setFollowerName("");
-    } catch (err) {
-      pushToast(err instanceof Error ? err.message : t("pages.inbox.followersFailed"));
-    }
-  }
-
   async function uploadThreadFile(fileList: FileList | null) {
     if (!fileList?.length) return;
     for (const file of Array.from(fileList)) {
@@ -591,7 +517,7 @@ export function SaleChatPanel({
   }
 
   return (
-    <aside className="flex h-full min-h-0 min-w-0 flex-col border-l-0 bg-panel lg:border-l lg:border-line">
+    <aside className="crm-panel-lift flex h-full min-h-0 min-w-0 flex-col border-l-0 lg:border-l lg:border-line/80">
       {selectedKeys.length > 0 ? (
         <MessageSelectionBar
           count={selectedKeys.length}
@@ -617,12 +543,8 @@ export function SaleChatPanel({
           onModeChange={setComposeMode}
           searchOpen={searchOpen}
           onToggleSearch={() => setSearchOpen((v) => !v)}
-          followersOpen={followersOpen}
-          onToggleFollowers={() => setFollowersOpen((v) => !v)}
           filesOpen={filesOpen}
           onToggleFiles={() => setFilesOpen((v) => !v)}
-          following={followingSelf}
-          onToggleFollow={() => void toggleFollow()}
           onScheduleActivity={() => setActivityOpen(true)}
           whatsappUrl={whatsappUrl}
         />
@@ -661,59 +583,6 @@ export function SaleChatPanel({
               ))}
             </ul>
           ) : null}
-        </div>
-      ) : null}
-
-      {followersOpen ? (
-        <div className="space-y-3 border-b border-line/80 bg-ash/30 px-3 py-3 text-xs">
-          <ul className="space-y-1.5">
-            {followers.length === 0 ? (
-              <li className="rounded-xl border border-dashed border-line/70 px-3 py-4 text-center text-mute">
-                {t("pages.inbox.noFollowers")}
-              </li>
-            ) : (
-              followers.map((f) => (
-                <li
-                  key={f.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-line/60 bg-panel/80 px-3 py-2"
-                >
-                  <span className="truncate font-medium text-ink">
-                    {f.partnerName || f.partnerEmail}
-                  </span>
-                  <button
-                    type="button"
-                    className="rounded-lg px-2 py-1 text-mute transition-colors hover:bg-ash hover:text-pink"
-                    onClick={() =>
-                      void fetch(`/api/inbox/followers?id=${f.id}`, {
-                        method: "DELETE",
-                      }).then(() =>
-                        setFollowers((prev) => prev.filter((x) => x.id !== f.id)),
-                      )
-                    }
-                  >
-                    {t("common.remove")}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
-          <div className="flex flex-wrap gap-2">
-            <input
-              className={`${inputClass} min-w-32 flex-1`}
-              placeholder="email@…"
-              value={followerEmail}
-              onChange={(e) => setFollowerEmail(e.target.value)}
-            />
-            <input
-              className={`${inputClass} min-w-24 flex-1`}
-              placeholder={t("pages.inbox.recipientName")}
-              value={followerName}
-              onChange={(e) => setFollowerName(e.target.value)}
-            />
-            <button type="button" className={btnGhost} onClick={() => void addFollower()}>
-              {t("pages.inbox.addFollower")}
-            </button>
-          </div>
         </div>
       ) : null}
 
@@ -799,10 +668,11 @@ export function SaleChatPanel({
         </div>
       ) : null}
 
-      <div
-        ref={threadRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 sm:px-3"
-      >
+      <div className="crm-chat-stage flex min-h-0 flex-1 flex-col">
+        <div
+          ref={threadRef}
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2 sm:px-3"
+        >
         {!canLoad ? (
           <EmptyHint>{t("pages.sales.clientEmailMissing")}</EmptyHint>
         ) : loading ? (
@@ -851,6 +721,7 @@ export function SaleChatPanel({
           ))
         )}
       </div>
+      </div>
 
       <footer className="shrink-0 border-t border-line bg-ash/40 p-3 sm:p-4">
         {selectedKeys.length > 0 || !canLoad ? null : composeMode === "note" ||
@@ -883,7 +754,6 @@ export function SaleChatPanel({
         initialToEmail={threadKey}
         initialToName={displayName}
         initialSubject={room?.lastSubject}
-        initialCc={followers.map((f) => f.partnerEmail).filter((e) => e !== threadKey)}
         templateModels={["sale.order", "res.partner", "crm.lead", "account.move"]}
         onSend={async (payload) => {
           await sendMessage({

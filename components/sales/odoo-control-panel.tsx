@@ -62,18 +62,59 @@ export function OdooControlPanel({
 
   return (
     <div ref={rootRef} className="space-y-0">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:gap-3">
-        {newHref ? (
-          <Link href={newHref} className={`${btnPrimary} shrink-0`}>
-            {newLabel}
-          </Link>
-        ) : onNew ? (
-          <button type="button" className={`${btnPrimary} shrink-0`} onClick={onNew}>
-            {newLabel}
-          </button>
-        ) : null}
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-start lg:flex-nowrap lg:gap-3">
+        <div className="flex items-center gap-2">
+          {newHref ? (
+            <Link href={newHref} className={`${btnPrimary} min-w-0 flex-1 sm:flex-none`}>
+              {newLabel}
+            </Link>
+          ) : onNew ? (
+            <button
+              type="button"
+              className={`${btnPrimary} min-w-0 flex-1 sm:flex-none`}
+              onClick={onNew}
+            >
+              {newLabel}
+            </button>
+          ) : null}
 
-        <div className="min-w-0 flex-1">
+          {viewMode && onViewModeChange ? (
+            <div
+              role="group"
+              aria-label={t("pages.sales.viewMode")}
+              className="ml-auto flex shrink-0 border border-line sm:ml-0"
+            >
+              <button
+                type="button"
+                aria-pressed={viewMode === "kanban"}
+                title={t("pages.sales.kanban")}
+                className={`flex h-9 w-9 items-center justify-center ${
+                  viewMode === "kanban"
+                    ? "bg-accent text-white"
+                    : "bg-panel text-mute hover:bg-ash hover:text-ink"
+                }`}
+                onClick={() => onViewModeChange("kanban")}
+              >
+                <KanbanIcon />
+              </button>
+              <button
+                type="button"
+                aria-pressed={viewMode === "list"}
+                title={t("pages.sales.list")}
+                className={`flex h-9 w-9 items-center justify-center border-l border-line ${
+                  viewMode === "list"
+                    ? "bg-accent text-white"
+                    : "bg-panel text-mute hover:bg-ash hover:text-ink"
+                }`}
+                onClick={() => onViewModeChange("list")}
+              >
+                <ListIcon />
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="min-w-0 w-full flex-1">
           <div className="odoo-searchview flex min-h-9 flex-wrap items-center gap-1.5 border border-line bg-panel px-2 py-1.5">
             <SearchIcon className="shrink-0 text-mute" />
             {facets.map((facet) => (
@@ -96,7 +137,7 @@ export function OdooControlPanel({
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
               placeholder={t("pages.sales.odooSearchPlaceholder")}
-              className="min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-ink outline-none placeholder:text-mute"
+              className="min-w-0 flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-ink outline-none placeholder:text-mute sm:min-w-[8rem]"
               aria-label={t("pages.sales.odooSearchPlaceholder")}
             />
           </div>
@@ -141,41 +182,6 @@ export function OdooControlPanel({
             />
           </div>
         </div>
-
-        {viewMode && onViewModeChange ? (
-          <div
-            role="group"
-            aria-label={t("pages.sales.viewMode")}
-            className="flex shrink-0 border border-line"
-          >
-            <button
-              type="button"
-              aria-pressed={viewMode === "kanban"}
-              title={t("pages.sales.kanban")}
-              className={`flex h-9 w-9 items-center justify-center ${
-                viewMode === "kanban"
-                  ? "bg-accent text-white"
-                  : "bg-panel text-mute hover:bg-ash hover:text-ink"
-              }`}
-              onClick={() => onViewModeChange("kanban")}
-            >
-              <KanbanIcon />
-            </button>
-            <button
-              type="button"
-              aria-pressed={viewMode === "list"}
-              title={t("pages.sales.list")}
-              className={`flex h-9 w-9 items-center justify-center border-l border-line ${
-                viewMode === "list"
-                  ? "bg-accent text-white"
-                  : "bg-panel text-mute hover:bg-ash hover:text-ink"
-              }`}
-              onClick={() => onViewModeChange("list")}
-            >
-              <ListIcon />
-            </button>
-          </div>
-        ) : null}
       </div>
     </div>
   );

@@ -32,6 +32,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
   const {
     sales,
     invoices,
+    leads,
     ready,
     updateSaleStatus,
     sendSaleQuote,
@@ -49,6 +50,9 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
   const [sendQuoteSale, setSendQuoteSale] = useState<Sale | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [moving, setMoving] = useState(false);
+  const [mobilePane, setMobilePane] = useState<"details" | "messages">(
+    "details",
+  );
 
   const orderedSales = useMemo(
     () =>
@@ -135,8 +139,8 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
         <SalesSubnav />
       </div>
 
-      <div className="mb-3 mt-4 flex shrink-0 items-center justify-between gap-3 text-xs text-mute">
-        <div>
+      <div className="mb-3 mt-4 flex shrink-0 flex-wrap items-center justify-between gap-2 text-xs text-mute">
+        <div className="min-w-0">
           <Link href="/sales?tab=bookings" className="hover:text-ink">
             {t("pages.sales.menuOrders")}
           </Link>
@@ -298,8 +302,37 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
       </OdooFormToolbar>
       </div>
 
-      <div className="grid min-h-0 flex-1 overflow-hidden border border-line bg-panel max-lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(300px,38%)]">
-        <div className="min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6">
+      <div className="flex shrink-0 border border-b-0 border-line bg-panel lg:hidden">
+        <button
+          type="button"
+          onClick={() => setMobilePane("details")}
+          className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
+            mobilePane === "details"
+              ? "border-b-2 border-gold text-ink"
+              : "border-b-2 border-transparent text-mute"
+          }`}
+        >
+          {t("common.details")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobilePane("messages")}
+          className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
+            mobilePane === "messages"
+              ? "border-b-2 border-gold text-ink"
+              : "border-b-2 border-transparent text-mute"
+          }`}
+        >
+          {t("common.messages")}
+        </button>
+      </div>
+
+      <div className="grid min-h-0 flex-1 overflow-hidden border border-line bg-panel max-lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_minmax(300px,38%)]">
+        <div
+          className={`min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 ${
+            mobilePane === "details" ? "block" : "hidden"
+          } lg:block`}
+        >
           <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="font-display text-2xl tracking-wide text-ink">{sale.number}</h1>
@@ -364,7 +397,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
           )}
 
           <div className="mb-6 flex justify-end">
-            <div className="min-w-[220px] space-y-1 border border-line bg-ash/30 px-4 py-3 text-sm">
+            <div className="crm-money-box space-y-1 border border-line bg-ash/30 px-4 py-3 text-sm">
               <div className="flex justify-between font-semibold text-ink">
                 <span>{t("pages.sales.total")}</span>
                 <SalesAmount amount={sale.amount} locale={locale} size="md" />
@@ -413,12 +446,23 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
           ) : null}
         </div>
 
-        <div className="flex min-h-0 flex-col overflow-hidden border-t border-line lg:border-t-0">
+        <div
+          className={`min-h-0 flex-col overflow-hidden border-t border-line lg:border-t-0 ${
+            mobilePane === "messages" ? "flex" : "hidden"
+          } lg:flex`}
+        >
           <SaleChatPanel
             email={sale.email}
             customerName={sale.customer}
             relatedType="sale"
             relatedId={sale.id}
+            phone={
+              leads.find((l) => l.id === sale.leadId)?.phone ||
+              leads.find(
+                (l) => l.email.toLowerCase() === sale.email.toLowerCase(),
+              )?.phone ||
+              undefined
+            }
           />
         </div>
       </div>

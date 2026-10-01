@@ -2558,15 +2558,15 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             {t("common.delete")}
           </button>
         ) : null}
-        <span className="min-w-2 flex-1" aria-hidden />
-        <div className="flex flex-wrap items-stretch overflow-hidden rounded-sm">
+        <span className="min-w-2 flex-1 basis-full sm:basis-auto" aria-hidden />
+        <div className="flex max-w-full flex-wrap items-stretch overflow-x-auto rounded-sm">
           {PIPELINE.map((stage, index) => {
             const active = index === activeStage;
             const reached = index <= activeStage;
             return (
               <span
                 key={stage}
-                className={`relative px-4 py-1.5 text-xs font-semibold ${active
+                className={`relative shrink-0 px-3 py-1.5 text-[11px] font-semibold sm:px-4 sm:text-xs ${active
                     ? "bg-[#017e84] text-white"
                     : reached
                       ? "bg-[#e7e9ed] text-[#1f1f1f]"
@@ -2632,7 +2632,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           <div className="flex min-w-0 flex-col gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-3">
               <select
-                className={`${inputClass} min-w-[14rem] max-w-full`}
+                className={`${inputClass} min-w-0 w-full max-w-full sm:min-w-[14rem] sm:w-auto`}
                 value={
                   pickingPeople || form.recipientEmails.length > 0
                     ? "pick"
@@ -2700,7 +2700,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
               <div className="min-w-0 space-y-2 rounded-md border border-line bg-ash/30 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <input
-                    className={`${inputClass} min-w-[12rem] flex-1`}
+                    className={`${inputClass} min-w-0 w-full flex-1 sm:min-w-[12rem]`}
                     placeholder={t("pages.emailMarketing.recipientsSearch")}
                     value={peopleQuery}
                     disabled={contentLocked}
@@ -2790,7 +2790,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
 
         {form.status === "sent" && mailing ? (
           <>
-            <div className="flex flex-wrap items-stretch divide-x divide-line border-b border-line bg-ash/20">
+            <div className="grid grid-cols-2 border-b border-line bg-ash/20 sm:flex sm:flex-wrap sm:items-stretch sm:divide-x sm:divide-line">
               {(
                 [
                   ["colOpened", formatRatio(mailing.openPct)],
@@ -2801,7 +2801,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
               ).map(([labelKey, value]) => (
                 <div
                   key={labelKey}
-                  className="min-w-[6.5rem] flex-1 px-4 py-3 text-center"
+                  className="min-w-0 border-b border-line px-3 py-3 text-center even:border-l sm:min-w-[6.5rem] sm:flex-1 sm:border-b-0 sm:border-l-0 sm:px-4"
                 >
                   <p className="text-lg font-semibold tabular-nums text-ink sm:text-xl">
                     {value}
@@ -3129,7 +3129,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     <p className="max-w-sm text-xs text-[#9a9a9a]">
                       {t("pages.emailMarketing.designHint")}
                     </p>
-                    <label className="min-w-[14rem] flex-1 space-y-1">
+                    <label className="min-w-0 w-full flex-1 space-y-1 sm:min-w-[14rem]">
                       <span className="text-[10px] font-semibold uppercase tracking-wide text-[#9a9a9a]">
                         {t("pages.newsletter.template")}
                       </span>

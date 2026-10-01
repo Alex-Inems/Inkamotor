@@ -73,7 +73,7 @@ export function InvoiceDocument({
 
       <div className="px-8 pb-8 pt-6">
 
-      <dl className="grid grid-cols-2 gap-6 text-sm sm:grid-cols-4">
+        <dl className="grid grid-cols-1 gap-4 text-sm min-[420px]:grid-cols-2 min-[420px]:gap-6 sm:grid-cols-4">
         <div>
           <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8a8478]">
             {copy.number}
@@ -178,7 +178,7 @@ export function InvoiceDocument({
       </table>
 
       <div className="mt-6 flex justify-end">
-        <div className="min-w-[220px] bg-[#f4e5c1] px-4 py-3">
+        <div className="crm-money-box bg-[#f4e5c1] px-4 py-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#31595d]">
             {copy.total}
           </p>
