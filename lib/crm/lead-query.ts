@@ -139,7 +139,7 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
 }> {
   const kanban = Boolean(input.kanban);
   const limit = kanban
-    ? Math.min(Math.max(input.limit ?? 400, 1), 800)
+    ? Math.min(Math.max(input.limit ?? 500, 1), 1200)
     : Math.min(Math.max(input.limit ?? 75, 1), 100);
   const page = Math.max(input.page ?? 0, 0);
   const sort = input.sort ?? "completeness";
@@ -176,7 +176,12 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
 
   let slice: CachedLead[];
   if (kanban) {
-    const perStage = Math.max(20, Math.floor(limit / 5));
+    // Cap each stage so busy columns (e.g. New) don't hide the rest.
+    const stageKeys = new Set(
+      filtered.map((row) => row.lead.status || "new"),
+    );
+    const stageN = Math.max(stageKeys.size, 1);
+    const perStage = Math.max(40, Math.ceil(limit / stageN));
     const buckets = new Map<string, CachedLead[]>();
     for (const row of filtered) {
       const key = row.lead.status || "new";
@@ -370,8 +375,11 @@ export async function writeLead(
     company,
     source: prev?.source ?? "manual",
     status,
-    value: prev?.value ?? 0,
-    currency: "USD",
+    value:
+      typeof input.value === "number" && Number.isFinite(input.value)
+        ? Math.max(0, input.value)
+        : (prev?.value ?? 0),
+    currency: "USD" as const,
     owner: prev?.owner ?? "Team",
     created_at: prev?.createdAt ?? day,
     last_contact: day,
@@ -401,6 +409,269 @@ export async function writeLead(
     notes,
   });
   return { lead: cached.lead, details: cached.details, score: cached.score };
+}
+
+export type QuickCreatePayload = {
+  status: LeadStatus;
+  company: string;
+  contactName: string;
+  opportunityName: string;
+  email: string;
+  phone: string;
+  value: number;
+  priority: LeadPriority;
+};
+
+/**
+ * Odoo-style quick create: upsert Company + Contact into the shared address book
+ * (same /api/leads catalog Contacts/Sales use), then create the pipeline opportunity.
+ */
+export async function writeQuickCreate(
+  input: QuickCreatePayload,
+): Promise<LeadTableRow> {
+  const company = input.company.trim();
+  const contactName = input.contactName.trim();
+  const opportunity = input.opportunityName.trim();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone.trim();
+  const value =
+    typeof input.value === "number" && Number.isFinite(input.value)
+      ? Math.max(0, input.value)
+      : 0;
+  const priority = clampPriority(input.priority);
+  const status = input.status;
+
+  if (!opportunity && !contactName && !company && !email) {
+    throw new Error("Name is required");
+  }
+
+  if (company) {
+    await upsertCompanyContact(company);
+  }
+
+  let personId: string | null = null;
+  if (contactName || email) {
+    const person = await upsertPersonContact({
+      name: contactName || opportunity || email,
+      email,
+      phone,
+      company,
+    });
+    personId = person.lead.id;
+  }
+
+  const distinctOpportunity =
+    Boolean(opportunity) &&
+    opportunity.toLowerCase() !== contactName.toLowerCase() &&
+    opportunity.toLowerCase() !== company.toLowerCase();
+
+  // Contact (or company-only) is the pipeline card when there is no separate opportunity title.
+  if (personId && !distinctOpportunity) {
+    const existing = await getLeadRow(personId);
+    if (!existing) throw new Error("Contact not found");
+    return writeLead(
+      {
+        ...contactWriteFromLead(existing.lead, existing.details),
+        name: contactName || existing.lead.name,
+        email: email || existing.lead.email,
+        phone: phone || existing.lead.phone,
+        company: company || existing.lead.company,
+        value: value || existing.lead.value,
+        priority,
+        status,
+        isCompany: false,
+        active: true,
+      },
+      personId,
+    );
+  }
+
+  if (!personId && company && !distinctOpportunity && !email) {
+    const firm = await findCompanyContact(company);
+    if (firm) {
+      return writeLead(
+        {
+          ...contactWriteFromLead(firm.lead, firm.details),
+          name: company,
+          company,
+          value: value || firm.lead.value,
+          priority,
+          status,
+          isCompany: true,
+          active: true,
+        },
+        firm.lead.id,
+      );
+    }
+  }
+
+  const notesParts: string[] = [];
+  if (contactName && distinctOpportunity) {
+    notesParts.push(`Contact: ${contactName}`);
+  }
+
+  return writeLead({
+    name: opportunity || contactName || company || email,
+    email,
+    phone,
+    company,
+    city: "",
+    country: "",
+    tags: "",
+    isCompany: !contactName && !email && Boolean(company),
+    active: true,
+    stats: "",
+    activities: "",
+    activityStatus: "",
+    nextActivity: "",
+    upcomingActivity: "",
+    properties: "",
+    priority,
+    extras: [],
+    notes: notesParts.join("\n"),
+    status,
+    value,
+  });
+}
+
+async function findCompanyContact(companyName: string): Promise<LeadTableRow | null> {
+  const key = companyName.trim().toLowerCase();
+  if (!key) return null;
+  const rows = await loadCatalog();
+  const hit = rows.find((row) => {
+    if (!row.details.isCompany) return false;
+    const name = row.lead.name.trim().toLowerCase();
+    const company = row.lead.company.trim().toLowerCase();
+    return name === key || company === key;
+  });
+  return hit
+    ? { lead: hit.lead, details: hit.details, score: hit.score }
+    : null;
+}
+
+async function upsertCompanyContact(companyName: string): Promise<LeadTableRow> {
+  const existing = await findCompanyContact(companyName);
+  if (existing) {
+    if (!existing.details.active) {
+      return writeLead(
+        {
+          ...contactWriteFromLead(existing.lead, existing.details),
+          name: companyName,
+          company: companyName,
+          isCompany: true,
+          active: true,
+        },
+        existing.lead.id,
+      );
+    }
+    return existing;
+  }
+  return writeLead({
+    name: companyName,
+    email: "",
+    phone: "",
+    company: companyName,
+    city: "",
+    country: "",
+    tags: "",
+    isCompany: true,
+    active: true,
+    stats: "",
+    activities: "",
+    activityStatus: "",
+    nextActivity: "",
+    upcomingActivity: "",
+    properties: "",
+    priority: 0,
+    extras: [],
+    notes: "",
+    status: "new",
+    value: 0,
+  });
+}
+
+async function findPersonContact(input: {
+  name: string;
+  email: string;
+  company: string;
+}): Promise<LeadTableRow | null> {
+  const rows = await loadCatalog();
+  const email = input.email.trim().toLowerCase();
+  if (email) {
+    const byEmail = rows.find(
+      (row) =>
+        !row.details.isCompany &&
+        row.lead.email.trim().toLowerCase() === email,
+    );
+    if (byEmail) {
+      return {
+        lead: byEmail.lead,
+        details: byEmail.details,
+        score: byEmail.score,
+      };
+    }
+  }
+  const name = input.name.trim().toLowerCase();
+  const company = input.company.trim().toLowerCase();
+  if (!name) return null;
+  const byName = rows.find((row) => {
+    if (row.details.isCompany) return false;
+    if (row.lead.name.trim().toLowerCase() !== name) return false;
+    if (!company) return true;
+    return row.lead.company.trim().toLowerCase() === company;
+  });
+  return byName
+    ? { lead: byName.lead, details: byName.details, score: byName.score }
+    : null;
+}
+
+async function upsertPersonContact(input: {
+  name: string;
+  email: string;
+  phone: string;
+  company: string;
+}): Promise<LeadTableRow> {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const phone = input.phone.trim();
+  const company = input.company.trim();
+  const existing = await findPersonContact({ name, email, company });
+  if (existing) {
+    return writeLead(
+      {
+        ...contactWriteFromLead(existing.lead, existing.details),
+        name: name || existing.lead.name,
+        email: email || existing.lead.email,
+        phone: phone || existing.lead.phone,
+        company: company || existing.lead.company,
+        isCompany: false,
+        active: true,
+      },
+      existing.lead.id,
+    );
+  }
+  return writeLead({
+    name: name || email,
+    email,
+    phone,
+    company,
+    city: "",
+    country: "",
+    tags: "",
+    isCompany: false,
+    active: true,
+    stats: "",
+    activities: "",
+    activityStatus: "",
+    nextActivity: "",
+    upcomingActivity: "",
+    properties: "",
+    priority: 0,
+    extras: [],
+    notes: "",
+    status: "new",
+    value: 0,
+  });
 }
 
 function asText(value: unknown) {
@@ -443,5 +714,8 @@ export function parseContactWrite(body: unknown): ContactWrite | null {
     extras,
     notes: asText(input.notes),
     status: status as LeadStatus,
+    value: Number.isFinite(Number(input.value))
+      ? Math.max(0, Number(input.value))
+      : undefined,
   };
 }

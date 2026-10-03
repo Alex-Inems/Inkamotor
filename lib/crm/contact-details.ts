@@ -224,6 +224,8 @@ export type ContactWrite = {
   extras: { label: string; value: string }[];
   notes: string;
   status: LeadStatus;
+  /** Expected revenue (opportunity value). */
+  value?: number;
 };
 
 const NOTE_LABELS: Record<
@@ -336,6 +338,7 @@ export function contactWriteFromLead(
     extras: details.extras.map((row) => ({ ...row })),
     notes: leftoverNotes(lead.notes),
     status: lead.status,
+    value: lead.value,
   };
 }
 
@@ -360,5 +363,6 @@ export function emptyContactWrite(): ContactWrite {
     extras: [],
     notes: "",
     status: "new",
+    value: 0,
   };
 }

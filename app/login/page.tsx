@@ -3,6 +3,7 @@
 import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ColorStripe, InkamotoLogo } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { LanguageSwitcher, useT } from "@/lib/i18n";
 
 function loginError(
@@ -81,7 +82,8 @@ function LoginForm() {
         style={{ backgroundImage: "url(/grain.svg)", backgroundSize: "280px" }}
       />
 
-      <div className="absolute right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-10 sm:right-6 sm:top-6">
+      <div className="absolute right-[max(1rem,env(safe-area-inset-right))] top-[max(1rem,env(safe-area-inset-top))] z-10 flex items-center gap-1 sm:right-6 sm:top-6">
+        <ThemeToggle />
         <LanguageSwitcher />
       </div>
 

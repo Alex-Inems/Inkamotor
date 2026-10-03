@@ -191,6 +191,7 @@ export default function InboxPage() {
   const [opened, setOpened] = useState<string[]>([]);
   const [editTarget, setEditTarget] = useState<RoomMessage | null>(null);
   const [editText, setEditText] = useState("");
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const pendingChat = useRef<string | null>(null);
 
@@ -620,6 +621,41 @@ export default function InboxPage() {
     }
   }
 
+  async function resendMessage(message: RoomMessage) {
+    if (
+      !message.editableId ||
+      message.editableKind === "note" ||
+      resendingId
+    ) {
+      return;
+    }
+    setResendingId(message.editableId);
+    try {
+      const res = await fetch("/api/inbox/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ replyId: message.editableId }),
+      });
+      const parsed = await readApiJson<{ reply?: MailReply | null }>(res);
+      if (!parsed.ok) throw new Error(parsed.error || t("pages.inbox.resendFailed"));
+      const saved = parsed.data.reply;
+      if (saved) {
+        setReplies((prev) =>
+          prev.some((r) => r.id === saved.id) ? prev : [saved, ...prev],
+        );
+      }
+      pushToast(t("pages.inbox.messageResent"));
+      void loadReplies();
+      void loadMail();
+    } catch (err) {
+      pushToast(
+        err instanceof Error ? err.message : t("pages.inbox.resendFailed"),
+      );
+    } finally {
+      setResendingId(null);
+    }
+  }
+
   async function translateMessage(message: RoomMessage) {
     try {
       const res = await fetch("/api/inbox/translate-message", {
@@ -892,6 +928,11 @@ export default function InboxPage() {
                         setEditTarget(m);
                         setEditText(m.clean.text || m.raw);
                       }}
+                      onResend={(m) => void resendMessage(m)}
+                      resending={
+                        !!message.editableId &&
+                        resendingId === message.editableId
+                      }
                       onTranslate={(m) => void translateMessage(m)}
                     />
                   </div>

@@ -9,6 +9,7 @@ import {
   localeStorageKey,
 } from "@/lib/i18n/config";
 import { userFromClaims } from "@/lib/session";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const staatliches = Staatliches({
@@ -52,9 +53,13 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang={localeMeta[locale].bcp47}
+      data-theme="dark"
       suppressHydrationWarning
       className={`${staatliches.variable} ${inriaSans.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body className="min-h-full font-sans">
         <CrmShell user={user} locale={locale}>
           {children}

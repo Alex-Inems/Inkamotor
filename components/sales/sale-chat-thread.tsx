@@ -126,6 +126,7 @@ export function SaleChatPanel({
   const [activityOpen, setActivityOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<RoomMessage | null>(null);
   const [editText, setEditText] = useState("");
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -236,13 +237,18 @@ export function SaleChatPanel({
 
   const messages = useMemo(() => {
     const base = (room?.messages ?? []).map((m) => {
-      const replyId = m.key.startsWith("out-") && !m.key.startsWith("out-mail-")
-        ? m.key.slice(4)
-        : null;
+      const fromKey =
+        m.key.startsWith("out-") && !m.key.startsWith("out-mail-")
+          ? m.key.slice(4)
+          : undefined;
+      const replyId =
+        (m.editableKind === "reply" && m.editableId) || fromKey || undefined;
       return {
         ...m,
-        editableId: replyId || undefined,
-        editableKind: replyId ? ("reply" as const) : undefined,
+        editableId: replyId ?? m.editableId,
+        editableKind: replyId
+          ? ("reply" as const)
+          : m.editableKind,
       };
     });
     const noteMsgs: RoomMessage[] = notes.map((note) => ({
@@ -496,6 +502,42 @@ export function SaleChatPanel({
     }
   }
 
+  async function resendMessage(message: RoomMessage) {
+    if (
+      !message.editableId ||
+      message.editableKind === "note" ||
+      resendingId
+    ) {
+      return;
+    }
+    setResendingId(message.editableId);
+    try {
+      const res = await fetch("/api/inbox/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ replyId: message.editableId }),
+      });
+      const parsed = await readApiJson<{ reply?: MailReply | null }>(res);
+      if (!parsed.ok) {
+        throw new Error(parsed.error || t("pages.inbox.resendFailed"));
+      }
+      const saved = parsed.data.reply;
+      if (saved) {
+        setReplies((prev) =>
+          prev.some((row) => row.id === saved.id) ? prev : [saved, ...prev],
+        );
+      }
+      pushToast(t("pages.inbox.messageResent"));
+      void loadConversation({ silent: true });
+    } catch (err) {
+      pushToast(
+        err instanceof Error ? err.message : t("pages.inbox.resendFailed"),
+      );
+    } finally {
+      setResendingId(null);
+    }
+  }
+
   async function translateMessage(message: RoomMessage) {
     try {
       const res = await fetch("/api/inbox/translate-message", {
@@ -715,6 +757,10 @@ export function SaleChatPanel({
                   setEditTarget(m);
                   setEditText(m.clean.text || m.raw);
                 }}
+                onResend={(m) => void resendMessage(m)}
+                resending={
+                  !!message.editableId && resendingId === message.editableId
+                }
                 onTranslate={(m) => void translateMessage(m)}
               />
             </div>

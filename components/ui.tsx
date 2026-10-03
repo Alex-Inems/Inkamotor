@@ -69,10 +69,11 @@ export function StatusBadge({
 }) {
   const tones = {
     neutral: "bg-ash text-ink",
-    info: "bg-purple/25 text-cream",
-    success: "bg-green/20 text-sand",
-    warning: "bg-gold/20 text-gold",
-    danger: "bg-wine/25 text-pink",
+    // accent-deep on accent-soft is invisible in dark (both near-teal)
+    info: "bg-accent text-white",
+    success: "bg-green/15 text-green",
+    warning: "bg-gold/20 text-sand",
+    danger: "bg-wine/15 text-pink",
   };
 
   return (

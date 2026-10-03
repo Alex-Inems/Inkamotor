@@ -24,6 +24,7 @@ import {
 } from "@/lib/mail/compose-attachments";
 import {
   personalizeTemplateBody,
+  saveCustomMessageTemplate,
   type MessageTemplateModel,
 } from "@/lib/mail/message-templates";
 import { useCrm } from "@/lib/crm-store";
@@ -61,7 +62,7 @@ const ToolChip = forwardRef<
       {...props}
       className={`inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-xs font-semibold transition-colors ${
         active
-          ? "border-gold/50 bg-gold/10 text-gold"
+          ? "border-line bg-ash text-ink"
           : "border-line/80 bg-ash/40 text-mute hover:border-mute/40 hover:bg-ash hover:text-ink"
       } ${className ?? ""}`}
     >
@@ -301,6 +302,42 @@ export function FullComposerModal({
                 setEditorKey(String(Date.now()));
                 setTemplateOpen(false);
               }}
+              onSaveAsTemplate={() => {
+                const body = stripHtml(html);
+                const subj = subject.trim();
+                if (!body && !subj) {
+                  pushToast({
+                    message: t("pages.inbox.templateBodyRequired"),
+                    tone: "info",
+                  });
+                  return;
+                }
+                const name = window.prompt(t("pages.inbox.templateNamePrompt"));
+                if (!name?.trim()) return;
+                try {
+                  const model = Array.isArray(templateModels)
+                    ? templateModels[0]
+                    : templateModels;
+                  saveCustomMessageTemplate({
+                    name: name.trim(),
+                    subject: subj,
+                    body,
+                    model,
+                  });
+                  pushToast({
+                    message: t("pages.inbox.templateSaved"),
+                    tone: "success",
+                  });
+                } catch (err) {
+                  pushToast({
+                    message:
+                      err instanceof Error
+                        ? err.message
+                        : t("pages.inbox.templateSaveFailed"),
+                    tone: "error",
+                  });
+                }
+              }}
             />
           </div>
           <div className="flex items-center gap-2">
@@ -349,12 +386,12 @@ export function FullComposerModal({
             {ccEmails.map((email) => (
               <span
                 key={email}
-                className="inline-flex max-w-full items-center gap-1 rounded-full border border-accent/30 bg-accent-soft/60 px-2.5 py-1 text-[11px] text-cream"
+                className="inline-flex max-w-full items-center gap-1 rounded-full border border-accent/30 bg-accent-soft/60 px-2.5 py-1 text-[11px] text-ink"
               >
                 <span className="truncate">{email}</span>
                 <button
                   type="button"
-                  className="text-cream/60 hover:text-pink"
+                  className="text-mute hover:text-pink"
                   onClick={() =>
                     setCcEmails((prev) => prev.filter((e) => e !== email))
                   }
@@ -431,7 +468,7 @@ export function FullComposerModal({
         ) : null}
 
         {aiOpen ? (
-          <div className="mx-4 my-3 space-y-3 rounded-2xl border border-gold/25 bg-linear-to-br from-gold/10 to-transparent p-4 sm:mx-5">
+          <div className="mx-4 my-3 space-y-3 rounded-2xl border border-line bg-ash/40 p-4 sm:mx-5">
             <div>
               <p className="font-display text-lg tracking-wide text-ink">
                 {t("pages.inbox.aiGenerate")}

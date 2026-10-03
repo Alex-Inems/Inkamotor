@@ -164,43 +164,18 @@ export function groupMailRooms(input: {
     return fresh;
   };
 
+  // 1) Inbound mail first (builds rooms / relatedMailId links).
+  // 2) CRM replies next (editable + resendable).
+  // 3) Outbound IMAP/SENT copies last (merge onto replies; avoid orphan bubbles).
+  const outboundMail: MailItem[] = [];
+
   for (const m of mail) {
     const raw = m.bodyText || m.preview || "";
     const clean = cleanBody(raw, m.subject);
     const ownOutbound = isOwnAddress(m.fromEmail, ownAddresses);
 
     if (ownOutbound) {
-      const recipient =
-        m.toEmail &&
-        !isOwnAddress(m.toEmail, ownAddresses) &&
-        !isSystemSender(m.toEmail)
-          ? m.toEmail
-          : extractEmailFromBody(raw, [
-              m.fromEmail,
-              m.toEmail,
-              ...ownAddresses,
-            ]);
-      if (!recipient || isOwnAddress(recipient, ownAddresses)) continue;
-      const room = ensure(recipient, null);
-      const dup = findNearDuplicate(room, true, raw, m.receivedAt);
-      if (dup) {
-        if (m.attachments?.length) dup.attachments = m.attachments;
-        mergeDelivery(dup, m);
-        continue;
-      }
-      room.messages.push({
-        key: `out-mail-${m.id}`,
-        mine: true,
-        at: m.receivedAt,
-        subject: m.subject,
-        authorName: m.fromName?.trim() || m.fromEmail,
-        clean: cleanBody(raw),
-        raw,
-        deliveryStatus: m.deliveryStatus ?? null,
-        deliveredAt: m.deliveredAt ?? null,
-        openedAt: m.openedAt ?? null,
-        attachments: m.attachments?.length ? m.attachments : undefined,
-      });
+      outboundMail.push(m);
       continue;
     }
 
@@ -270,6 +245,13 @@ export function groupMailRooms(input: {
     if (duplicate) {
       if (r.attachments?.length) duplicate.attachments = r.attachments;
       mergeDelivery(duplicate, r);
+      // Always prefer CRM reply identity so Edit/Resend work.
+      duplicate.key = `out-${r.id}`;
+      duplicate.editableId = r.id;
+      duplicate.editableKind = "reply";
+      if (r.sentByName?.trim()) {
+        duplicate.sentByName = r.sentByName.trim();
+      }
       continue;
     }
     room.messages.push({
@@ -288,6 +270,43 @@ export function groupMailRooms(input: {
       attachments: r.attachments?.length ? r.attachments : undefined,
       editableId: r.id,
       editableKind: "reply",
+    });
+  }
+
+  for (const m of outboundMail) {
+    const raw = m.bodyText || m.preview || "";
+    const recipient =
+      m.toEmail &&
+      !isOwnAddress(m.toEmail, ownAddresses) &&
+      !isSystemSender(m.toEmail)
+        ? m.toEmail
+        : extractEmailFromBody(raw, [
+            m.fromEmail,
+            m.toEmail,
+            ...ownAddresses,
+          ]);
+    if (!recipient || isOwnAddress(recipient, ownAddresses)) continue;
+    const room = ensure(recipient, null);
+    const dup = findNearDuplicate(room, true, raw, m.receivedAt);
+    if (dup) {
+      if (m.attachments?.length && !(dup.attachments?.length)) {
+        dup.attachments = m.attachments;
+      }
+      mergeDelivery(dup, m);
+      continue;
+    }
+    room.messages.push({
+      key: `out-mail-${m.id}`,
+      mine: true,
+      at: m.receivedAt,
+      subject: m.subject,
+      authorName: m.fromName?.trim() || m.fromEmail,
+      clean: cleanBody(raw),
+      raw,
+      deliveryStatus: m.deliveryStatus ?? null,
+      deliveredAt: m.deliveredAt ?? null,
+      openedAt: m.openedAt ?? null,
+      attachments: m.attachments?.length ? m.attachments : undefined,
     });
   }
 
@@ -317,6 +336,6 @@ function findNearDuplicate(
   return room.messages.find((msg) => {
     if (msg.mine !== mine) return false;
     if (previewOf(msg.clean) !== preview) return false;
-    return Math.abs(new Date(msg.at).getTime() - ts) < 5 * 60_000;
+    return Math.abs(new Date(msg.at).getTime() - ts) < 15 * 60_000;
   });
 }

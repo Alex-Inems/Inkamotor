@@ -1,5 +1,65 @@
 @import "tailwindcss";
 
+.overview-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.overview-card {
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 1.15rem;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 35%, transparent) inset,
+    0 14px 40px -28px var(--shadow-soft);
+}
+
+[data-theme="dark"] .overview-card {
+  box-shadow:
+    0 1px 0 color-mix(in srgb, var(--cream) 6%, transparent) inset,
+    0 18px 42px -28px var(--shadow-strong);
+}
+
+/* Light mode — clean SaaS sheet (white cards on soft gray, blue accent) */
+[data-theme="light"] .overview-shell {
+  gap: 1.35rem;
+  border-radius: 1.5rem;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 1.25rem 1.15rem 1.5rem;
+  box-shadow: 0 18px 50px -36px var(--shadow-soft);
+}
+
+@media (min-width: 640px) {
+  [data-theme="light"] .overview-shell {
+    padding: 1.5rem 1.5rem 1.75rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-theme="light"] .overview-shell {
+    padding: 1.75rem 1.85rem 2rem;
+  }
+}
+
+[data-theme="light"] .overview-card {
+  border-radius: 1.25rem;
+  border-color: var(--line);
+  background: #ffffff;
+  box-shadow: 0 10px 28px -22px rgba(52, 64, 110, 0.28);
+}
+
+[data-theme="light"] .overview-kpi-value {
+  color: var(--accent);
+}
+
+[data-theme="light"] .crm-topbar.crm-glass {
+  background: color-mix(in srgb, #ffffff 88%, transparent);
+  border-color: var(--line);
+  box-shadow: 0 8px 24px -20px rgba(52, 64, 110, 0.35);
+}
+
 .odoo-search-facet {
   background: color-mix(in srgb, var(--purple) 88%, black);
 }
@@ -68,8 +128,9 @@
   }
 }
 
-:root {
-  /* inkamototours.com brand tokens */
+:root,
+[data-theme="dark"] {
+  /* inkamototours.com brand tokens — dark (default) */
   --canvas: #1c1b19;
   --panel: #252422;
   --ink: #f7f4ee;
@@ -96,6 +157,144 @@
   --foreground: var(--ink);
   --crm-topnav: 3.75rem;
   --crm-gutter: max(0.75rem, env(safe-area-inset-left));
+  --atmosphere-top: #2a2622;
+  --atmosphere-bottom: #12110f;
+  --shadow-strong: rgba(0, 0, 0, 0.7);
+  --shadow-soft: rgba(0, 0, 0, 0.55);
+  --chat-recess-top: #121110;
+  --chat-recess-bottom: #1a1816;
+}
+
+/* Light SaaS sheet — soft gray canvas, white panels, vivid blue accent */
+[data-theme="light"] {
+  --canvas: #f0f2f7;
+  --panel: #ffffff;
+  --ink: #2a3042;
+  --mute: #74788d;
+  --line: #e6e8f0;
+  --ash: #f5f6fa;
+  --accent: #4a63e7;
+  --accent-deep: #3b51d4;
+  --accent-soft: #e4e8fc;
+  --pink: #ef4e34;
+  --pink-deep: #d93a22;
+  --gold: #f1b44c;
+  --sand: #c9a43a;
+  --cream: #495057;
+  --purple: #6f7cf0;
+  --wine: #e74c3c;
+  --green: #34c38f;
+  --green-light: #5ed0a5;
+  --sale: #e74c3c;
+  --chat-in: #eef0f7;
+  --chat-out: #4a63e7;
+  --chat-out-text: #ffffff;
+  --background: var(--canvas);
+  --foreground: var(--ink);
+  --atmosphere-top: #f5f6fa;
+  --atmosphere-bottom: #eef0f6;
+  --shadow-strong: rgba(52, 64, 110, 0.16);
+  --shadow-soft: rgba(52, 64, 110, 0.1);
+  --chat-recess-top: #e9ecf5;
+  --chat-recess-bottom: #e3e7f2;
+}
+
+/* Contacts: brand-blue rounded-square avatars in light theme (not circle/pill) */
+[data-theme="light"] .contact-avatar-tone {
+  background-color: var(--accent) !important;
+  border-radius: 0.375rem !important;
+}
+
+/* Contacts list: deeper silver page ground in light theme */
+[data-theme="light"] main:has(.contacts-page) {
+  background: #c9ceda;
+}
+[data-theme="light"] .crm-atmosphere:has(.contacts-page) {
+  background: #c9ceda;
+}
+[data-theme="light"] .crm-atmosphere:has(.contacts-page)::before,
+[data-theme="light"] .crm-atmosphere:has(.contacts-page)::after {
+  opacity: 0;
+}
+
+/* List mode: soft slate on silver — avoid harsh black ink/borders */
+[data-theme="light"] .contacts-page .contacts-list-table {
+  background: #ffffff;
+  border-color: #b4bac8;
+  box-shadow: 0 1px 2px rgba(52, 64, 110, 0.06);
+}
+[data-theme="light"] .contacts-page .contacts-list-head {
+  background: #e8ebf2;
+  color: #5c6478;
+}
+[data-theme="light"] .contacts-page .contacts-list-row {
+  border-color: #e0e3ec;
+}
+[data-theme="light"] .contacts-page .contacts-list-row:hover {
+  background: #f3f5f9;
+}
+[data-theme="light"] .contacts-page .contacts-list-name {
+  color: #3a4156;
+}
+[data-theme="light"] .contacts-page .contacts-list-table .text-mute {
+  color: #6b7285;
+}
+[data-theme="light"] .contacts-page .contacts-list-table [class*="bg-ash"] {
+  background-color: #e8ebf2;
+  color: #5c6478;
+}
+
+/* Search Console dashboard — soft silver sheet like analytics reference */
+[data-theme="light"] main:has(.gsc-dashboard) {
+  background: #f3f5f9;
+}
+[data-theme="light"] .crm-atmosphere:has(.gsc-dashboard) {
+  background: #f3f5f9;
+}
+[data-theme="light"] .crm-atmosphere:has(.gsc-dashboard)::before,
+[data-theme="light"] .crm-atmosphere:has(.gsc-dashboard)::after {
+  opacity: 0;
+}
+.gsc-card {
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  border-radius: 1rem;
+  background: var(--panel);
+  box-shadow: 0 10px 28px -22px var(--shadow-soft);
+}
+[data-theme="light"] .gsc-card {
+  background: #ffffff;
+  border-color: #e4e7ec;
+  box-shadow: 0 8px 24px -18px rgba(52, 64, 110, 0.22);
+}
+
+.gsc-map-shell {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 45%, #ffffff 0%, transparent 70%),
+    var(--ash);
+}
+[data-theme="light"] .gsc-map-shell {
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 45%, #ffffff 0%, transparent 68%),
+    #eef1f6;
+}
+.gsc-pin-pulse {
+  transform-origin: center;
+  transform-box: fill-box;
+  animation: gsc-pin-pulse 1.8s ease-out infinite;
+}
+@keyframes gsc-pin-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.55);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
 }
 
 @theme inline {
@@ -133,6 +332,14 @@ html {
   overflow-x: clip;
 }
 
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -167,10 +374,22 @@ body {
     ),
     linear-gradient(
       168deg,
-      #2a2622 0%,
+      var(--atmosphere-top) 0%,
       var(--canvas) 40%,
-      #12110f 100%
+      var(--atmosphere-bottom) 100%
     );
+}
+
+[data-theme="light"] .crm-atmosphere {
+  background: var(--canvas);
+}
+
+[data-theme="light"] .crm-atmosphere::before {
+  display: none;
+}
+
+[data-theme="light"] .crm-atmosphere::after {
+  opacity: 0.02;
 }
 
 .crm-atmosphere::before {
@@ -236,10 +455,43 @@ body {
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, #121110 70%, var(--canvas)) 0%,
+      color-mix(in srgb, var(--chat-recess-top) 70%, var(--canvas)) 0%,
       var(--ash) 48%,
-      color-mix(in srgb, #1a1816 80%, var(--canvas)) 100%
+      color-mix(in srgb, var(--chat-recess-bottom) 80%, var(--canvas)) 100%
     );
+}
+
+[data-theme="light"] .crm-chat-stage {
+  background:
+    radial-gradient(
+      ellipse 80% 50% at 50% -20%,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      transparent 55%
+    ),
+    linear-gradient(
+      180deg,
+      var(--chat-recess-top) 0%,
+      var(--ash) 52%,
+      var(--chat-recess-bottom) 100%
+    );
+}
+
+[data-theme="light"] .crm-chat-stage::after {
+  box-shadow:
+    inset 0 20px 36px rgba(52, 64, 110, 0.04),
+    inset 0 -24px 40px rgba(52, 64, 110, 0.03),
+    inset 0 0 0 1px var(--line);
+}
+
+[data-theme="light"] .crm-glass {
+  background: color-mix(in srgb, #ffffff 90%, transparent);
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 10px 28px -22px var(--shadow-soft);
+}
+
+[data-theme="light"] .odoo-search-facet {
+  background: color-mix(in srgb, var(--accent) 92%, #1f2a6b);
 }
 
 .crm-chat-stage::before {
@@ -569,7 +821,7 @@ button {
   backdrop-filter: blur(14px);
   box-shadow:
     0 1px 0 color-mix(in srgb, var(--cream) 8%, transparent) inset,
-    0 12px 36px -24px rgba(0, 0, 0, 0.7);
+    0 12px 36px -24px var(--shadow-strong);
 }
 
 .crm-panel-lift {
@@ -577,7 +829,13 @@ button {
   backdrop-filter: blur(10px);
   box-shadow:
     0 1px 0 color-mix(in srgb, var(--cream) 6%, transparent) inset,
-    0 18px 40px -28px rgba(0, 0, 0, 0.55);
+    0 18px 40px -28px var(--shadow-soft);
+}
+
+[data-theme="light"] .crm-panel-lift {
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #ffffff 80%, transparent) inset,
+    0 18px 40px -28px var(--shadow-soft);
 }
 
 .crm-app-tile {
@@ -599,8 +857,40 @@ button {
 .crm-compose-shell {
   box-shadow:
     0 1px 0 color-mix(in srgb, var(--cream) 8%, transparent) inset,
-    0 14px 40px -22px rgba(0, 0, 0, 0.65),
+    0 14px 40px -22px var(--shadow-strong),
     0 0 0 1px color-mix(in srgb, var(--gold) 8%, transparent);
+}
+
+[data-theme="light"] .crm-compose-shell {
+  background: #ffffff;
+  border-color: #b8bfd0;
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 8px 28px -14px rgba(52, 64, 110, 0.22),
+    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+[data-theme="light"] .crm-compose-shell:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, #b8bfd0);
+  box-shadow:
+    0 1px 0 #ffffff inset,
+    0 10px 32px -12px rgba(74, 99, 231, 0.28),
+    0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+[data-theme="light"] .compose-send-accent {
+  background: linear-gradient(180deg, #5b74f0 0%, var(--accent) 100%);
+  box-shadow: 0 2px 10px rgba(74, 99, 231, 0.42);
+}
+[data-theme="light"] .compose-send-accent:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4a63e7 0%, var(--accent-deep) 100%);
+}
+[data-theme="light"] .compose-send-danger {
+  background: linear-gradient(180deg, #f05a4a 0%, var(--sale) 100%);
+  box-shadow: 0 2px 10px rgba(231, 76, 60, 0.4);
+}
+[data-theme="light"] .compose-send-danger:hover:not(:disabled) {
+  background: linear-gradient(180deg, #e74c3c 0%, var(--pink-deep) 100%);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -802,9 +1092,9 @@ button {
   overflow: hidden;
   pointer-events: auto;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--panel) 94%, #1c1b19);
+  background: color-mix(in srgb, var(--panel) 94%, var(--canvas));
   box-shadow:
-    0 24px 64px rgba(0, 0, 0, 0.55),
+    0 24px 64px var(--shadow-soft),
     0 0 0 1px color-mix(in srgb, var(--gold) 14%, transparent);
   backdrop-filter: blur(12px);
   animation: tour-card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1);

@@ -126,7 +126,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
     return (
       <div className="space-y-3">
         <EmptyHint>{t("pages.sales.saleNotFound")}</EmptyHint>
-        <Link href="/sales?tab=bookings" className="text-sm font-semibold text-gold hover:underline">
+        <Link href="/sales?tab=bookings" className="text-sm font-semibold text-ink hover:underline">
           {t("pages.sales.backToOrders")}
         </Link>
       </div>
@@ -308,7 +308,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
           onClick={() => setMobilePane("details")}
           className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
             mobilePane === "details"
-              ? "border-b-2 border-gold text-ink"
+              ? "border-b-2 border-ink/70 text-ink"
               : "border-b-2 border-transparent text-mute"
           }`}
         >
@@ -319,7 +319,7 @@ export function SaleDetailView({ saleId }: { saleId: string }) {
           onClick={() => setMobilePane("messages")}
           className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
             mobilePane === "messages"
-              ? "border-b-2 border-gold text-ink"
+              ? "border-b-2 border-ink/70 text-ink"
               : "border-b-2 border-transparent text-mute"
           }`}
         >

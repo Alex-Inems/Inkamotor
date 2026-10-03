@@ -347,6 +347,40 @@ export async function saveMailReply(input: SaveInput): Promise<MailReply> {
   );
 }
 
+/** Load one outbound reply (with attachments) by id. */
+export async function getMailReply(id: string): Promise<MailReply | null> {
+  const replyId = asUuid(id);
+  if (!replyId || missingSupabaseEnv().length > 0) return null;
+
+  const supabase = getSupabase();
+  const richSelect = `${REPLY_SELECT_FULL}, body_html, cc_emails, edited_at`;
+
+  async function fetchOne(select: string) {
+    return supabase
+      .from("mail_replies")
+      .select(select)
+      .eq("id", replyId)
+      .maybeSingle();
+  }
+
+  let result = await fetchOne(richSelect);
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await fetchOne(REPLY_SELECT_FULL);
+  }
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await fetchOne(REPLY_SELECT_DELIVERY);
+  }
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await fetchOne(REPLY_SELECT_BASE);
+  }
+  if (result.error || !result.data) return null;
+
+  const [mapped] = await withAttachments([
+    mapRow(result.data as unknown as Record<string, unknown>),
+  ]);
+  return mapped ?? null;
+}
+
 /** Edit outbound reply body locally — does not re-send email. */
 export async function updateMailReplyBody(
   id: string,

@@ -212,12 +212,12 @@ function OdooMenuButton({
         <ChevronDown className={open ? "rotate-180" : ""} />
       </button>
       {open ? (
-        <div className="absolute left-0 top-full z-30 mt-1 min-w-[12rem] border border-line bg-panel py-1 shadow-lg">
+        <div className="absolute left-0 top-full z-30 mt-1 max-h-[min(70vh,22rem)] min-w-[12rem] max-w-[min(calc(100vw-1.5rem),20rem)] overflow-y-auto overscroll-contain border border-line bg-panel py-1 shadow-lg">
           {items.map((item) => (
             <button
               key={item.id}
               type="button"
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-ash ${
+              className={`flex w-full min-w-0 items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-ash sm:py-2 ${
                 item.active ? "text-ink" : "text-mute"
               }`}
               onClick={() => {
@@ -227,13 +227,13 @@ function OdooMenuButton({
             >
               <span
                 aria-hidden
-                className={`inline-flex h-4 w-4 items-center justify-center text-xs ${
+                className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-xs ${
                   item.active ? "text-accent" : "text-transparent"
                 }`}
               >
                 ✓
               </span>
-              <span>{item.label}</span>
+              <span className="min-w-0 truncate">{item.label}</span>
             </button>
           ))}
         </div>

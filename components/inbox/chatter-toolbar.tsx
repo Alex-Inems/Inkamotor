@@ -19,7 +19,7 @@ function ToolBtn({
       {...props}
       className={`rounded-full px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors ${
         active
-          ? "bg-cream/95 text-[#1c1b19] shadow-sm"
+          ? "bg-panel text-ink shadow-sm ring-1 ring-line"
           : "bg-transparent text-mute hover:bg-ash hover:text-ink"
       } ${props.className ?? ""}`}
     >
@@ -52,8 +52,8 @@ export function ChatterToolbar({
   const { t } = useLocale();
 
   return (
-    <div className="flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-line/80 bg-linear-to-b from-[#2a2825] to-panel/90 px-2 py-2 [scrollbar-width:none] sm:px-3 [&::-webkit-scrollbar]:hidden">
-      <div className="mr-1 inline-flex shrink-0 rounded-full border border-line/70 bg-ash/50 p-0.5">
+    <div className="flex flex-nowrap items-center gap-1 overflow-x-auto border-b border-line/80 bg-ash/60 px-2 py-2 [scrollbar-width:none] sm:px-3 [&::-webkit-scrollbar]:hidden">
+      <div className="mr-1 inline-flex shrink-0 rounded-full border border-line/70 bg-panel/80 p-0.5">
         <ToolBtn
           active={mode === "message"}
           onClick={() => onModeChange("message")}

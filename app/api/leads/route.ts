@@ -7,6 +7,7 @@ import {
   updateLeadPriorityFast,
   updateLeadStatusFast,
   writeLead,
+  writeQuickCreate,
 } from "@/lib/crm/lead-query";
 import { isValidStageId } from "@/lib/crm/pipeline";
 import type { LeadStatus } from "@/lib/demo-data";
@@ -80,12 +81,43 @@ export async function POST(req: Request) {
   const blocked = supabaseMissing();
   if (blocked) return blocked;
 
-  let body: unknown;
+  let body: Record<string, unknown>;
   try {
-    body = await req.json();
+    body = (await req.json()) as Record<string, unknown>;
   } catch {
     return jsonError(400, { error: "Invalid JSON", code: "db_error" });
   }
+
+  if (body.quickCreate === true) {
+    const status = String(body.status ?? "").trim();
+    if (!isValidStageId(status)) {
+      return jsonError(400, {
+        error: "A valid stage is required",
+        code: "db_error",
+      });
+    }
+    try {
+      const row = await writeQuickCreate({
+        status,
+        company: String(body.company ?? ""),
+        contactName: String(body.contactName ?? ""),
+        opportunityName: String(
+          body.opportunityName ?? body.name ?? "",
+        ),
+        email: String(body.email ?? ""),
+        phone: String(body.phone ?? ""),
+        value: Number(body.value) || 0,
+        priority: clampPriority(body.priority),
+      });
+      return Response.json({ row });
+    } catch (err) {
+      return jsonError(502, {
+        error: err instanceof Error ? err.message : "Could not add lead",
+        code: "db_error",
+      });
+    }
+  }
+
   const input = parseContactWrite(body);
   if (!input) {
     return jsonError(400, { error: "Contact fields are required", code: "db_error" });

@@ -22,7 +22,7 @@ function SheetSection({
 }) {
   return (
     <section className="border-b border-line/80 last:border-b-0">
-      <h2 className="px-5 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-gold/90">
+      <h2 className="px-5 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-[0.14em] text-mute">
         {title}
       </h2>
       <div className="px-5 pb-4 pt-1">{children}</div>

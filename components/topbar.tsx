@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAvatar } from "@/components/user-avatar";
 import { LanguageSwitcher, localeMeta, useLocale, type Locale } from "@/lib/i18n";
 import { resolveCrmApp } from "@/lib/crm-apps";
@@ -298,6 +299,8 @@ export function Topbar({
             <span className="hidden max-w-[9rem] truncate px-2 text-[13px] font-medium text-mute xl:inline">
               {currentWorkspace.name}
             </span>
+
+            <ThemeToggle />
 
             <span className="hidden md:contents">
               <LanguageSwitcher />

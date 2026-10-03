@@ -129,7 +129,7 @@ export function ScheduleActivityModal({
                   onClick={() => setDueAt(p.value)}
                   className={`rounded-full px-3 py-1.5 text-[11px] font-semibold tracking-wide transition-colors ${
                     dueAt === p.value
-                      ? "bg-cream/95 text-[#1c1b19]"
+                      ? "bg-panel text-ink shadow-sm ring-1 ring-line"
                       : "border border-line/80 bg-ash/40 text-mute hover:border-mute/40 hover:bg-ash hover:text-ink"
                   }`}
                 >

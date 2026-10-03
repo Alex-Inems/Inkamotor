@@ -12,10 +12,59 @@ export type MessageTemplate = {
   model: MessageTemplateModel;
   subject: string;
   body: string;
+  /** User-saved from the composer (local). */
+  custom?: boolean;
 };
+
+const CUSTOM_STORAGE_KEY = "inkamoto.messageTemplates.custom";
 
 /** Inkamoto mail.template records synced from Odoo (business templates only). */
 export const MESSAGE_TEMPLATES = seed.templates as MessageTemplate[];
+
+function readCustomTemplates(): MessageTemplate[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(CUSTOM_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((row) => row && typeof row === "object")
+      .map((row) => {
+        const item = row as Record<string, unknown>;
+        return {
+          id: Number(item.id) || Date.now(),
+          name: String(item.name ?? "").trim() || "Template",
+          model: (String(item.model ?? "res.partner") as MessageTemplateModel),
+          subject: String(item.subject ?? ""),
+          body: String(item.body ?? ""),
+          custom: true,
+        } satisfies MessageTemplate;
+      })
+      .filter((row) => row.body.trim() || row.subject.trim());
+  } catch {
+    return [];
+  }
+}
+
+function writeCustomTemplates(rows: MessageTemplate[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(rows));
+}
+
+export function listMessageTemplates(): MessageTemplate[] {
+  const custom = readCustomTemplates();
+  const byName = new Map<string, MessageTemplate>();
+  for (const tpl of MESSAGE_TEMPLATES) {
+    byName.set(tpl.name.toLowerCase(), tpl);
+  }
+  for (const tpl of custom) {
+    byName.set(tpl.name.toLowerCase(), tpl);
+  }
+  return [...byName.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
+}
 
 export function searchMessageTemplates(
   query: string,
@@ -28,7 +77,7 @@ export function searchMessageTemplates(
       : [modelHint]
     : null;
 
-  const ranked = MESSAGE_TEMPLATES.map((tpl) => {
+  const ranked = listMessageTemplates().map((tpl) => {
     let score = 0;
     if (hints?.includes(tpl.model)) score += 2;
     if (!q) return { tpl, score: score || 1 };
@@ -40,9 +89,58 @@ export function searchMessageTemplates(
     return { tpl, score };
   })
     .filter((row) => row.score >= 0)
-    .sort((a, b) => b.score - a.score || a.tpl.name.localeCompare(b.tpl.name, "fr"));
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        a.tpl.name.localeCompare(b.tpl.name, undefined, { sensitivity: "base" }),
+    );
 
   return ranked.map((row) => row.tpl);
+}
+
+export function saveCustomMessageTemplate(input: {
+  name: string;
+  subject?: string;
+  body: string;
+  model?: MessageTemplateModel;
+}): MessageTemplate {
+  const name = input.name.trim();
+  if (!name) throw new Error("Template name is required");
+  const body = input.body.trim();
+  const subject = (input.subject ?? "").trim();
+  if (!body && !subject) throw new Error("Add a subject or body before saving");
+
+  const custom = readCustomTemplates();
+  const existing = custom.find(
+    (row) => row.name.toLowerCase() === name.toLowerCase(),
+  );
+  const next: MessageTemplate = {
+    id: existing?.id ?? Date.now(),
+    name,
+    model: input.model ?? existing?.model ?? "res.partner",
+    subject,
+    body,
+    custom: true,
+  };
+  const rows = existing
+    ? custom.map((row) => (row.id === existing.id ? next : row))
+    : [next, ...custom];
+  writeCustomTemplates(rows);
+  return next;
+}
+
+export function listCustomMessageTemplates(): MessageTemplate[] {
+  return readCustomTemplates().sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+  );
+}
+
+export function deleteCustomMessageTemplate(id: number): boolean {
+  const custom = readCustomTemplates();
+  const next = custom.filter((row) => row.id !== id);
+  if (next.length === custom.length) return false;
+  writeCustomTemplates(next);
+  return true;
 }
 
 /** Soft-swap the greeting name so templates match the open conversation. */

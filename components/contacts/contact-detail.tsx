@@ -32,12 +32,12 @@ type ContactRow = { lead: Lead; details: ContactDetails; score?: number };
 const FORM_ID = "contact-detail-form";
 
 const AVATAR_TONES = [
-  "bg-[#714B67]",
-  "bg-[#3d8b7a]",
-  "bg-[#c47a3a]",
-  "bg-[#5a7aa8]",
-  "bg-[#6b8f3a]",
-  "bg-[#a85a5a]",
+  "bg-[#3a3834]",
+  "bg-[#2e2c29]",
+  "bg-[#45423c]",
+  "bg-[#33312e]",
+  "bg-[#3f3c38]",
+  "bg-[#2a2826]",
 ];
 
 function avatarTone(seed: string) {
@@ -58,8 +58,19 @@ function initials(name: string, email: string) {
   return (letters || "?").toUpperCase();
 }
 
-export function ContactDetail({ contactId }: { contactId: string }) {
+/** Prefill `/leads/new` from kanban “Search More” / quick-edit. */
+export const LEAD_FORM_DRAFT_KEY = "inkamoto.leadForm.draft";
+
+export function ContactDetail({
+  contactId,
+  basePath = "/contacts",
+}: {
+  contactId: string;
+  /** List/form route prefix — `/contacts` or `/leads` (same records). */
+  basePath?: "/contacts" | "/leads";
+}) {
   const isNew = contactId === "new";
+  const isLeadContext = basePath === "/leads";
   const router = useRouter();
   const { addSale, pushToast } = useCrm();
   const { t, locale } = useLocale();
@@ -77,6 +88,19 @@ export function ContactDetail({ contactId }: { contactId: string }) {
     const local = readPipelineFromStorage();
     if (local?.length) setPipeline(local);
   }, []);
+
+  useEffect(() => {
+    if (!isNew || !isLeadContext) return;
+    try {
+      const raw = sessionStorage.getItem(LEAD_FORM_DRAFT_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(LEAD_FORM_DRAFT_KEY);
+      const parsed = JSON.parse(raw) as ContactWrite;
+      setForm({ ...emptyContactWrite(), ...parsed });
+    } catch {
+      /* ignore bad draft */
+    }
+  }, [isNew, isLeadContext]);
 
   const stageLabel = useCallback(
     (id: string) => {
@@ -103,7 +127,11 @@ export function ContactDetail({ contactId }: { contactId: string }) {
       const json = (await res.json()) as { row?: ContactRow; error?: string };
       if (!res.ok || !json.row) {
         pushToast({
-          message: json.error || t("pages.contacts.notFound"),
+          message:
+            json.error ||
+            (isLeadContext
+              ? t("pages.leads.notFound")
+              : t("pages.contacts.notFound")),
           tone: "error",
         });
         setRow(null);
@@ -115,7 +143,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
     } finally {
       setLoading(false);
     }
-  }, [contactId, isNew, pushToast, t]);
+  }, [contactId, isLeadContext, isNew, pushToast, t]);
 
   useEffect(() => {
     void load();
@@ -123,7 +151,11 @@ export function ContactDetail({ contactId }: { contactId: string }) {
 
   async function saveContact() {
     if (!form.name.trim()) {
-      setFormError(t("pages.contacts.nameRequired"));
+      setFormError(
+        isLeadContext
+          ? t("pages.leads.nameRequired")
+          : t("pages.contacts.nameRequired"),
+      );
       return;
     }
     setSaving(true);
@@ -141,12 +173,16 @@ export function ContactDetail({ contactId }: { contactId: string }) {
     }
     pushToast({
       message: isNew
-        ? t("pages.contacts.created", { name: form.name.trim() })
-        : t("pages.contacts.saved"),
+        ? isLeadContext
+          ? t("toast.leadAdded", { name: form.name.trim() })
+          : t("pages.contacts.created", { name: form.name.trim() })
+        : isLeadContext
+          ? t("toast.leadSaved")
+          : t("pages.contacts.saved"),
       tone: "success",
     });
     if (isNew) {
-      router.replace(`/contacts/${encodeURIComponent(json.row.lead.id)}`);
+      router.replace(`${basePath}/${encodeURIComponent(json.row.lead.id)}`);
       return;
     }
     setRow(json.row);
@@ -177,27 +213,48 @@ export function ContactDetail({ contactId }: { contactId: string }) {
   if (!isNew && !row) {
     return (
       <div className="space-y-3">
-        <EmptyHint>{t("pages.contacts.notFound")}</EmptyHint>
-        <Link href="/contacts" className="text-sm font-semibold text-gold hover:underline">
-          {t("pages.contacts.backToList")}
+        <EmptyHint>
+          {isLeadContext
+            ? t("pages.leads.notFound")
+            : t("pages.contacts.notFound")}
+        </EmptyHint>
+        <Link
+          href={basePath}
+          className="text-sm font-semibold text-ink hover:underline"
+        >
+          {isLeadContext
+            ? t("pages.leads.backToList")
+            : t("pages.contacts.backToList")}
         </Link>
       </div>
     );
   }
 
+  const listTitle = isLeadContext
+    ? t("pages.leads.title")
+    : t("pages.contacts.title");
   const title = isNew
-    ? t("pages.contacts.newContact")
-    : form.name.trim() || row?.lead.name || t("pages.contacts.editContact");
+    ? isLeadContext
+      ? t("pages.leads.newContact")
+      : t("pages.contacts.newContact")
+    : form.name.trim() ||
+      row?.lead.name ||
+      (isLeadContext
+        ? t("pages.leads.editContact")
+        : t("pages.contacts.editContact"));
   const chatEmail = (form.email || row?.lead.email || "").trim();
   const chatName = (form.name || row?.lead.name || "").trim();
   const tags = tagList(form.tags).slice(0, 6);
   const subtitle = [chatEmail, form.phone.trim()].filter(Boolean).join(" · ");
+  const messagesTitle = isLeadContext
+    ? t("pages.leads.messages")
+    : t("pages.contacts.messages");
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden px-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pt-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6 lg:px-8">
       <div className="mb-3 shrink-0 text-xs text-mute">
-        <Link href="/contacts" className="hover:text-ink">
-          {t("pages.contacts.title")}
+        <Link href={basePath} className="hover:text-ink">
+          {listTitle}
         </Link>
         <span className="mx-1">/</span>
         <span className="text-ink">{title}</span>
@@ -218,7 +275,9 @@ export function ContactDetail({ contactId }: { contactId: string }) {
             href={`/inbox?chat=${encodeURIComponent(chatEmail)}`}
             className={btnToolbar}
           >
-            {t("pages.contacts.openInbox")}
+            {isLeadContext
+              ? t("pages.leads.openChat")
+              : t("pages.contacts.openInbox")}
           </Link>
         ) : null}
         {!isNew && row ? (
@@ -230,7 +289,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
             {t("pages.leads.createSale")}
           </button>
         ) : null}
-        <Link href="/contacts" className={btnToolbar}>
+        <Link href={basePath} className={btnToolbar}>
           {t("common.cancel")}
         </Link>
       </OdooFormToolbar>
@@ -248,7 +307,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
           onClick={() => setMobilePane("details")}
           className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
             mobilePane === "details"
-              ? "border-b-2 border-gold text-ink"
+              ? "border-b-2 border-ink/70 text-ink"
               : "border-b-2 border-transparent text-mute"
           }`}
         >
@@ -259,7 +318,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
           onClick={() => setMobilePane("messages")}
           className={`min-h-11 flex-1 px-3 text-sm font-semibold transition-colors ${
             mobilePane === "messages"
-              ? "border-b-2 border-gold text-ink"
+              ? "border-b-2 border-ink/70 text-ink"
               : "border-b-2 border-transparent text-mute"
           }`}
         >
@@ -350,7 +409,7 @@ export function ContactDetail({ contactId }: { contactId: string }) {
           <SaleChatPanel
             email={chatEmail}
             customerName={chatName}
-            title={t("pages.contacts.messages")}
+            title={messagesTitle}
             phone={form.phone}
             relatedType="lead"
             relatedId={contactId}

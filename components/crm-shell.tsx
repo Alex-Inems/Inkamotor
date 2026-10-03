@@ -50,9 +50,10 @@ function CrmShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isSaleDetail = /^\/sales\/(?!new)[^/]+$/.test(pathname);
   const isContactDetail = /^\/contacts\/[^/]+$/.test(pathname);
+  const isLeadDetail = /^\/leads\/[^/]+$/.test(pathname);
   const fullBleed =
-    pathname === "/inbox" || isSaleDetail || isContactDetail;
-  const wideMain = isSaleDetail || isContactDetail;
+    pathname === "/inbox" || isSaleDetail || isContactDetail || isLeadDetail;
+  const wideMain = isSaleDetail || isContactDetail || isLeadDetail;
   const [navOpen, setNavOpen] = useState(false);
   const openNav = useCallback(() => setNavOpen(true), []);
   const closeNav = useCallback(() => setNavOpen(false), []);

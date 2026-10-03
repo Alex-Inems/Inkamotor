@@ -17,6 +17,7 @@ import { MessageTemplatePicker } from "@/components/inbox/message-template-picke
 import { MentionMenu } from "@/components/inbox/mention-menu";
 import {
   personalizeTemplateBody,
+  saveCustomMessageTemplate,
   type MessageTemplateModel,
 } from "@/lib/mail/message-templates";
 
@@ -168,6 +169,40 @@ export function MessageCompose({
     });
   }
 
+  function saveAsTemplate() {
+    const body = draft.trim();
+    const subject = templateSubject?.trim() || "";
+    if (!body && !subject) {
+      pushToast({
+        message: t("pages.inbox.templateBodyRequired"),
+        tone: "info",
+      });
+      return;
+    }
+    const name = window.prompt(t("pages.inbox.templateNamePrompt"));
+    if (!name?.trim()) return;
+    try {
+      const model = Array.isArray(templateModels)
+        ? templateModels[0]
+        : templateModels;
+      saveCustomMessageTemplate({
+        name: name.trim(),
+        subject,
+        body,
+        model,
+      });
+      pushToast({ message: t("pages.inbox.templateSaved"), tone: "success" });
+    } catch (err) {
+      pushToast({
+        message:
+          err instanceof Error
+            ? err.message
+            : t("pages.inbox.templateSaveFailed"),
+        tone: "error",
+      });
+    }
+  }
+
   async function handleSend() {
     if (busy) return;
     const error = validatePendingAttachments(attachments, t);
@@ -273,8 +308,8 @@ export function MessageCompose({
     "flex h-9 w-9 items-center justify-center rounded-lg text-mute transition-colors hover:bg-ash hover:text-ink";
   const sendToneClass =
     sendTone === "danger"
-      ? "bg-sale text-white hover:bg-pink-deep"
-      : "bg-accent text-cream hover:bg-accent-deep";
+      ? "compose-send-danger bg-sale text-white hover:bg-pink-deep"
+      : "compose-send-accent bg-accent text-white hover:bg-accent-deep";
 
   return (
     <div className="space-y-2">
@@ -344,10 +379,10 @@ export function MessageCompose({
               type="button"
               onClick={insertLink}
               disabled={!linkUrl.trim()}
-              className={`px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 ${
                 sendTone === "danger"
-                  ? "bg-sale hover:bg-pink-deep"
-                  : "bg-accent hover:bg-accent-deep"
+                  ? "compose-send-danger bg-sale hover:bg-pink-deep"
+                  : "compose-send-accent bg-accent hover:bg-accent-deep"
               }`}
             >
               {t("pages.inbox.insertLink")}
@@ -357,8 +392,8 @@ export function MessageCompose({
       ) : null}
 
       <div
-        className={`relative overflow-hidden rounded-2xl border bg-panel/95 crm-compose-shell focus-within:border-gold/70 ${
-          dragOver ? "border-gold bg-ash/30" : "border-line/80"
+        className={`relative overflow-hidden rounded-2xl border bg-panel crm-compose-shell focus-within:border-accent/50 ${
+          dragOver ? "border-accent bg-accent-soft/40" : "border-line"
         }`}
         onDragEnter={(e) => {
           e.preventDefault();
@@ -561,6 +596,7 @@ export function MessageCompose({
             modelHint={templateModels}
             anchorRef={templateBtnRef}
             onPick={(tpl) => applyTemplate(tpl.body, tpl.subject)}
+            onSaveAsTemplate={saveAsTemplate}
           />
         </div>
       </div>

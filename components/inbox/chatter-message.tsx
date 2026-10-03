@@ -166,7 +166,7 @@ export function MessageSelectionBar({
         type="button"
         aria-label={t("common.close")}
         onClick={onClear}
-        className="flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream"
+        className="flex h-11 w-11 shrink-0 items-center justify-center text-white/90 hover:text-white"
       >
         <svg
           viewBox="0 0 24 24"
@@ -180,7 +180,7 @@ export function MessageSelectionBar({
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>
       </button>
-      <p className="min-w-0 flex-1 truncate px-1 text-[15px] font-semibold text-cream">
+      <p className="min-w-0 flex-1 truncate px-1 text-[15px] font-semibold text-white">
         {t("pages.inbox.selectedCount", { n: count })}
       </p>
       {canCopy ? (
@@ -188,7 +188,7 @@ export function MessageSelectionBar({
           type="button"
           disabled={copying || count === 0}
           onClick={onCopy}
-          className="flex h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-cream/95 hover:text-cream disabled:opacity-40"
+          className="flex h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-white/95 hover:text-white disabled:opacity-40"
         >
           <svg
             viewBox="0 0 24 24"
@@ -243,7 +243,9 @@ export function ChatterMessage({
   selectionActive = false,
   onToggleSelect,
   onEdit,
+  onResend,
   onTranslate,
+  resending = false,
 }: {
   message: RoomMessage;
   youLabel: string;
@@ -253,7 +255,9 @@ export function ChatterMessage({
   /** Long-press or tap-while-selecting. */
   onToggleSelect?: () => void;
   onEdit?: (message: RoomMessage) => void;
+  onResend?: (message: RoomMessage) => void;
   onTranslate?: (message: RoomMessage) => void;
+  resending?: boolean;
 }) {
   const { t, locale } = useLocale();
   const [showQuoted, setShowQuoted] = useState(false);
@@ -281,7 +285,13 @@ export function ChatterMessage({
     !/^update$/i.test(message.subject);
   const timeLabel = formatTime(message.at, locale);
   const selectable = !!onToggleSelect;
-  const canAct = !!(onEdit || onTranslate);
+  const canResend =
+    !!onResend &&
+    message.mine &&
+    !message.isNote &&
+    !!message.editableId &&
+    message.editableKind !== "note";
+  const canAct = !!(onEdit || onTranslate || canResend);
 
   function clearPressTimer() {
     if (pressTimer.current != null) {
@@ -425,7 +435,23 @@ export function ChatterMessage({
                 ⋮
               </button>
               {menuOpen ? (
-                <div className="absolute right-0 top-full mt-1 min-w-[8rem] overflow-hidden rounded-lg border border-line bg-panel shadow-lg">
+                <div className="absolute right-0 top-full z-20 mt-1 min-w-[9rem] overflow-hidden rounded-lg border border-line bg-panel shadow-lg">
+                  {canResend ? (
+                    <button
+                      type="button"
+                      disabled={resending}
+                      className="block w-full px-3 py-2 text-left text-xs font-medium text-ink hover:bg-ash disabled:opacity-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuOpen(false);
+                        onResend?.(message);
+                      }}
+                    >
+                      {resending
+                        ? t("pages.inbox.resending")
+                        : t("pages.inbox.resendMessage")}
+                    </button>
+                  ) : null}
                   {onEdit && message.editableId ? (
                     <button
                       type="button"
