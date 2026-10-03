@@ -295,6 +295,8 @@ export const fr: Messages = {
     opportunitySummary: "Résumé des opportunités",
     closedWon: "Gagnées",
     closedLost: "Perdues",
+    opportunitySales: "Ventes",
+    opportunityLeads: "Nouvelles pistes",
     recentLead: "Pistes récentes",
     leadByStatus: "Pistes par statut",
     salesSummary: "Résumé des ventes",
