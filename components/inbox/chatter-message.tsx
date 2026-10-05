@@ -18,8 +18,8 @@ const AVATAR_TONES = [
   "bg-[#a85a5a]",
 ];
 
-const LONG_PRESS_MS = 420;
-const MOVE_CANCEL_PX = 10;
+const LONG_PRESS_MS = 480;
+const MOVE_CANCEL_PX = 16;
 
 export function chatterAvatarTone(seed: string) {
   let hash = 0;
@@ -265,6 +265,7 @@ export function ChatterMessage({
   const pressTimer = useRef<number | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   const didLongPress = useRef(false);
+  const activePointerId = useRef<number | null>(null);
   const text =
     message.clean.text?.trim() ||
     previewOf(message.clean, message.raw?.trim() || "");
@@ -300,27 +301,91 @@ export function ChatterMessage({
     }
   }
 
+  function releasePointer(target: HTMLElement) {
+    const pointerId = activePointerId.current;
+    if (pointerId == null) return;
+    activePointerId.current = null;
+    if (target.hasPointerCapture?.(pointerId)) {
+      try {
+        target.releasePointerCapture(pointerId);
+      } catch {
+        /* already released */
+      }
+    }
+  }
+
   function onPointerDown(event: PointerEvent<HTMLElement>) {
-    if (!selectable || event.button !== 0) return;
+    if (!selectable) return;
+    // Touch/pen report button 0; only ignore non-primary mouse buttons.
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    // Leave real form fields alone; still allow long-press on bubble links/buttons.
+    const hit = event.target;
+    if (
+      hit instanceof Element &&
+      hit.closest("input, textarea, select")
+    ) {
+      return;
+    }
+
     didLongPress.current = false;
     pressOrigin.current = { x: event.clientX, y: event.clientY };
+    activePointerId.current = event.pointerId;
     clearPressTimer();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* unsupported */
+    }
+
     pressTimer.current = window.setTimeout(() => {
       didLongPress.current = true;
+      pressTimer.current = null;
+      window.getSelection()?.removeAllRanges();
       onToggleSelect?.();
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* unsupported */
+      }
     }, LONG_PRESS_MS);
   }
 
   function onPointerMove(event: PointerEvent<HTMLElement>) {
     if (!pressOrigin.current || pressTimer.current == null) return;
+    if (
+      activePointerId.current != null &&
+      event.pointerId !== activePointerId.current
+    ) {
+      return;
+    }
     const dx = event.clientX - pressOrigin.current.x;
     const dy = event.clientY - pressOrigin.current.y;
     if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) clearPressTimer();
   }
 
-  function onPointerUp() {
+  function suppressGhostClick() {
+    const block = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    // Capture-phase so bubble links/buttons don't fire after a select.
+    document.addEventListener("click", block, true);
+    document.addEventListener("auxclick", block, true);
+    window.setTimeout(() => {
+      document.removeEventListener("click", block, true);
+      document.removeEventListener("auxclick", block, true);
+      didLongPress.current = false;
+    }, 400);
+  }
+
+  function onPointerUp(event: PointerEvent<HTMLElement>) {
     clearPressTimer();
     pressOrigin.current = null;
+    releasePointer(event.currentTarget);
+    // iOS often skips click after a long-press; clear the guard anyway.
+    if (didLongPress.current) {
+      suppressGhostClick();
+    }
   }
 
   function onClick(event: MouseEvent<HTMLElement>) {
@@ -328,6 +393,7 @@ export function ChatterMessage({
     if (didLongPress.current) {
       didLongPress.current = false;
       event.preventDefault();
+      event.stopPropagation();
       return;
     }
     if (selectionActive) {
@@ -339,7 +405,8 @@ export function ChatterMessage({
   function onContextMenu(event: MouseEvent<HTMLElement>) {
     if (!selectable) return;
     event.preventDefault();
-    onToggleSelect?.();
+    // Desktop right-click; also covers some mobile long-press menus.
+    if (!didLongPress.current) onToggleSelect?.();
   }
 
   return (
@@ -356,7 +423,12 @@ export function ChatterMessage({
       onPointerCancel={onPointerUp}
       onClick={onClick}
       onContextMenu={onContextMenu}
-      style={{ WebkitTouchCallout: "none", userSelect: selectionActive ? "none" : undefined }}
+      style={{
+        WebkitTouchCallout: "none",
+        WebkitUserSelect: selectable ? "none" : undefined,
+        userSelect: selectable ? "none" : undefined,
+        touchAction: "manipulation",
+      }}
     >
       {selected ? (
         <span

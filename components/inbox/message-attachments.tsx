@@ -269,6 +269,9 @@ function OnDemandPreview({ file, url }: { file: ReplyAttachment; url: string }) 
         alt={file.fileName}
         className="max-h-64 w-full border-t border-line/60 bg-white object-contain"
         loading="lazy"
+        draggable={false}
+        onContextMenu={(event) => event.preventDefault()}
+        style={{ WebkitTouchCallout: "none", userSelect: "none" }}
       />
     );
   }

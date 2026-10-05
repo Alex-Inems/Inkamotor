@@ -26,6 +26,7 @@ import { readApiJson } from "@/lib/api-client";
 import { quickSaleInput } from "@/lib/quotation-form-data";
 import { buildReplyFormData } from "@/lib/mail/compose-attachments";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
+import type { MailNote } from "@/lib/mail/notes";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { localeMeta, useLocale } from "@/lib/i18n";
 
@@ -169,6 +170,7 @@ export default function InboxPage() {
   const loc = localeMeta[locale].bcp47;
   const [mail, setMail] = useState<MailMessage[]>([]);
   const [replies, setReplies] = useState<MailReply[]>([]);
+  const [notes, setNotes] = useState<MailNote[]>([]);
   const [conn, setConn] = useState<InboxStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -197,6 +199,7 @@ export default function InboxPage() {
 
   useEffect(() => {
     setSelectedKeys([]);
+    setThreadSearch("");
   }, [activeEmail]);
 
   useEffect(() => {
@@ -257,6 +260,31 @@ export default function InboxPage() {
     const json = await res.json();
     setReplies((json as { replies: MailReply[] }).replies ?? []);
   }, [locale]);
+
+  const loadNotes = useCallback(async (email: string) => {
+    const key = email.trim().toLowerCase();
+    if (!key) {
+      setNotes([]);
+      return;
+    }
+    const res = await fetch(
+      `/api/inbox/notes?email=${encodeURIComponent(key)}`,
+    );
+    if (!res.ok) {
+      setNotes([]);
+      return;
+    }
+    const json = (await res.json()) as { notes?: MailNote[] };
+    setNotes(json.notes ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (!activeEmail) {
+      setNotes([]);
+      return;
+    }
+    void loadNotes(activeEmail);
+  }, [activeEmail, loadNotes]);
 
   const sync = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -376,6 +404,42 @@ export default function InboxPage() {
   }, [rooms, query, filter, starred]);
 
   const active = rooms.find((r) => r.email === activeEmail) ?? null;
+  const youLabel = t("pages.inbox.youPrefix").replace(/:\s*$/, "").trim() || "You";
+
+  const activeMessages = useMemo(() => {
+    if (!active) return [] as Message[];
+    const threadKey = active.email.trim().toLowerCase();
+    const noteMsgs: Message[] = notes
+      .filter((note) => note.threadEmail === threadKey)
+      .map((note) => ({
+        key: `note-${note.id}`,
+        mine: true,
+        at: note.createdAt,
+        subject: "Note",
+        authorName: note.authorName || youLabel,
+        clean: {
+          text: note.bodyText,
+          fields: [],
+          quoted: null,
+          isForm: false,
+          trimmed: false,
+        },
+        raw: note.bodyText,
+        sentByName: note.authorName,
+        isNote: true,
+        editableId: note.id,
+        editableKind: "note" as const,
+      }));
+    const merged = [...active.messages, ...noteMsgs].sort(
+      (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+    );
+    const q = threadSearch.trim().toLowerCase();
+    if (!q) return merged;
+    return merged.filter((m) => {
+      const hay = `${m.clean.text} ${m.subject} ${m.authorName}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [active, notes, threadSearch, youLabel]);
 
   // Desktop: land in a conversation. Mobile: keep the list until they tap one.
   useEffect(() => {
@@ -388,10 +452,9 @@ export default function InboxPage() {
 
   useEffect(() => {
     const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [active?.email, active?.messages.length]);
-
-  const youLabel = t("pages.inbox.youPrefix").replace(/:\s*$/, "").trim() || "You";
+    if (!el || threadSearch.trim()) return;
+    el.scrollTop = el.scrollHeight;
+  }, [active?.email, activeMessages.length, threadSearch]);
 
   const tabCounts = useMemo(() => {
     const inboxRooms = rooms.filter((r) => !r.bulk);
@@ -438,10 +501,19 @@ export default function InboxPage() {
             bodyText: payload.message,
           }),
         });
-        const parsed = await readApiJson(res);
+        const parsed = await readApiJson<{ note?: MailNote }>(res);
         if (!parsed.ok) {
           pushToast(parsed.error || t("pages.inbox.sendFailed"));
           throw new Error(parsed.error || t("pages.inbox.sendFailed"));
+        }
+        if (parsed.data.note) {
+          setNotes((prev) =>
+            prev.some((n) => n.id === parsed.data.note!.id)
+              ? prev
+              : [...prev, parsed.data.note!],
+          );
+        } else {
+          void loadNotes(active.email);
         }
         pushToast(t("pages.inbox.internalNote"));
         return;
@@ -490,6 +562,19 @@ export default function InboxPage() {
       danger: true,
       run: async () => {
         for (const key of keys) {
+          if (key.startsWith("note-")) {
+            const id = key.slice(5);
+            const res = await fetch(
+              `/api/inbox/notes?id=${encodeURIComponent(id)}`,
+              { method: "DELETE" },
+            );
+            const parsed = await readApiJson(res);
+            if (!parsed.ok) {
+              pushToast(parsed.error || t("pages.inbox.deleteFailed"));
+              throw new Error(parsed.error || t("pages.inbox.deleteFailed"));
+            }
+            continue;
+          }
           const res = await fetch("/api/inbox/delete", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -512,10 +597,14 @@ export default function InboxPage() {
               !keys.includes(`out-mail-${row.id}`),
           ),
         );
+        setNotes((prev) =>
+          prev.filter((n) => !keys.includes(`note-${n.id}`)),
+        );
         setSelectedKeys([]);
         pushToast(t("pages.inbox.messageDeleted"));
         void loadReplies();
         void loadMail();
+        if (activeEmail) void loadNotes(activeEmail);
       },
     });
     if (!ok) return;
@@ -523,7 +612,7 @@ export default function InboxPage() {
 
   async function copySelectedMessages() {
     if (!active || selectedKeys.length === 0) return;
-    const chunks = active.messages
+    const chunks = activeMessages
       .filter((message) => selectedKeys.includes(message.key))
       .map((message) => getMessagePlainText(message, showOriginal))
       .filter(Boolean);
@@ -573,6 +662,7 @@ export default function InboxPage() {
               (row.toEmail ?? "").toLowerCase() !== email.toLowerCase(),
           ),
         );
+        setNotes([]);
         closeThread();
         pushToast(t("pages.inbox.conversationDeleted"));
         void loadReplies();
@@ -597,22 +687,44 @@ export default function InboxPage() {
   async function saveEdit() {
     if (!editTarget?.editableId || !editText.trim()) return;
     try {
-      const res = await fetch("/api/inbox/edit-reply", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: editTarget.editableId,
-          bodyText: editText,
-        }),
-      });
-      const parsed = await readApiJson<{ reply?: MailReply }>(res);
-      if (!parsed.ok) throw new Error(parsed.error);
-      if (parsed.data.reply) {
-        setReplies((prev) =>
-          prev.map((r) =>
-            r.id === parsed.data.reply!.id ? { ...r, ...parsed.data.reply! } : r,
-          ),
-        );
+      if (editTarget.editableKind === "note" || editTarget.isNote) {
+        const res = await fetch("/api/inbox/notes", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editTarget.editableId,
+            bodyText: editText,
+          }),
+        });
+        const parsed = await readApiJson<{ note?: MailNote }>(res);
+        if (!parsed.ok) throw new Error(parsed.error);
+        if (parsed.data.note) {
+          setNotes((prev) =>
+            prev.map((n) =>
+              n.id === parsed.data.note!.id ? parsed.data.note! : n,
+            ),
+          );
+        }
+      } else {
+        const res = await fetch("/api/inbox/edit-reply", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editTarget.editableId,
+            bodyText: editText,
+          }),
+        });
+        const parsed = await readApiJson<{ reply?: MailReply }>(res);
+        if (!parsed.ok) throw new Error(parsed.error);
+        if (parsed.data.reply) {
+          setReplies((prev) =>
+            prev.map((r) =>
+              r.id === parsed.data.reply!.id
+                ? { ...r, ...parsed.data.reply! }
+                : r,
+            ),
+          );
+        }
       }
       setEditTarget(null);
       pushToast(t("pages.inbox.messageUpdated"));
@@ -887,8 +999,8 @@ export default function InboxPage() {
               ref={threadRef}
               className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 py-3 sm:px-6 sm:py-5"
             >
-              {active.messages.map((message, i) => {
-                const prev = active.messages[i - 1];
+              {activeMessages.map((message, i) => {
+                const prev = activeMessages[i - 1];
                 const newDay =
                   !prev ||
                   dayLabel(
