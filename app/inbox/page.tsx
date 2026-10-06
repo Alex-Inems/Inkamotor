@@ -27,6 +27,11 @@ import { quickSaleInput } from "@/lib/quotation-form-data";
 import { buildReplyFormData } from "@/lib/mail/compose-attachments";
 import { groupMailRooms, type MailRoom, type RoomMessage } from "@/lib/mail/rooms";
 import type { MailNote } from "@/lib/mail/notes";
+import {
+  makeOptimisticMailNote,
+  mergeMailNotes,
+  replaceTempMailNote,
+} from "@/lib/mail/note-local";
 import type { DeliveryStatus } from "@/lib/mail/delivery";
 import { localeMeta, useLocale } from "@/lib/i18n";
 
@@ -196,6 +201,7 @@ export default function InboxPage() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const pendingChat = useRef<string | null>(null);
+  const notesFetchGen = useRef(0);
 
   useEffect(() => {
     setSelectedKeys([]);
@@ -264,22 +270,26 @@ export default function InboxPage() {
   const loadNotes = useCallback(async (email: string) => {
     const key = email.trim().toLowerCase();
     if (!key) {
+      notesFetchGen.current += 1;
       setNotes([]);
       return;
     }
+    const gen = ++notesFetchGen.current;
     const res = await fetch(
       `/api/inbox/notes?email=${encodeURIComponent(key)}`,
     );
+    if (gen !== notesFetchGen.current) return;
     if (!res.ok) {
-      setNotes([]);
+      setNotes((prev) => mergeMailNotes([], prev));
       return;
     }
     const json = (await res.json()) as { notes?: MailNote[] };
-    setNotes(json.notes ?? []);
+    setNotes((prev) => mergeMailNotes(json.notes ?? [], prev));
   }, []);
 
   useEffect(() => {
     if (!activeEmail) {
+      notesFetchGen.current += 1;
       setNotes([]);
       return;
     }
@@ -503,29 +513,38 @@ export default function InboxPage() {
     setSending(true);
     try {
       if (composeMode === "note") {
-        const res = await fetch("/api/inbox/notes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            threadEmail: active.email,
-            bodyText: payload.message,
-          }),
+        const optimistic = makeOptimisticMailNote({
+          threadEmail: active.email,
+          bodyText: payload.message,
+          authorName: youLabel,
         });
-        const parsed = await readApiJson<{ note?: MailNote }>(res);
-        if (!parsed.ok) {
-          pushToast(parsed.error || t("pages.inbox.sendFailed"));
-          throw new Error(parsed.error || t("pages.inbox.sendFailed"));
-        }
-        if (parsed.data.note) {
+        // Ignore in-flight note GETs that would wipe this row.
+        notesFetchGen.current += 1;
+        setNotes((prev) => [...prev, optimistic]);
+        try {
+          const res = await fetch("/api/inbox/notes", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              threadEmail: active.email,
+              bodyText: payload.message,
+            }),
+          });
+          const parsed = await readApiJson<{ note?: MailNote }>(res);
+          if (!parsed.ok) {
+            pushToast(parsed.error || t("pages.inbox.sendFailed"));
+            throw new Error(parsed.error || t("pages.inbox.sendFailed"));
+          }
+          notesFetchGen.current += 1;
           setNotes((prev) =>
-            prev.some((n) => n.id === parsed.data.note!.id)
-              ? prev
-              : [...prev, parsed.data.note!],
+            replaceTempMailNote(prev, optimistic.id, parsed.data.note),
           );
-        } else {
-          void loadNotes(active.email);
+          if (!parsed.data.note) void loadNotes(active.email);
+          pushToast(t("pages.inbox.internalNote"));
+        } catch (err) {
+          setNotes((prev) => prev.filter((n) => n.id !== optimistic.id));
+          throw err;
         }
-        pushToast(t("pages.inbox.internalNote"));
         return;
       }
       const form = buildReplyFormData({

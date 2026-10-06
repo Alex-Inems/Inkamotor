@@ -31,6 +31,11 @@ import {
 } from "@/lib/mail/rooms";
 import { useLocale } from "@/lib/i18n";
 import type { MailNote } from "@/lib/mail/notes";
+import {
+  makeOptimisticMailNote,
+  mergeMailNotes,
+  replaceTempMailNote,
+} from "@/lib/mail/note-local";
 import type { MailThreadFile } from "@/lib/mail/thread-files";
 import { formatAttachmentBytes } from "@/lib/mail/compose-attachments";
 
@@ -129,6 +134,7 @@ export function SaleChatPanel({
   const [resendingId, setResendingId] = useState<string | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const notesFetchGen = useRef(0);
 
   useEffect(() => {
     setSelectedKeys([]);
@@ -146,6 +152,7 @@ export function SaleChatPanel({
   const loadConversation = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!canLoad) {
+        notesFetchGen.current += 1;
         setMail([]);
         setReplies([]);
         setNotes([]);
@@ -155,6 +162,7 @@ export function SaleChatPanel({
 
       const silent = !!opts?.silent;
       if (!silent) setLoading(true);
+      const notesGen = ++notesFetchGen.current;
       try {
         const emailParam = encodeURIComponent(email.trim());
         const [statusRes, mailRes, repliesRes, notesRes, filesRes] =
@@ -188,9 +196,9 @@ export function SaleChatPanel({
           setReplies(json.replies ?? []);
         } else if (!silent) setReplies([]);
 
-        if (notesRes.ok) {
+        if (notesRes.ok && notesGen === notesFetchGen.current) {
           const json = (await notesRes.json()) as { notes?: MailNote[] };
-          setNotes(json.notes ?? []);
+          setNotes((prev) => mergeMailNotes(json.notes ?? [], prev));
         }
         if (filesRes.ok) {
           const json = (await filesRes.json()) as { files?: MailThreadFile[] };
@@ -312,6 +320,15 @@ export function SaleChatPanel({
       return;
     }
     if (composeMode === "note") {
+      const optimistic = makeOptimisticMailNote({
+        threadEmail: threadKey,
+        bodyText: payload.message,
+        authorName: youLabel,
+        relatedSaleId: relatedType === "sale" ? relatedId : undefined,
+      });
+      // Ignore in-flight note GETs that would wipe this row.
+      notesFetchGen.current += 1;
+      setNotes((prev) => [...prev, optimistic]);
       setSending(true);
       try {
         const res = await fetch("/api/inbox/notes", {
@@ -325,10 +342,15 @@ export function SaleChatPanel({
         });
         const parsed = await readApiJson<{ note?: MailNote }>(res);
         if (!parsed.ok) throw new Error(parsed.error || t("pages.inbox.sendFailed"));
-        if (parsed.data.note) {
-          setNotes((prev) => [...prev, parsed.data.note!]);
+        notesFetchGen.current += 1;
+        setNotes((prev) =>
+          replaceTempMailNote(prev, optimistic.id, parsed.data.note),
+        );
+        if (!parsed.data.note) {
+          void loadConversation({ silent: true });
         }
       } catch (err) {
+        setNotes((prev) => prev.filter((n) => n.id !== optimistic.id));
         pushToast(err instanceof Error ? err.message : t("pages.inbox.sendFailed"));
         throw err;
       } finally {
