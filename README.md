@@ -8,9 +8,10 @@ Deploy on a subdomain (e.g. `crm.inkamototours.com`). Staff log in and work from
 
 | Area | What it does |
 |------|----------------|
-| **Inbox** | Incoming mail (auto-refresh) + outbound replies with Sent → Delivered → Opened tracking |
+| **Inbox** | Incoming mail (auto-refresh) + outbound replies with Sent → Delivered → Opened tracking; internal notes; WhatsApp-style chat (right-click / long-press to select messages) |
+| **Website forms** | Webflow form emails land in Inbox with a **Forms** filter, “Website form” badges, and parsed field cards — leads sync with source **website** |
 | **Contacts** | Contact records with an embedded chat thread (same send path as Inbox) |
-| **Leads / Sales / Follow-ups** | Pipeline, quotations, and tasks in Supabase |
+| **Leads / Sales / Follow-ups** | Pipeline, quotations, and tasks in Supabase (website leads show a form chip on the board) |
 | **Invoices** | Create PDF invoices and email them |
 | **Email marketing** | Draft / send mailings to subscribers |
 | **Odoo sync** | Optional cron pull of contacts, sales, and recent messages (**once daily**, evening UTC) |
@@ -60,6 +61,7 @@ Open [http://localhost:3000/login](http://localhost:3000/login).
 | `supabase/mail_replies.sql` | Sent replies history |
 | `supabase/mail_delivery_tracking.sql` | Delivery / open columns |
 | `supabase/mail_attachments.sql` | Reply attachments |
+| `supabase/mail_chatter.sql` | Internal notes (`mail_notes`) + thread files |
 | `supabase/sales_quote.sql` | Quotation fields on sales |
 | `supabase/newsletter_mailings.sql` | Email marketing drafts |
 | `supabase/crm_users.sql` | Login directory (password + Google) |
@@ -141,9 +143,12 @@ Check status in the app at **/setup** (after login).
 1. **/setup** — Incoming mailbox + Email sending should be Ready.
 2. **Inbox** — Send a test email to `contact@inkamototours.com`, wait ~1 minute (or click **Refresh**).
 3. Open the message → reply → confirm it appears in the thread with delivery status.
-4. **Contacts** — open a contact with a real email → send from the side chat (same Brevo path).
-5. **Invoices** / **Sales** — email a quotation or invoice to yourself.
-6. **Email marketing** — send a campaign (add yourself to the Brevo list first).
+4. **Log note** — switch to note mode, save, and confirm the dashed “Internal note” bubble appears in the thread.
+5. **Select messages** — right-click (desktop) or long-press (mobile) a bubble to highlight it for copy / delete.
+6. **Forms** — submit the website contact form (or forward a Webflow notification), then open **Inbox → Forms** and confirm the badge + field card.
+7. **Contacts** — open a contact with a real email → send from the side chat (same Brevo path).
+8. **Invoices** / **Sales** — email a quotation or invoice to yourself.
+9. **Email marketing** — send a campaign (add yourself to the Brevo list first).
 
 If send fails, the compose box keeps your draft and shows an error toast (it should not clear as if it succeeded).
 
@@ -164,6 +169,22 @@ No webhook or extra setup. Point the Webflow form notification at
 If the notification arrives from a no-reply address, the CRM reads the
 visitor's email out of the message body so replies and subscriptions go to the
 real person.
+
+### How to spot form leads
+
+| Where | What you see |
+|-------|----------------|
+| **Inbox → Forms** | Tab listing only website-form conversations (or search `website` / `form`) |
+| **Conversation list** | Gold **Website form** label on the preview line |
+| **Open chat** | Gold label in the header + on the form message bubble; name / email / phone shown as a field card |
+| **Bell notifications** | “Website form from {name}” |
+| **Leads board** | Chip **Website form** when the lead source is `website` |
+
+Form notifications stay in the main Inbox (not Promos). After sync, matching contacts become leads with source **website**.
+
+### Internal notes
+
+Use **Log note** in Inbox (and on contact / lead / sale chat) to leave a private note in the thread. Notes are not emailed; they need `supabase/mail_chatter.sql` if that table is missing.
 
 ## Subscribers
 
