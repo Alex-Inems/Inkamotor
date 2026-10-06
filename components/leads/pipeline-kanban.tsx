@@ -1231,6 +1231,11 @@ function KanbanCard({
                     {lead.company}
                   </p>
                 ) : null}
+                {lead.source === "website" ? (
+                  <p className="mt-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-gold">
+                    {t("sources.website_form")}
+                  </p>
+                ) : null}
               </div>
               {lead.value > 0 ? (
                 <p className="shrink-0 text-[11px] font-semibold text-mute">

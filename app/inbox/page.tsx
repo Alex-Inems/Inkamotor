@@ -86,7 +86,7 @@ type InboxStatus = {
 type Message = RoomMessage;
 type Room = MailRoom;
 
-type Filter = "inbox" | "unread" | "starred" | "promos";
+type Filter = "inbox" | "unread" | "starred" | "website" | "promos";
 
 const AUTO_SYNC_MS = 60_000;
 const STAR_KEY = "inbox.starred";
@@ -393,13 +393,20 @@ export default function InboxPage() {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return rooms.filter((room) => {
-      if (filter === "promos" ? !room.bulk : room.bulk) return false;
+      if (filter === "promos") {
+        if (!room.bulk) return false;
+      } else if (filter === "website") {
+        if (!room.fromForm || room.bulk) return false;
+      } else if (room.bulk) {
+        return false;
+      }
       if (filter === "unread" && room.unread === 0) return false;
       if (filter === "starred" && !starred.includes(room.email)) return false;
       if (!q) return true;
-      return `${room.name ?? ""} ${room.email} ${room.lastText} ${room.lastSubject}`
-        .toLowerCase()
-        .includes(q);
+      const hay = `${room.name ?? ""} ${room.email} ${room.lastText} ${room.lastSubject}${
+        room.fromForm ? " website form webflow formulario formulaire site" : ""
+      }`.toLowerCase();
+      return hay.includes(q);
     });
   }, [rooms, query, filter, starred]);
 
@@ -459,6 +466,7 @@ export default function InboxPage() {
   const tabCounts = useMemo(() => {
     const inboxRooms = rooms.filter((r) => !r.bulk);
     const promoRooms = rooms.filter((r) => r.bulk);
+    const websiteRooms = rooms.filter((r) => r.fromForm && !r.bulk);
     const starredRooms = rooms.filter((r) => starred.includes(r.email));
     const unreadRooms = inboxRooms.filter((r) => r.unread > 0);
     const sumUnread = (list: Room[]) => list.reduce((n, r) => n + r.unread, 0);
@@ -467,6 +475,8 @@ export default function InboxPage() {
       unread: unreadRooms.length,
       starred: sumUnread(starredRooms) || starredRooms.length,
       starredUnread: sumUnread(starredRooms),
+      website: websiteRooms.length,
+      websiteUnread: sumUnread(websiteRooms),
       promos: sumUnread(promoRooms) || promoRooms.length,
       promosUnread: sumUnread(promoRooms),
       promosTotal: promoRooms.length,
@@ -828,6 +838,12 @@ export default function InboxPage() {
                 alert: tabCounts.starredUnread > 0,
               },
               {
+                id: "website" as const,
+                label: t("pages.inbox.website"),
+                count: tabCounts.website,
+                alert: tabCounts.websiteUnread > 0,
+              },
+              {
                 id: "promos" as const,
                 label: t("pages.inbox.promos"),
                 count: tabCounts.promos,
@@ -845,6 +861,8 @@ export default function InboxPage() {
                       unread: tabCounts.promosUnread,
                       total: tabCounts.promosTotal,
                     })
+                  : tab.id === "website"
+                    ? t("pages.inbox.websiteTitle", { n: tabCounts.website })
                   : tab.id === "unread"
                     ? t("pages.inbox.unreadChats", { n: tab.count })
                     : undefined
@@ -880,7 +898,9 @@ export default function InboxPage() {
                   ? t("pages.inbox.nothingUnread")
                   : filter === "starred"
                     ? t("pages.inbox.nothingStarred")
-                    : t("pages.inbox.empty")}
+                    : filter === "website"
+                      ? t("pages.inbox.nothingWebsite")
+                      : t("pages.inbox.empty")}
             </p>
           ) : (
             visible.map((room) => (
@@ -964,6 +984,12 @@ export default function InboxPage() {
                     {activeName}
                   </p>
                   <p className="truncate text-[11px] leading-snug text-cream/70 sm:text-[12px]">
+                    {active.fromForm ? (
+                      <span className="font-semibold text-gold">
+                        {t("topbar.websiteForm")}
+                        <span className="font-normal text-cream/55"> · </span>
+                      </span>
+                    ) : null}
                     {active.email}
                   </p>
                 </div>
@@ -1317,6 +1343,12 @@ function RoomRow({
                 unread ? "text-ink/80" : "text-mute"
               }`}
             >
+              {room.fromForm ? (
+                <span className="mr-1.5 inline font-semibold text-gold">
+                  {t("topbar.websiteForm")}
+                  <span className="font-normal text-mute"> · </span>
+                </span>
+              ) : null}
               {room.lastText}
             </span>
             {unread ? <CountBadge count={room.unread} /> : null}

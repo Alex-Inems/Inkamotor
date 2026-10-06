@@ -86,6 +86,8 @@ export type MailRoom = {
   lastText: string;
   unread: number;
   bulk: boolean;
+  /** At least one inbound message came from the website form. */
+  fromForm: boolean;
   lastSubject: string;
   lastMailId?: string;
   fields: FormField[];
@@ -157,6 +159,7 @@ export function groupMailRooms(input: {
       lastText: "",
       unread: 0,
       bulk: false,
+      fromForm: false,
       lastSubject: "",
       fields: [],
     };
@@ -224,6 +227,7 @@ export function groupMailRooms(input: {
       attachments: m.attachments?.length ? m.attachments : undefined,
     });
     if (clean.fields.length > 0) room.fields = clean.fields;
+    if (fromForm || clean.fields.length > 0) room.fromForm = true;
     if (!m.isRead && !opened.includes(room.email)) room.unread += 1;
     if (isBulkMail({ fromEmail: m.fromEmail, isForm: clean.isForm, raw })) {
       room.bulk = true;

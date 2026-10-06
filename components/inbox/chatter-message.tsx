@@ -293,6 +293,22 @@ export function ChatterMessage({
     !!message.editableId &&
     message.editableKind !== "note";
   const canAct = !!(onEdit || onTranslate || canResend);
+  // Inherit bubble theme tokens so light/dark mode stay readable.
+  const bodyClass = message.isNote
+    ? "text-[#f4e5c1]"
+    : message.mine
+      ? "text-[color:var(--chat-out-text)]"
+      : "text-[color:var(--ink)]";
+  const softClass = message.isNote
+    ? "text-[#f4e5c1]/75"
+    : message.mine
+      ? "text-[color:var(--chat-out-text)]/75"
+      : "text-[color:var(--ink)]/70";
+  const fieldPanelClass = message.isNote
+    ? "border-gold/30 bg-black/20"
+    : message.mine
+      ? "border-[color:var(--chat-out-text)]/15 bg-black/10"
+      : "border-[color:var(--ink)]/12 bg-black/[0.05]";
 
   function clearPressTimer() {
     if (pressTimer.current != null) {
@@ -489,15 +505,19 @@ export function ChatterMessage({
           }`}
         >
           {message.isNote ? (
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-gold">
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
               {t("pages.inbox.internalNote")}
+            </p>
+          ) : message.clean.isForm ? (
+            <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-gold">
+              {t("topbar.websiteForm")}
             </p>
           ) : null}
           {canAct ? (
             <div className="absolute right-1 top-1 z-[2]">
               <button
                 type="button"
-                className="rounded px-1.5 py-0.5 text-[11px] text-mute/80 hover:bg-black/20 hover:text-ink"
+                className={`rounded px-1.5 py-0.5 text-[11px] hover:bg-black/15 ${softClass}`}
                 aria-label={t("pages.inbox.messageActions")}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -556,41 +576,39 @@ export function ChatterMessage({
           ) : null}
           {showOriginal ? (
             <pre
-              className={`whitespace-pre-wrap wrap-break-word text-xs ${
-                message.mine ? "text-[#0f1f1e]/95" : "text-white/95"
-              }`}
+              className={`whitespace-pre-wrap wrap-break-word text-xs ${bodyClass}`}
             >
               {message.raw}
             </pre>
           ) : (
             <>
               {showSubject ? (
-                <p
-                  className={`mb-1 text-[12px] font-medium ${
-                    message.mine ? "text-[#0f1f1e]/70" : "text-white/70"
-                  }`}
-                >
+                <p className={`mb-1.5 text-[12px] font-medium ${softClass}`}>
                   {t("common.subject")}: {message.subject}
                 </p>
               ) : null}
 
               {hasFields ? (
-                <dl
-                  className={`mb-1 space-y-0.5 border-l pl-2 text-xs ${
-                    message.mine
-                      ? "border-[#0f1f1e]/25 text-[#0f1f1e]/80"
-                      : "border-white/25 text-white/80"
-                  }`}
+                <div
+                  className={`mb-2 overflow-hidden rounded-lg border px-2.5 py-2 ${fieldPanelClass}`}
                 >
-                  {message.clean.fields.map((f) => (
-                    <div key={`${f.label}-${f.value}`} className="flex gap-2">
-                      <dt>{f.label}</dt>
-                      <dd className="min-w-0 wrap-break-word text-inherit">
-                        {f.value}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
+                  <dl className="space-y-1.5">
+                    {message.clean.fields.map((f) => (
+                      <div key={`${f.label}-${f.value}`}>
+                        <dt
+                          className={`text-[10px] font-semibold uppercase tracking-[0.06em] ${softClass}`}
+                        >
+                          {f.label}
+                        </dt>
+                        <dd
+                          className={`mt-0.5 text-[13px] font-medium leading-snug wrap-break-word ${bodyClass}`}
+                        >
+                          {f.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
               ) : null}
 
               {hasAtt ? (
@@ -604,19 +622,13 @@ export function ChatterMessage({
               {hasText ? (
                 <LinkifiedText
                   text={text}
-                  className={`whitespace-pre-wrap wrap-break-word ${
-                    hasAtt ? "mt-1.5 " : ""
-                  }${message.mine ? "text-[#0f1f1e]" : "text-white"}`}
-                  linkClassName="font-medium underline underline-offset-2"
+                  className={`whitespace-pre-wrap wrap-break-word leading-relaxed ${
+                    hasAtt || hasFields ? "mt-1 " : ""
+                  }${bodyClass}`}
+                  linkClassName="font-semibold underline underline-offset-2"
                 />
               ) : !hasFields && !hasAtt ? (
-                <p
-                  className={
-                    message.mine ? "text-[#0f1f1e]/80" : "text-white/80"
-                  }
-                >
-                  {t("pages.inbox.emptyMessage")}
-                </p>
+                <p className={softClass}>{t("pages.inbox.emptyMessage")}</p>
               ) : null}
 
               {message.clean.quoted ? (
@@ -627,9 +639,7 @@ export function ChatterMessage({
                       event.stopPropagation();
                       setShowQuoted((v) => !v);
                     }}
-                    className={`mt-1 text-[11px] font-semibold underline-offset-2 hover:underline ${
-                      message.mine ? "text-[#0f1f1e]/70" : "text-white/70"
-                    }`}
+                    className={`mt-1.5 text-[11px] font-semibold underline-offset-2 hover:underline ${softClass}`}
                   >
                     {showQuoted
                       ? t("pages.inbox.hideQuoted")
@@ -637,11 +647,7 @@ export function ChatterMessage({
                   </button>
                   {showQuoted ? (
                     <pre
-                      className={`mt-1 max-h-52 overflow-y-auto whitespace-pre-wrap wrap-break-word border-l pl-2 text-xs ${
-                        message.mine
-                          ? "border-[#0f1f1e]/25 text-[#0f1f1e]/75"
-                          : "border-white/25 text-white/75"
-                      }`}
+                      className={`mt-1 max-h-52 overflow-y-auto whitespace-pre-wrap wrap-break-word border-l border-current/20 pl-2 text-xs ${softClass}`}
                     >
                       {message.clean.quoted}
                     </pre>
@@ -651,11 +657,7 @@ export function ChatterMessage({
             </>
           )}
 
-          <span
-            className={`wa-time ${
-              message.mine ? "text-[#0f1f1e]" : "text-white"
-            }`}
-          >
+          <span className={`wa-time ${softClass}`}>
             <time dateTime={message.at} title={formatDateTime(message.at, locale)}>
               {timeLabel}
             </time>
