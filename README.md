@@ -8,7 +8,8 @@ Deploy on a subdomain (e.g. `crm.inkamototours.com`). Staff log in and work from
 
 | Area | What it does |
 |------|----------------|
-| **Inbox** | Incoming mail (auto-refresh) + outbound replies with Sent → Delivered → Opened tracking; internal notes; WhatsApp-style chat (right-click / long-press to select messages) |
+| **Inbox** | Incoming mail (auto-refresh) + outbound replies with Sent → Delivered → Opened tracking; internal notes (show immediately); WhatsApp-style chat |
+| **Selection** | Right-click / long-press to select **conversations** in the list (delete / star without opening) or **messages** inside a thread (copy / delete) |
 | **Website forms** | Webflow form emails land in Inbox with a **Forms** filter, “Website form” badges, and parsed field cards — leads sync with source **website** |
 | **Contacts** | Contact records with an embedded chat thread (same send path as Inbox) |
 | **Leads / Sales / Follow-ups** | Pipeline, quotations, and tasks in Supabase (website leads show a form chip on the board) |
@@ -143,12 +144,13 @@ Check status in the app at **/setup** (after login).
 1. **/setup** — Incoming mailbox + Email sending should be Ready.
 2. **Inbox** — Send a test email to `contact@inkamototours.com`, wait ~1 minute (or click **Refresh**).
 3. Open the message → reply → confirm it appears in the thread with delivery status.
-4. **Log note** — switch to note mode, save, and confirm the dashed “Internal note” bubble appears in the thread.
-5. **Select messages** — right-click (desktop) or long-press (mobile) a bubble to highlight it for copy / delete.
-6. **Forms** — submit the website contact form (or forward a Webflow notification), then open **Inbox → Forms** and confirm the badge + field card.
-7. **Contacts** — open a contact with a real email → send from the side chat (same Brevo path).
-8. **Invoices** / **Sales** — email a quotation or invoice to yourself.
-9. **Email marketing** — send a campaign (add yourself to the Brevo list first).
+4. **Log note** — switch to note mode, save, and confirm the dashed “Internal note” bubble appears in the thread right away (no refresh).
+5. **Select conversations** — in the left list, right-click (desktop) or long-press (mobile) a row without opening it; use Delete or Star in the top bar. Tap more rows while selection is active.
+6. **Select messages** — inside an open chat, right-click / long-press a bubble to copy or delete.
+7. **Forms** — submit the website contact form (or forward a Webflow notification), then open **Inbox → Forms** and confirm the badge + field card.
+8. **Contacts** — open a contact with a real email → send from the side chat (same Brevo path).
+9. **Invoices** / **Sales** — email a quotation or invoice to yourself.
+10. **Email marketing** — send a campaign (add yourself to the Brevo list first).
 
 If send fails, the compose box keeps your draft and shows an error toast (it should not clear as if it succeeded).
 
@@ -184,7 +186,16 @@ Form notifications stay in the main Inbox (not Promos). After sync, matching con
 
 ### Internal notes
 
-Use **Log note** in Inbox (and on contact / lead / sale chat) to leave a private note in the thread. Notes are not emailed; they need `supabase/mail_chatter.sql` if that table is missing.
+Use **Log note** in Inbox (and on contact / lead / sale chat) to leave a private note in the thread. Notes are not emailed; they need `supabase/mail_chatter.sql` if that table is missing. New notes appear in the chat immediately (optimistic UI) and survive background refreshes.
+
+### Selecting conversations & messages
+
+| Target | How | Actions |
+|--------|-----|---------|
+| **Conversation list** | Right-click or long-press a row (does not open the chat). Further taps toggle selection. | Delete, Star / Unstar, Clear |
+| **Open thread** | Right-click or long-press a bubble | Copy, Delete, Clear |
+
+Light and dark themes keep readable contrast on the teal chat header and on form / note bubbles.
 
 ## Subscribers
 
