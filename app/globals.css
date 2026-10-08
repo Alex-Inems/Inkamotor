@@ -757,15 +757,17 @@ button {
 }
 
 .wa-sender-bar {
+  /* Always dark teal — keep light text in both themes (light --cream is dark). */
   background: linear-gradient(
     180deg,
     color-mix(in srgb, #4a858b 70%, #3d6f74) 0%,
     #31595d 55%,
     #2a4e52 100%
   );
+  color: #f7f4ee;
   min-height: 56px;
   box-shadow:
-    0 1px 0 color-mix(in srgb, var(--cream) 12%, transparent) inset,
+    0 1px 0 rgba(247, 244, 238, 0.12) inset,
     0 8px 28px -12px rgba(0, 0, 0, 0.55);
   padding-left: max(0.15rem, env(safe-area-inset-left));
   padding-right: max(0.15rem, env(safe-area-inset-right));

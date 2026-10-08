@@ -581,8 +581,13 @@ export const es: Messages = {
       deleteMessageConfirm: "¿Eliminar este mensaje?",
       deleteConversationConfirm:
         "¿Eliminar todos los mensajes con {email}? Esta acción no se puede deshacer.",
+      deleteConversationsConfirm:
+        "¿Eliminar {n} conversaciones? Esta acción no se puede deshacer.",
       messageDeleted: "Mensaje eliminado",
       conversationDeleted: "Conversación eliminada",
+      conversationsDeleted: "{n} conversaciones eliminadas",
+      starSelected: "Destacar",
+      unstarSelected: "Quitar destacado",
       deleteFailed: "No se pudo eliminar",
       deliverySent: "Enviado",
       deliveryDelivered: "Entregado",

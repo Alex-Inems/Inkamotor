@@ -6,6 +6,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
 import { ChatterMessage, MessageSelectionBar, getMessagePlainText } from "@/components/inbox/chatter-message";
@@ -188,6 +189,7 @@ export default function InboxPage() {
   const [showOriginal, setShowOriginal] = useState(false);
   const [sending, setSending] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
   const [composeMode, setComposeMode] = useState<ChatterMode>("message");
   const [fullOpen, setFullOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
@@ -207,6 +209,10 @@ export default function InboxPage() {
     setSelectedKeys([]);
     setThreadSearch("");
   }, [activeEmail]);
+
+  useEffect(() => {
+    setSelectedEmails([]);
+  }, [filter, query]);
 
   useEffect(() => {
     try {
@@ -496,6 +502,7 @@ export default function InboxPage() {
   const unreadTotal = tabCounts.inbox;
 
   function openRoom(email: string) {
+    setSelectedEmails([]);
     setActiveEmail(email);
     setDetailsOpen(false);
     setShowOriginal(false);
@@ -506,6 +513,38 @@ export default function InboxPage() {
     setDetailsOpen(false);
     setActiveEmail(null);
     setSelectedKeys([]);
+  }
+
+  function toggleRoomSelect(email: string) {
+    setSelectedKeys([]);
+    setSelectedEmails((prev) =>
+      prev.includes(email)
+        ? prev.filter((row) => row !== email)
+        : [...prev, email],
+    );
+  }
+
+  function starSelectedConversations() {
+    if (selectedEmails.length === 0) return;
+    const allStarred = selectedEmails.every((email) => starred.includes(email));
+    setStarred((prev) => {
+      let next = [...prev];
+      for (const email of selectedEmails) {
+        const has = next.includes(email);
+        if (allStarred) {
+          if (has) next = next.filter((e) => e !== email);
+        } else if (!has) {
+          next.push(email);
+        }
+      }
+      try {
+        window.localStorage.setItem(STAR_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
+    setSelectedEmails([]);
   }
 
   async function send(payload: MessageComposePayload) {
@@ -657,9 +696,46 @@ export default function InboxPage() {
   }
 
   function toggleMessageSelect(key: string) {
+    setSelectedEmails([]);
     setSelectedKeys((prev) =>
       prev.includes(key) ? prev.filter((row) => row !== key) : [...prev, key],
     );
+  }
+
+  async function removeConversations(emails: string[]) {
+    const keys = emails.map((email) => email.trim().toLowerCase()).filter(Boolean);
+    if (keys.length === 0) return;
+    for (const email of keys) {
+      const res = await fetch("/api/inbox/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "conversation", email }),
+      });
+      const json = (await res.json()) as ApiError;
+      if (!res.ok) {
+        pushToast(json.error || t("pages.inbox.deleteFailed"));
+        throw new Error(json.error || t("pages.inbox.deleteFailed"));
+      }
+    }
+    const keySet = new Set(keys);
+    setReplies((prev) =>
+      prev.filter((row) => !keySet.has(row.toEmail.toLowerCase())),
+    );
+    setMail((prev) =>
+      prev.filter(
+        (row) =>
+          !keySet.has(row.fromEmail.toLowerCase()) &&
+          !keySet.has((row.toEmail ?? "").toLowerCase()),
+      ),
+    );
+    if (activeEmail && keySet.has(activeEmail.toLowerCase())) {
+      setNotes([]);
+      closeThread();
+    }
+    setSelectedEmails([]);
+    setSelectedKeys([]);
+    void loadReplies();
+    void loadMail();
   }
 
   async function deleteConversation() {
@@ -671,31 +747,31 @@ export default function InboxPage() {
       confirmLabel: t("common.delete"),
       danger: true,
       run: async () => {
-        const res = await fetch("/api/inbox/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "conversation", email }),
-        });
-        const json = (await res.json()) as ApiError;
-        if (!res.ok) {
-          pushToast(json.error || t("pages.inbox.deleteFailed"));
-          throw new Error(json.error || t("pages.inbox.deleteFailed"));
-        }
-        setReplies((prev) =>
-          prev.filter((row) => row.toEmail.toLowerCase() !== email.toLowerCase()),
-        );
-        setMail((prev) =>
-          prev.filter(
-            (row) =>
-              row.fromEmail.toLowerCase() !== email.toLowerCase() &&
-              (row.toEmail ?? "").toLowerCase() !== email.toLowerCase(),
-          ),
-        );
-        setNotes([]);
-        closeThread();
+        await removeConversations([email]);
         pushToast(t("pages.inbox.conversationDeleted"));
-        void loadReplies();
-        void loadMail();
+      },
+    });
+    if (!ok) return;
+  }
+
+  async function deleteSelectedConversations() {
+    if (selectedEmails.length === 0) return;
+    const emails = [...selectedEmails];
+    const ok = await confirm({
+      title: t("pages.inbox.deleteConversation"),
+      message:
+        emails.length === 1
+          ? t("pages.inbox.deleteConversationConfirm", { email: emails[0] })
+          : t("pages.inbox.deleteConversationsConfirm", { n: emails.length }),
+      confirmLabel: t("common.delete"),
+      danger: true,
+      run: async () => {
+        await removeConversations(emails);
+        pushToast(
+          emails.length === 1
+            ? t("pages.inbox.conversationDeleted")
+            : t("pages.inbox.conversationsDeleted", { n: emails.length }),
+        );
       },
     });
     if (!ok) return;
@@ -829,21 +905,36 @@ export default function InboxPage() {
               : "hidden lg:flex lg:w-72 xl:w-80"
         }`}
       >
-        <div className="flex items-center justify-between gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
-          <h1 className="font-display text-lg tracking-wide">{t("pages.inbox.messages")}</h1>
-          {unreadTotal > 0 ? (
-            <CountBadge count={unreadTotal} />
-          ) : null}
-      </div>
+        {selectedEmails.length > 0 ? (
+          <MessageSelectionBar
+            count={selectedEmails.length}
+            canCopy={false}
+            onClear={() => setSelectedEmails([])}
+            onDelete={() => void deleteSelectedConversations()}
+            onStar={starSelectedConversations}
+            starLabel={
+              selectedEmails.every((email) => starred.includes(email))
+                ? t("pages.inbox.unstarSelected")
+                : t("pages.inbox.starSelected")
+            }
+          />
+        ) : (
+          <div className="flex items-center justify-between gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
+            <h1 className="font-display text-lg tracking-wide">
+              {t("pages.inbox.messages")}
+            </h1>
+            {unreadTotal > 0 ? <CountBadge count={unreadTotal} /> : null}
+          </div>
+        )}
 
         <div className="px-3 pt-2 sm:px-4 sm:pt-3">
-        <input
+          <input
             className="w-full rounded-full border border-line bg-ash px-3.5 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none sm:px-3"
             placeholder={t("pages.inbox.search")}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </div>
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
 
         <div className="flex gap-0 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(
@@ -927,8 +1018,11 @@ export default function InboxPage() {
                 key={room.email}
                 room={room}
                 active={room.email === activeEmail}
+                selected={selectedEmails.includes(room.email)}
+                selectionActive={selectedEmails.length > 0}
                 starred={starred.includes(room.email)}
                 onOpen={() => openRoom(room.email)}
+                onToggleSelect={() => toggleRoomSelect(room.email)}
                 onStar={() => toggleStar(room.email)}
                 locale={loc}
               />
@@ -975,7 +1069,7 @@ export default function InboxPage() {
                 <button
                   type="button"
                 aria-label={t("pages.inbox.backToMessages")}
-                className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream lg:hidden"
+                className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-white/90 hover:text-white lg:hidden"
                 onClick={() => closeThread()}
               >
                 <BackIcon />
@@ -983,7 +1077,7 @@ export default function InboxPage() {
                 <button
                   type="button"
                   aria-label={t("apps.openApps")}
-                  className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream lg:hidden"
+                  className="relative z-10 flex h-11 w-11 shrink-0 items-center justify-center text-white/90 hover:text-white lg:hidden"
                   onClick={() =>
                     window.dispatchEvent(new Event("crm:open-apps"))
                   }
@@ -999,14 +1093,14 @@ export default function InboxPage() {
                   <Avatar name={active.name} email={active.email} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[15px] font-semibold leading-tight text-cream sm:text-[16px]">
+                  <p className="truncate text-[15px] font-semibold leading-tight text-white sm:text-[16px]">
                     {activeName}
                   </p>
-                  <p className="truncate text-[11px] leading-snug text-cream/70 sm:text-[12px]">
+                  <p className="truncate text-[11px] leading-snug text-white/75 sm:text-[12px]">
                     {active.fromForm ? (
                       <span className="font-semibold text-gold">
                         {t("topbar.websiteForm")}
-                        <span className="font-normal text-cream/55"> · </span>
+                        <span className="font-normal text-white/55"> · </span>
                       </span>
                     ) : null}
                     {active.email}
@@ -1021,7 +1115,7 @@ export default function InboxPage() {
                 className={`flex h-11 w-11 shrink-0 items-center justify-center transition-colors ${
                   starred.includes(active.email)
                     ? "text-gold"
-                    : "text-cream/85 hover:text-cream"
+                    : "text-white/85 hover:text-white"
                 }`}
               >
                 <StarIcon filled={starred.includes(active.email)} />
@@ -1032,7 +1126,7 @@ export default function InboxPage() {
                 title={t("pages.inbox.details")}
                 onClick={() => setDetailsOpen((v) => !v)}
                 className={`flex h-11 w-11 shrink-0 items-center justify-center transition-colors ${
-                  detailsOpen ? "text-gold" : "text-cream/85 hover:text-cream"
+                  detailsOpen ? "text-gold" : "text-white/85 hover:text-white"
                 }`}
               >
                 <InfoIcon />
@@ -1196,11 +1290,11 @@ export default function InboxPage() {
               type="button"
               aria-label={t("pages.inbox.backToChat")}
               onClick={() => setDetailsOpen(false)}
-              className="flex h-11 w-11 shrink-0 items-center justify-center text-cream/90 hover:text-cream"
+              className="flex h-11 w-11 shrink-0 items-center justify-center text-white/90 hover:text-white"
             >
               <BackIcon />
             </button>
-            <p className="min-w-0 flex-1 truncate px-2 text-[15px] font-semibold text-cream">
+            <p className="min-w-0 flex-1 truncate px-2 text-[15px] font-semibold text-white">
               {t("pages.inbox.details")}
             </p>
           </div>
@@ -1310,36 +1404,137 @@ export default function InboxPage() {
   );
 }
 
+const ROOM_LONG_PRESS_MS = 480;
+const ROOM_MOVE_CANCEL_PX = 16;
+
 function RoomRow({
   room,
   active,
+  selected = false,
+  selectionActive = false,
   starred,
   onOpen,
+  onToggleSelect,
   onStar,
   locale,
 }: {
   room: Room;
   active: boolean;
+  selected?: boolean;
+  selectionActive?: boolean;
   starred: boolean;
   onOpen: () => void;
+  onToggleSelect: () => void;
   onStar: () => void;
   locale: string;
 }) {
   const { t } = useLocale();
   const unread = room.unread > 0;
+  const pressTimer = useRef<number | null>(null);
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null);
+  const didLongPress = useRef(false);
+
+  function clearPressTimer() {
+    if (pressTimer.current != null) {
+      window.clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    didLongPress.current = false;
+    pressOrigin.current = { x: event.clientX, y: event.clientY };
+    clearPressTimer();
+    pressTimer.current = window.setTimeout(() => {
+      didLongPress.current = true;
+      pressTimer.current = null;
+      onToggleSelect();
+      try {
+        navigator.vibrate?.(12);
+      } catch {
+        /* unsupported */
+      }
+    }, ROOM_LONG_PRESS_MS);
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (!pressOrigin.current || pressTimer.current == null) return;
+    const dx = event.clientX - pressOrigin.current.x;
+    const dy = event.clientY - pressOrigin.current.y;
+    if (Math.hypot(dx, dy) > ROOM_MOVE_CANCEL_PX) clearPressTimer();
+  }
+
+  function onPointerUp() {
+    clearPressTimer();
+    pressOrigin.current = null;
+    if (didLongPress.current) {
+      window.setTimeout(() => {
+        didLongPress.current = false;
+      }, 350);
+    }
+  }
+
+  function onClick() {
+    if (didLongPress.current) {
+      didLongPress.current = false;
+      return;
+    }
+    if (selectionActive) {
+      onToggleSelect();
+      return;
+    }
+    onOpen();
+  }
+
   return (
     <div
       className={`crm-room-row group flex items-center gap-2.5 px-3 py-3 sm:gap-3 sm:py-2.5 ${
-        active ? "crm-room-row-active" : ""
+        selected
+          ? "bg-[#00a884]/18"
+          : active
+            ? "crm-room-row-active"
+            : selectionActive
+              ? "hover:bg-white/5"
+              : ""
       }`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onToggleSelect();
+      }}
+      style={{ WebkitTouchCallout: "none", userSelect: "none", touchAction: "manipulation" }}
     >
       <button
         type="button"
-        onClick={onOpen}
+        onClick={onClick}
+        aria-selected={selected}
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
         <span className="relative shrink-0">
-          <Avatar name={room.name} email={room.email} />
+          {selected ? (
+            <span
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00a884] text-white"
+              aria-hidden
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 12l5 5L20 7" />
+              </svg>
+            </span>
+          ) : (
+            <Avatar name={room.name} email={room.email} />
+          )}
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline justify-between gap-2">
@@ -1370,26 +1565,31 @@ function RoomRow({
               ) : null}
               {room.lastText}
             </span>
-            {unread ? <CountBadge count={room.unread} /> : null}
+            {unread && !selected ? <CountBadge count={room.unread} /> : null}
           </span>
         </span>
       </button>
-      <button
-        type="button"
-        aria-label={
-          starred
-            ? t("pages.inbox.unstarConversation")
-            : t("pages.inbox.starConversation")
-        }
-        onClick={onStar}
-        className={`shrink-0 p-2 transition-colors ${
-          starred
-            ? "text-gold"
-            : "text-mute hover:text-ink sm:text-transparent sm:group-hover:text-mute"
-        }`}
-      >
-        <StarIcon filled={starred} />
-      </button>
+      {selectionActive ? null : (
+        <button
+          type="button"
+          aria-label={
+            starred
+              ? t("pages.inbox.unstarConversation")
+              : t("pages.inbox.starConversation")
+          }
+          onClick={(event) => {
+            event.stopPropagation();
+            onStar();
+          }}
+          className={`shrink-0 p-2 transition-colors ${
+            starred
+              ? "text-gold"
+              : "text-mute hover:text-ink sm:text-transparent sm:group-hover:text-mute"
+          }`}
+        >
+          <StarIcon filled={starred} />
+        </button>
+      )}
     </div>
   );
 }

@@ -577,8 +577,13 @@ export const en = {
       deleteMessageConfirm: "Delete this message?",
       deleteConversationConfirm:
         "Delete all messages with {email}? This cannot be undone.",
+      deleteConversationsConfirm:
+        "Delete {n} conversations? This cannot be undone.",
       messageDeleted: "Message deleted",
       conversationDeleted: "Conversation deleted",
+      conversationsDeleted: "{n} conversations deleted",
+      starSelected: "Star",
+      unstarSelected: "Unstar",
       deleteFailed: "Could not delete",
       deliverySent: "Sent",
       deliveryDelivered: "Delivered",

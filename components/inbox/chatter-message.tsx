@@ -149,6 +149,8 @@ export function MessageSelectionBar({
   onClear,
   onCopy,
   onDelete,
+  onStar,
+  starLabel,
 }: {
   count: number;
   copying?: boolean;
@@ -156,8 +158,10 @@ export function MessageSelectionBar({
   canCopy?: boolean;
   canDelete?: boolean;
   onClear: () => void;
-  onCopy: () => void;
+  onCopy?: () => void;
   onDelete: () => void;
+  onStar?: () => void;
+  starLabel?: string;
 }) {
   const { t } = useLocale();
   return (
@@ -183,7 +187,17 @@ export function MessageSelectionBar({
       <p className="min-w-0 flex-1 truncate px-1 text-[15px] font-semibold text-white">
         {t("pages.inbox.selectedCount", { n: count })}
       </p>
-      {canCopy ? (
+      {onStar ? (
+        <button
+          type="button"
+          disabled={count === 0}
+          onClick={onStar}
+          className="flex h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-gold hover:text-white disabled:opacity-40"
+        >
+          {starLabel ?? t("pages.inbox.star")}
+        </button>
+      ) : null}
+      {canCopy && onCopy ? (
         <button
           type="button"
           disabled={copying || count === 0}

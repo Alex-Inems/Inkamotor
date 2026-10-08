@@ -581,8 +581,13 @@ export const fr: Messages = {
       deleteMessageConfirm: "Supprimer ce message ?",
       deleteConversationConfirm:
         "Supprimer tous les messages avec {email} ? Cette action est irréversible.",
+      deleteConversationsConfirm:
+        "Supprimer {n} conversations ? Cette action est irréversible.",
       messageDeleted: "Message supprimé",
       conversationDeleted: "Conversation supprimée",
+      conversationsDeleted: "{n} conversations supprimées",
+      starSelected: "Favori",
+      unstarSelected: "Retirer le favori",
       deleteFailed: "Suppression impossible",
       deliverySent: "Envoyé",
       deliveryDelivered: "Distribué",
