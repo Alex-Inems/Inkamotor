@@ -288,6 +288,8 @@ export const fr: Messages = {
     totalLeads: "Total des pistes",
     totalOpportunity: "Total opportunités",
     totalSales: "Total des ventes",
+    newContactsThisMonth: "Nouveaux contacts ce mois",
+    newSalesThisMonth: "Nouvelles ventes ce mois",
     seeMore: "Voir plus de détails",
     vsPriorMonth: "vs mois précédent",
     vsPrior30Days: "vs 30 jours précédents",

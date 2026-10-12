@@ -1404,8 +1404,8 @@ export default function InboxPage() {
   );
 }
 
-const ROOM_LONG_PRESS_MS = 480;
-const ROOM_MOVE_CANCEL_PX = 16;
+const ROOM_LONG_PRESS_MS = 500;
+const ROOM_MOVE_CANCEL_PX = 14;
 
 function RoomRow({
   room,
@@ -1430,9 +1430,14 @@ function RoomRow({
 }) {
   const { t } = useLocale();
   const unread = room.unread > 0;
+  const rowRef = useRef<HTMLDivElement>(null);
   const pressTimer = useRef<number | null>(null);
   const pressOrigin = useRef<{ x: number; y: number } | null>(null);
   const didLongPress = useRef(false);
+  const activePointerId = useRef<number | null>(null);
+  const usingTouch = useRef(false);
+  const onToggleSelectRef = useRef(onToggleSelect);
+  onToggleSelectRef.current = onToggleSelect;
 
   function clearPressTimer() {
     if (pressTimer.current != null) {
@@ -1441,41 +1446,142 @@ function RoomRow({
     }
   }
 
+  function fireLongPress() {
+    didLongPress.current = true;
+    pressTimer.current = null;
+    window.getSelection()?.removeAllRanges();
+    onToggleSelectRef.current();
+    try {
+      navigator.vibrate?.(12);
+    } catch {
+      /* unsupported */
+    }
+  }
+
+  function suppressGhostClick() {
+    const block = (e: Event) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    document.addEventListener("click", block, true);
+    document.addEventListener("auxclick", block, true);
+    window.setTimeout(() => {
+      document.removeEventListener("click", block, true);
+      document.removeEventListener("auxclick", block, true);
+      didLongPress.current = false;
+    }, 450);
+  }
+
+  // Touch long-press is more reliable than pointer events inside a scroll list.
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0]!;
+      usingTouch.current = true;
+      didLongPress.current = false;
+      pressOrigin.current = { x: touch.clientX, y: touch.clientY };
+      clearPressTimer();
+      pressTimer.current = window.setTimeout(() => {
+        fireLongPress();
+      }, ROOM_LONG_PRESS_MS);
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (!pressOrigin.current || pressTimer.current == null) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      const dx = touch.clientX - pressOrigin.current.x;
+      const dy = touch.clientY - pressOrigin.current.y;
+      if (Math.hypot(dx, dy) > ROOM_MOVE_CANCEL_PX) {
+        clearPressTimer();
+        pressOrigin.current = null;
+      }
+    };
+
+    const onTouchEnd = () => {
+      clearPressTimer();
+      pressOrigin.current = null;
+      if (didLongPress.current) suppressGhostClick();
+      window.setTimeout(() => {
+        usingTouch.current = false;
+      }, 0);
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchend", onTouchEnd);
+    el.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      clearPressTimer();
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
+
   function onPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    // Touch path is handled by touch listeners above.
+    if (event.pointerType === "touch" || usingTouch.current) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest("[data-room-star]")
+    ) {
+      return;
+    }
+
     didLongPress.current = false;
     pressOrigin.current = { x: event.clientX, y: event.clientY };
+    activePointerId.current = event.pointerId;
     clearPressTimer();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* unsupported */
+    }
     pressTimer.current = window.setTimeout(() => {
-      didLongPress.current = true;
-      pressTimer.current = null;
-      onToggleSelect();
-      try {
-        navigator.vibrate?.(12);
-      } catch {
-        /* unsupported */
-      }
+      fireLongPress();
     }, ROOM_LONG_PRESS_MS);
   }
 
   function onPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "touch" || usingTouch.current) return;
     if (!pressOrigin.current || pressTimer.current == null) return;
+    if (
+      activePointerId.current != null &&
+      event.pointerId !== activePointerId.current
+    ) {
+      return;
+    }
     const dx = event.clientX - pressOrigin.current.x;
     const dy = event.clientY - pressOrigin.current.y;
     if (Math.hypot(dx, dy) > ROOM_MOVE_CANCEL_PX) clearPressTimer();
   }
 
-  function onPointerUp() {
+  function onPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (event.pointerType === "touch" || usingTouch.current) return;
     clearPressTimer();
     pressOrigin.current = null;
-    if (didLongPress.current) {
-      window.setTimeout(() => {
-        didLongPress.current = false;
-      }, 350);
+    const pointerId = activePointerId.current;
+    activePointerId.current = null;
+    if (
+      pointerId != null &&
+      event.currentTarget.hasPointerCapture?.(pointerId)
+    ) {
+      try {
+        event.currentTarget.releasePointerCapture(pointerId);
+      } catch {
+        /* already released */
+      }
     }
+    if (didLongPress.current) suppressGhostClick();
   }
 
-  function onClick() {
+  function onRowActivate() {
     if (didLongPress.current) {
       didLongPress.current = false;
       return;
@@ -1489,7 +1595,11 @@ function RoomRow({
 
   return (
     <div
-      className={`crm-room-row group flex items-center gap-2.5 px-3 py-3 sm:gap-3 sm:py-2.5 ${
+      ref={rowRef}
+      role="button"
+      tabIndex={0}
+      aria-selected={selected}
+      className={`crm-room-row group flex cursor-pointer items-center gap-2.5 px-3 py-3 sm:gap-3 sm:py-2.5 ${
         selected
           ? "bg-[#00a884]/18"
           : active
@@ -1502,81 +1612,88 @@ function RoomRow({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onClick={onRowActivate}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onRowActivate();
+        }
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
-        onToggleSelect();
+        if (!didLongPress.current) onToggleSelect();
       }}
-      style={{ WebkitTouchCallout: "none", userSelect: "none", touchAction: "manipulation" }}
+      style={{
+        WebkitTouchCallout: "none",
+        WebkitUserSelect: "none",
+        userSelect: "none",
+        touchAction: "pan-y",
+      }}
     >
-      <button
-        type="button"
-        onClick={onClick}
-        aria-selected={selected}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-      >
-        <span className="relative shrink-0">
-          {selected ? (
-            <span
-              className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00a884] text-white"
-              aria-hidden
+      <span className="relative shrink-0">
+        {selected ? (
+          <span
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#00a884] text-white"
+            aria-hidden
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-5 w-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M5 12l5 5L20 7" />
-              </svg>
-            </span>
-          ) : (
-            <Avatar name={room.name} email={room.email} />
-          )}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline justify-between gap-2">
-            <span
-              className={`min-w-0 truncate text-[15px] sm:text-sm ${
-                unread ? "font-bold text-ink" : "font-medium text-ink"
-              }`}
-            >
-              {displayName(room.name, room.email)}
-            </span>
-            <span
-              className={`shrink-0 text-[11px] ${unread ? "font-semibold text-gold" : "text-mute"}`}
-            >
-              {stamp(room.lastAt, locale)}
-            </span>
+              <path d="M5 12l5 5L20 7" />
+            </svg>
           </span>
-          <span className="mt-0.5 flex items-center gap-2">
-            <span
-              className={`min-w-0 flex-1 truncate text-[13px] sm:text-xs ${
-                unread ? "text-ink/80" : "text-mute"
-              }`}
-            >
-              {room.fromForm ? (
-                <span className="mr-1.5 inline font-semibold text-gold">
-                  {t("topbar.websiteForm")}
-                  <span className="font-normal text-mute"> · </span>
-                </span>
-              ) : null}
-              {room.lastText}
-            </span>
-            {unread && !selected ? <CountBadge count={room.unread} /> : null}
+        ) : (
+          <Avatar name={room.name} email={room.email} />
+        )}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span
+            className={`min-w-0 truncate text-[15px] sm:text-sm ${
+              unread ? "font-bold text-ink" : "font-medium text-ink"
+            }`}
+          >
+            {displayName(room.name, room.email)}
+          </span>
+          <span
+            className={`shrink-0 text-[11px] ${unread ? "font-semibold text-gold" : "text-mute"}`}
+          >
+            {stamp(room.lastAt, locale)}
           </span>
         </span>
-      </button>
+        <span className="mt-0.5 flex items-center gap-2">
+          <span
+            className={`min-w-0 flex-1 truncate text-[13px] sm:text-xs ${
+              unread ? "text-ink/80" : "text-mute"
+            }`}
+          >
+            {room.fromForm ? (
+              <span className="mr-1.5 inline font-semibold text-gold">
+                {t("topbar.websiteForm")}
+                <span className="font-normal text-mute"> · </span>
+              </span>
+            ) : null}
+            {room.lastText}
+          </span>
+          {unread && !selected ? <CountBadge count={room.unread} /> : null}
+        </span>
+      </span>
       {selectionActive ? null : (
         <button
           type="button"
+          data-room-star
           aria-label={
             starred
               ? t("pages.inbox.unstarConversation")
               : t("pages.inbox.starConversation")
           }
+          onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
             onStar();

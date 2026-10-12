@@ -111,6 +111,14 @@ function eventMonth(iso: string | null | undefined, fallback?: string) {
   return /^\d{4}-\d{2}$/.test(raw) ? raw : null;
 }
 
+function calendarMonthKey(ref = new Date()) {
+  return `${ref.getFullYear()}-${String(ref.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function inCalendarMonth(iso: string, monthKey: string) {
+  return eventMonth(iso) === monthKey;
+}
+
 function weekdayLabel(iso: string, locale: string) {
   return new Date(`${iso}T12:00:00`).toLocaleDateString(locale, {
     weekday: "short",
@@ -420,6 +428,32 @@ export function OverviewDashboard() {
   const openOpps = leads.filter((l) => !["won", "lost"].includes(l.status)).length;
   const totalSalesCount = sales.filter((s) => s.status !== "cancelled").length;
 
+  const monthStats = useMemo(() => {
+    const now = new Date();
+    const thisMonth = calendarMonthKey(now);
+    const prior = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const priorMonth = calendarMonthKey(prior);
+
+    const countContacts = (month: string) =>
+      leads.filter((l) => inCalendarMonth(l.createdAt, month)).length;
+    const countSales = (month: string) =>
+      sales.filter(
+        (s) => s.status !== "cancelled" && inCalendarMonth(s.createdAt, month),
+      ).length;
+
+    const contactsThisMonth = countContacts(thisMonth);
+    const contactsPriorMonth = countContacts(priorMonth);
+    const salesThisMonth = countSales(thisMonth);
+    const salesPriorMonth = countSales(priorMonth);
+
+    return {
+      contactsThisMonth,
+      salesThisMonth,
+      contactMonthChange: pctChange(contactsThisMonth, contactsPriorMonth),
+      saleMonthChange: pctChange(salesThisMonth, salesPriorMonth),
+    };
+  }, [leads, sales]);
+
   const { opportunitySeries, opportunityFallback } = useMemo(() => {
     // Prefer months that actually exist in CRM data (demo dates may not be "this year").
     const dataMonths = new Set<string>();
@@ -651,6 +685,29 @@ export function OverviewDashboard() {
           value={num(totalSalesCount)}
           change={saleChange}
           changeHint={t("overview.vsPrior30Days")}
+          noTrendLabel={t("overview.noTrendYet")}
+          spark={saleSpark.length ? saleSpark : [0, 0]}
+          href="/sales"
+          detailsLabel={t("overview.seeMore")}
+        />
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <KpiCard
+          label={t("overview.newContactsThisMonth")}
+          value={num(monthStats.contactsThisMonth)}
+          change={monthStats.contactMonthChange}
+          changeHint={t("overview.vsPriorMonth")}
+          noTrendLabel={t("overview.noTrendYet")}
+          spark={leadSpark.length ? leadSpark : [0, 0]}
+          href="/contacts"
+          detailsLabel={t("overview.seeMore")}
+        />
+        <KpiCard
+          label={t("overview.newSalesThisMonth")}
+          value={num(monthStats.salesThisMonth)}
+          change={monthStats.saleMonthChange}
+          changeHint={t("overview.vsPriorMonth")}
           noTrendLabel={t("overview.noTrendYet")}
           spark={saleSpark.length ? saleSpark : [0, 0]}
           href="/sales"

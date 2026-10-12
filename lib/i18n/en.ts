@@ -286,6 +286,8 @@ export const en = {
     totalLeads: "Total Leads",
     totalOpportunity: "Total Opportunity",
     totalSales: "Total Sales",
+    newContactsThisMonth: "New contacts this month",
+    newSalesThisMonth: "New sales this month",
     seeMore: "See more details",
     vsPriorMonth: "vs prior month",
     vsPrior30Days: "vs prior 30 days",
