@@ -21,6 +21,8 @@ import {
   readPipelineFromStorage,
   type PipelineStage,
 } from "@/lib/crm/pipeline";
+import { deleteLeadRecords } from "@/lib/crm/delete-leads-client";
+import { useConfirm } from "@/lib/confirm";
 import { useCrm } from "@/lib/crm-store";
 import { quickSaleInput } from "@/lib/quotation-form-data";
 import { type Lead } from "@/lib/demo-data";
@@ -72,7 +74,8 @@ export function ContactDetail({
   const isNew = contactId === "new";
   const isLeadContext = basePath === "/leads";
   const router = useRouter();
-  const { addSale, pushToast } = useCrm();
+  const { addSale, pushToast, refreshCrm } = useCrm();
+  const confirm = useConfirm();
   const { t, locale } = useLocale();
   const [loading, setLoading] = useState(!isNew);
   const [row, setRow] = useState<ContactRow | null>(null);
@@ -189,6 +192,32 @@ export function ContactDetail({
     setForm(contactWriteFromLead(json.row.lead, json.row.details));
   }
 
+  async function deleteContact() {
+    if (isNew || !row) return;
+    const ok = await confirm({
+      title: isLeadContext
+        ? t("pages.leads.deleteLead")
+        : t("pages.contacts.deleteContact"),
+      message: isLeadContext
+        ? t("pages.leads.deleteLeadsConfirm", { n: 1 })
+        : t("pages.contacts.deleteContactsConfirm", { n: 1 }),
+      confirmLabel: t("common.delete"),
+      danger: true,
+      run: async () => {
+        await deleteLeadRecords([row.lead.id]);
+        pushToast({
+          message: isLeadContext
+            ? t("pages.leads.leadsDeleted", { n: 1 })
+            : t("pages.contacts.contactsDeleted", { n: 1 }),
+          tone: "success",
+        });
+        void refreshCrm();
+        router.push(basePath);
+      },
+    });
+    if (!ok) return;
+  }
+
   function createBooking() {
     if (!row) return;
     void addSale(
@@ -287,6 +316,15 @@ export function ContactDetail({
             onClick={() => createBooking()}
           >
             {t("pages.leads.createSale")}
+          </button>
+        ) : null}
+        {!isNew && row ? (
+          <button
+            type="button"
+            className={btnToolbar}
+            onClick={() => void deleteContact()}
+          >
+            {t("common.delete")}
           </button>
         ) : null}
         <Link href={basePath} className={btnToolbar}>

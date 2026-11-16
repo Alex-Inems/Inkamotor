@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { clampPriority } from "@/lib/crm/contact-details";
 import {
+  deleteLeads,
   getLeadRow,
   listLeadPage,
   parseContactWrite,
@@ -195,6 +196,43 @@ export async function PATCH(req: Request) {
   } catch (err) {
     return jsonError(502, {
       error: err instanceof Error ? err.message : "Could not update lead",
+      code: "db_error",
+    });
+  }
+}
+
+export async function DELETE(req: Request) {
+  const blocked = supabaseMissing();
+  if (blocked) return blocked;
+
+  const url = new URL(req.url);
+  const ids = new Set<string>();
+  const queryId = url.searchParams.get("id")?.trim();
+  if (queryId) ids.add(queryId);
+  for (const part of (url.searchParams.get("ids") ?? "").split(",")) {
+    const id = part.trim();
+    if (id) ids.add(id);
+  }
+  try {
+    const body = (await req.json()) as { id?: string; ids?: string[] };
+    if (typeof body.id === "string" && body.id.trim()) ids.add(body.id.trim());
+    for (const id of body.ids ?? []) {
+      if (typeof id === "string" && id.trim()) ids.add(id.trim());
+    }
+  } catch {
+    /* query-only delete */
+  }
+
+  if (ids.size === 0) {
+    return jsonError(400, { error: "id is required", code: "db_error" });
+  }
+
+  try {
+    const deleted = await deleteLeads([...ids]);
+    return Response.json({ ok: true, deleted });
+  } catch (err) {
+    return jsonError(502, {
+      error: err instanceof Error ? err.message : "Could not delete",
       code: "db_error",
     });
   }

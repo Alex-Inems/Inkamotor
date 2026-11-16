@@ -144,22 +144,26 @@ export function MessageSelectionBar({
   count,
   copying = false,
   deleting = false,
+  exporting = false,
   canCopy = true,
   canDelete = true,
   onClear,
   onCopy,
   onDelete,
+  onExport,
   onStar,
   starLabel,
 }: {
   count: number;
   copying?: boolean;
   deleting?: boolean;
+  exporting?: boolean;
   canCopy?: boolean;
   canDelete?: boolean;
   onClear: () => void;
   onCopy?: () => void;
   onDelete: () => void;
+  onExport?: () => void;
   onStar?: () => void;
   starLabel?: string;
 }) {
@@ -195,6 +199,16 @@ export function MessageSelectionBar({
           className="flex h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-gold hover:text-white disabled:opacity-40"
         >
           {starLabel ?? t("pages.inbox.star")}
+        </button>
+      ) : null}
+      {onExport ? (
+        <button
+          type="button"
+          disabled={exporting || count === 0}
+          onClick={onExport}
+          className="flex h-11 items-center gap-1.5 px-2.5 text-sm font-semibold text-white/95 hover:text-white disabled:opacity-40"
+        >
+          {exporting ? t("common.exporting") : t("common.export")}
         </button>
       ) : null}
       {canCopy && onCopy ? (

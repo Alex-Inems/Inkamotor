@@ -18,6 +18,7 @@ import { isCoreStageId, type PipelineStage } from "@/lib/crm/pipeline";
 import { type Lead, type LeadStatus } from "@/lib/demo-data";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
+import { useLongPressSelect } from "@/lib/ui/long-press-select";
 
 export type LeadRow = { lead: Lead; details: ContactDetails; score?: number };
 
@@ -104,6 +105,8 @@ export function PipelineKanban({
   onAddStage,
   onDeleteStage,
   onScheduleActivity,
+  selectedIds = [],
+  onToggleSelect,
 }: {
   pipeline: PipelineStage[];
   byStage: Record<string, LeadRow[]>;
@@ -131,6 +134,8 @@ export function PipelineKanban({
   onAddStage: (label: string) => void;
   onDeleteStage: (stage: PipelineStage) => void;
   onScheduleActivity: (row: LeadRow) => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
 }) {
   const { t, locale } = useLocale();
   const [menuStage, setMenuStage] = useState<string | null>(null);
@@ -340,7 +345,10 @@ export function PipelineKanban({
                         chipClass={tone.chip}
                         busy={movingId === row.lead.id}
                         dragging={draggingId === row.lead.id}
+                        selected={selectedIds.includes(row.lead.id)}
+                        selectionActive={selectedIds.length > 0}
                         onOpen={() => onOpen(row)}
+                        onToggleSelect={() => onToggleSelect?.(row.lead.id)}
                         onPriority={(priority) =>
                           onPriority(row.lead.id, priority)
                         }
@@ -1159,7 +1167,10 @@ function KanbanCard({
   chipClass,
   busy,
   dragging,
+  selected,
+  selectionActive,
   onOpen,
+  onToggleSelect,
   onPriority,
   onSchedule,
   onDragStart,
@@ -1169,7 +1180,10 @@ function KanbanCard({
   chipClass: string;
   busy: boolean;
   dragging: boolean;
+  selected: boolean;
+  selectionActive: boolean;
   onOpen: () => void;
+  onToggleSelect: () => void;
   onPriority: (priority: LeadPriority) => void;
   onSchedule: () => void;
   onDragStart: () => void;
@@ -1184,12 +1198,20 @@ function KanbanCard({
   const suppressClick = useRef(false);
   const initials = leadInitials(lead.name, lead.email, lead.company);
   const tone = avatarTone(lead.email || lead.id || lead.name);
+  const press = useLongPressSelect({
+    onToggle: onToggleSelect,
+    disabled: busy,
+  });
+  const canDrag = !busy && !selectionActive;
 
   return (
     <article
-      draggable={!busy}
+      ref={press.setNode}
+      draggable={canDrag}
       aria-label={t("pages.leads.dragToMove")}
+      aria-selected={selected}
       title={t("pages.leads.dragToMove")}
+      {...press.handlers}
       onDragStart={(e) => {
         suppressClick.current = true;
         e.dataTransfer.setData("text/lead-id", lead.id);
@@ -1197,16 +1219,24 @@ function KanbanCard({
         onDragStart();
       }}
       onDragEnd={onDragEnd}
-      className={`o-kanban-card group relative block w-full shrink-0 overflow-hidden rounded-lg border border-line/70 bg-canvas shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_6px_16px_-12px_rgba(0,0,0,0.55)] transition-[opacity,box-shadow] ${
-        dragging || busy ? "opacity-45" : "hover:border-mute/40"
-      } ${busy ? "" : "cursor-grab active:cursor-grabbing"}`}
+      className={`o-kanban-card group relative block w-full shrink-0 overflow-hidden rounded-lg border shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_6px_16px_-12px_rgba(0,0,0,0.55)] transition-[opacity,box-shadow,border-color,background-color] ${
+        selected
+          ? "border-[#00a884] bg-[#00a884]/12"
+          : "border-line/70 bg-canvas"
+      } ${
+        dragging || busy ? "opacity-45" : selected ? "" : "hover:border-mute/40"
+      } ${busy ? "" : canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
     >
       <button
         type="button"
         disabled={busy}
         onClick={() => {
-          if (suppressClick.current) {
+          if (press.consumeLongPress() || suppressClick.current) {
             suppressClick.current = false;
+            return;
+          }
+          if (selectionActive) {
+            onToggleSelect();
             return;
           }
           onOpen();
@@ -1216,9 +1246,17 @@ function KanbanCard({
         <div className="flex items-start gap-2">
           <span
             aria-hidden
-            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${tone}`}
+            className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${
+              selected ? "bg-[#00a884]" : tone
+            }`}
           >
-            {initials}
+            {selected ? (
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M5 12l5 5L20 7" />
+              </svg>
+            ) : (
+              initials
+            )}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">

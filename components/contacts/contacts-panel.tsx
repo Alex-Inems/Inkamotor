@@ -2,16 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LeadImportExportButtons } from "@/components/contacts/lead-import-export";
+import { MessageSelectionBar } from "@/components/inbox/chatter-message";
 import { OdooControlPanel } from "@/components/sales/odoo-control-panel";
 import { EmptyHint, PageHeader, StatusBadge } from "@/components/ui";
 import {
   tagList,
   type ContactDetails,
 } from "@/lib/crm/contact-details";
+import { deleteLeadRecords } from "@/lib/crm/delete-leads-client";
+import { exportLeadRecords } from "@/lib/crm/lead-csv-client";
+import { useConfirm } from "@/lib/confirm";
 import { useCrm } from "@/lib/crm-store";
 import { type Lead } from "@/lib/demo-data";
 import { formatNumber } from "@/lib/format";
 import { useLocale } from "@/lib/i18n";
+import { useLongPressSelect } from "@/lib/ui/long-press-select";
 
 const PAGE_SIZE = 60;
 
@@ -112,8 +118,9 @@ function ActivityDots({ active }: { active: boolean }) {
 
 export function ContactsPanel() {
   const router = useRouter();
-  const { pushToast } = useCrm();
+  const { pushToast, refreshCrm } = useCrm();
   const { t, locale } = useLocale();
+  const confirm = useConfirm();
   const [view, setView] = useState<ViewMode>("kanban");
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ContactFilter>("all");
@@ -126,6 +133,8 @@ export function ContactsPanel() {
   const [countries, setCountries] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   const kindParam =
     filter === "person" || filter === "company" ? filter : "all";
@@ -180,6 +189,7 @@ export function ContactsPanel() {
 
   useEffect(() => {
     setPage(0);
+    setSelectedIds([]);
   }, [query, filter, country, tag, view, groupBy]);
 
   const facets = useMemo(() => {
@@ -237,98 +247,85 @@ export function ContactsPanel() {
   }, [groupBy, locale, rows]);
 
   function openContact(id: string) {
+    setSelectedIds([]);
     router.push(`/contacts/${encodeURIComponent(id)}`);
   }
 
-  function renderCard(row: ContactRow) {
-    const { lead, details } = row;
-    const name = lead.name || lead.email || "—";
-    const company = details.isCompany
-      ? ""
-      : lead.company && lead.company !== lead.name
-        ? lead.company
-        : "";
-    const badge =
-      lead.source
-        ? sourceLabel(lead.source, t)
-        : tagList(details.tags)[0] ||
-          (details.isCompany ? t("pages.contacts.company") : "");
-    const owner = lead.owner.trim();
-    const hasActivity = Boolean(
-      details.nextActivity ||
-        details.activityStatus ||
-        details.active !== false,
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((row) => row !== id) : [...prev, id],
     );
+  }
 
+  function exportFilters() {
+    return {
+      q: query,
+      stage: "all" as const,
+      country,
+      tag,
+      kind: kindParam,
+      active:
+        filter === "archived"
+          ? ("archived" as const)
+          : filter === "all"
+            ? ("all" as const)
+            : ("active" as const),
+    };
+  }
+
+  async function exportSelected() {
+    if (selectedIds.length === 0) return;
+    setExporting(true);
+    try {
+      await exportLeadRecords({
+        ids: selectedIds,
+        filename: "contacts-selected.csv",
+      });
+      pushToast({ message: t("pages.contacts.exported"), tone: "success" });
+    } catch (err) {
+      pushToast({
+        message:
+          err instanceof Error ? err.message : t("pages.contacts.exportFailed"),
+        tone: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.length === 0) return;
+    const ids = [...selectedIds];
+    const ok = await confirm({
+      title: t("pages.contacts.deleteContact"),
+      message: t("pages.contacts.deleteContactsConfirm", { n: ids.length }),
+      confirmLabel: t("common.delete"),
+      danger: true,
+      run: async () => {
+        await deleteLeadRecords(ids);
+        setRows((prev) => prev.filter((row) => !ids.includes(row.lead.id)));
+        setTotal((prev) => Math.max(0, prev - ids.length));
+        setSelectedIds([]);
+        pushToast({
+          message: t("pages.contacts.contactsDeleted", { n: ids.length }),
+          tone: "success",
+        });
+        void refreshCrm();
+      },
+    });
+    if (!ok) return;
+  }
+
+  function renderCard(row: ContactRow) {
     return (
-      <button
-        key={lead.id}
-        type="button"
-        onClick={() => openContact(lead.id)}
-        className="flex w-full flex-col overflow-hidden rounded-xl border border-line bg-panel text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow] hover:border-mute/40 hover:shadow-[0_4px_14px_-8px_rgba(0,0,0,0.2)]"
-      >
-        <span className="flex items-start gap-3 px-3.5 pt-3.5 pb-3">
-          <span
-            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white ${avatarTone(lead.name || lead.email || lead.id)}`}
-            aria-hidden
-          >
-            {initials(lead.name, lead.email)}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-start justify-between gap-2">
-              <span className="min-w-0">
-                <span className="block truncate text-[15px] font-semibold leading-snug text-ink">
-                  {name}
-                </span>
-                {company ? (
-                  <span className="mt-0.5 block truncate text-[12px] text-mute">
-                    {company}
-                  </span>
-                ) : null}
-              </span>
-              {badge ? (
-                <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,#556ee6_14%,var(--panel))] px-2.5 py-0.5 text-[11px] font-medium text-[#4458c9]">
-                  {badge}
-                </span>
-              ) : null}
-            </span>
-          </span>
-        </span>
-
-        {(lead.email || lead.phone) && (
-          <span className="space-y-1.5 border-t border-line/70 px-3.5 py-2.5">
-            {lead.email ? (
-              <span className="flex min-w-0 items-center gap-2 text-[12px] text-mute">
-                <MailIcon />
-                <span className="truncate">{lead.email}</span>
-              </span>
-            ) : null}
-            {lead.phone ? (
-              <span className="flex min-w-0 items-center gap-2 text-[12px] text-mute">
-                <PhoneIcon />
-                <span className="truncate">{lead.phone}</span>
-              </span>
-            ) : null}
-          </span>
-        )}
-
-        <span className="flex items-center justify-between gap-2 border-t border-line/70 px-3.5 py-2">
-          {owner ? (
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span
-                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white ${avatarTone(owner)}`}
-                aria-hidden
-              >
-                {initials(owner, "")}
-              </span>
-              <span className="truncate text-[12px] text-mute">{owner}</span>
-            </span>
-          ) : (
-            <span />
-          )}
-          <ActivityDots active={hasActivity} />
-        </span>
-      </button>
+      <ContactCard
+        key={row.lead.id}
+        row={row}
+        selected={selectedIds.includes(row.lead.id)}
+        selectionActive={selectedIds.length > 0}
+        onOpen={() => openContact(row.lead.id)}
+        onToggleSelect={() => toggleSelect(row.lead.id)}
+      />
     );
   }
 
@@ -348,54 +345,14 @@ export function ContactsPanel() {
           </thead>
           <tbody>
             {items.map((row) => (
-              <tr
+              <ContactListRow
                 key={row.lead.id}
-                className="cursor-pointer border-t border-line hover:bg-ash/20"
-                onClick={() => openContact(row.lead.id)}
-              >
-                <td className="px-3 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white ${avatarTone(row.lead.name || row.lead.email)}`}
-                      aria-hidden
-                    >
-                      {initials(row.lead.name, row.lead.email)}
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium text-ink">
-                        {row.lead.name || "—"}
-                      </span>
-                      {!row.details.isCompany && row.lead.company ? (
-                        <span className="block truncate text-xs text-mute">
-                          {row.lead.company}
-                        </span>
-                      ) : null}
-                    </span>
-                  </div>
-                </td>
-                <td className="truncate px-3 py-2.5 text-mute">
-                  {row.lead.email || "—"}
-                </td>
-                <td className="truncate px-3 py-2.5 text-mute">
-                  {row.lead.phone || "—"}
-                </td>
-                <td className="truncate px-3 py-2.5 text-mute">
-                  {row.details.city || "—"}
-                </td>
-                <td className="truncate px-3 py-2.5 text-mute">
-                  {row.details.country || "—"}
-                </td>
-                <td className="px-3 py-2.5">
-                  <StatusBadge
-                    tone={row.details.isCompany ? "info" : "neutral"}
-                    compact
-                  >
-                    {row.details.isCompany
-                      ? t("pages.contacts.company")
-                      : t("pages.contacts.person")}
-                  </StatusBadge>
-                </td>
-              </tr>
+                row={row}
+                selected={selectedIds.includes(row.lead.id)}
+                selectionActive={selectedIds.length > 0}
+                onOpen={() => openContact(row.lead.id)}
+                onToggleSelect={() => toggleSelect(row.lead.id)}
+              />
             ))}
           </tbody>
         </table>
@@ -445,7 +402,31 @@ export function ContactsPanel() {
 
   return (
     <div className="contacts-page">
-      <PageHeader title={t("pages.contacts.title")} />
+      {selectedIds.length > 0 ? (
+        <div className="mb-3 overflow-hidden rounded-xl">
+          <MessageSelectionBar
+            count={selectedIds.length}
+            canCopy={false}
+            exporting={exporting}
+            onClear={() => setSelectedIds([])}
+            onExport={() => void exportSelected()}
+            onDelete={() => void deleteSelected()}
+          />
+        </div>
+      ) : null}
+      <PageHeader
+        title={t("pages.contacts.title")}
+        action={
+          <LeadImportExportButtons
+            scope="contacts"
+            filters={exportFilters()}
+            onImported={() => {
+              setLoading(true);
+              void load();
+            }}
+          />
+        }
+      />
 
       <div className="mt-1 mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-mute">
@@ -549,5 +530,217 @@ export function ContactsPanel() {
         </div>
       )}
     </div>
+  );
+}
+
+function ContactCard({
+  row,
+  selected,
+  selectionActive,
+  onOpen,
+  onToggleSelect,
+}: {
+  row: ContactRow;
+  selected: boolean;
+  selectionActive: boolean;
+  onOpen: () => void;
+  onToggleSelect: () => void;
+}) {
+  const { t } = useLocale();
+  const { lead, details } = row;
+  const name = lead.name || lead.email || "—";
+  const company = details.isCompany
+    ? ""
+    : lead.company && lead.company !== lead.name
+      ? lead.company
+      : "";
+  const badge =
+    lead.source
+      ? sourceLabel(lead.source, t)
+      : tagList(details.tags)[0] ||
+        (details.isCompany ? t("pages.contacts.company") : "");
+  const owner = lead.owner.trim();
+  const hasActivity = Boolean(
+    details.nextActivity ||
+      details.activityStatus ||
+      details.active !== false,
+  );
+  const press = useLongPressSelect({ onToggle: onToggleSelect });
+
+  return (
+    <button
+      type="button"
+      ref={press.setNode}
+      aria-selected={selected}
+      onClick={() => {
+        if (press.consumeLongPress()) return;
+        if (selectionActive) {
+          onToggleSelect();
+          return;
+        }
+        onOpen();
+      }}
+      {...press.handlers}
+      className={`flex w-full flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[border-color,box-shadow,background-color] ${
+        selected
+          ? "border-[#00a884] bg-[#00a884]/12"
+          : "border-line bg-panel hover:border-mute/40 hover:shadow-[0_4px_14px_-8px_rgba(0,0,0,0.2)]"
+      }`}
+    >
+      <span className="flex items-start gap-3 px-3.5 pt-3.5 pb-3">
+        <span className="relative shrink-0">
+          {selected ? (
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#00a884] text-white">
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M5 12l5 5L20 7" />
+              </svg>
+            </span>
+          ) : (
+            <span
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-[11px] font-semibold text-white ${avatarTone(lead.name || lead.email || lead.id)}`}
+              aria-hidden
+            >
+              {initials(lead.name, lead.email)}
+            </span>
+          )}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-start justify-between gap-2">
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-semibold leading-snug text-ink">
+                {name}
+              </span>
+              {company ? (
+                <span className="mt-0.5 block truncate text-[12px] text-mute">
+                  {company}
+                </span>
+              ) : null}
+            </span>
+            {badge ? (
+              <span className="shrink-0 rounded-full bg-[color-mix(in_srgb,#556ee6_14%,var(--panel))] px-2.5 py-0.5 text-[11px] font-medium text-[#4458c9]">
+                {badge}
+              </span>
+            ) : null}
+          </span>
+        </span>
+      </span>
+
+      {(lead.email || lead.phone) && (
+        <span className="space-y-1.5 border-t border-line/70 px-3.5 py-2.5">
+          {lead.email ? (
+            <span className="flex min-w-0 items-center gap-2 text-[12px] text-mute">
+              <MailIcon />
+              <span className="truncate">{lead.email}</span>
+            </span>
+          ) : null}
+          {lead.phone ? (
+            <span className="flex min-w-0 items-center gap-2 text-[12px] text-mute">
+              <PhoneIcon />
+              <span className="truncate">{lead.phone}</span>
+            </span>
+          ) : null}
+        </span>
+      )}
+
+      <span className="flex items-center justify-between gap-2 border-t border-line/70 px-3.5 py-2">
+        {owner ? (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[8px] font-semibold text-white ${avatarTone(owner)}`}
+              aria-hidden
+            >
+              {initials(owner, "")}
+            </span>
+            <span className="truncate text-[12px] text-mute">{owner}</span>
+          </span>
+        ) : (
+          <span />
+        )}
+        <ActivityDots active={hasActivity} />
+      </span>
+    </button>
+  );
+}
+
+function ContactListRow({
+  row,
+  selected,
+  selectionActive,
+  onOpen,
+  onToggleSelect,
+}: {
+  row: ContactRow;
+  selected: boolean;
+  selectionActive: boolean;
+  onOpen: () => void;
+  onToggleSelect: () => void;
+}) {
+  const { t } = useLocale();
+  const press = useLongPressSelect({ onToggle: onToggleSelect });
+
+  return (
+    <tr
+      ref={press.setNode}
+      aria-selected={selected}
+      className={`cursor-pointer border-t border-line ${
+        selected ? "bg-[#00a884]/12" : "hover:bg-ash/20"
+      }`}
+      onClick={() => {
+        if (press.consumeLongPress()) return;
+        if (selectionActive) {
+          onToggleSelect();
+          return;
+        }
+        onOpen();
+      }}
+      {...press.handlers}
+    >
+      <td className="px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {selected ? (
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#00a884] text-white">
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="3">
+                <path d="M5 12l5 5L20 7" />
+              </svg>
+            </span>
+          ) : (
+            <span
+              className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white ${avatarTone(row.lead.name || row.lead.email)}`}
+              aria-hidden
+            >
+              {initials(row.lead.name, row.lead.email)}
+            </span>
+          )}
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-ink">
+              {row.lead.name || "—"}
+            </span>
+            {!row.details.isCompany && row.lead.company ? (
+              <span className="block truncate text-xs text-mute">
+                {row.lead.company}
+              </span>
+            ) : null}
+          </span>
+        </div>
+      </td>
+      <td className="truncate px-3 py-2.5 text-mute">{row.lead.email || "—"}</td>
+      <td className="truncate px-3 py-2.5 text-mute">{row.lead.phone || "—"}</td>
+      <td className="truncate px-3 py-2.5 text-mute">
+        {row.details.city || "—"}
+      </td>
+      <td className="truncate px-3 py-2.5 text-mute">
+        {row.details.country || "—"}
+      </td>
+      <td className="px-3 py-2.5">
+        <StatusBadge
+          tone={row.details.isCompany ? "info" : "neutral"}
+          compact
+        >
+          {row.details.isCompany
+            ? t("pages.contacts.company")
+            : t("pages.contacts.person")}
+        </StatusBadge>
+      </td>
+    </tr>
   );
 }

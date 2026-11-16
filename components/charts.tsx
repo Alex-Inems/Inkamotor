@@ -198,7 +198,7 @@ export function LineChart({
   const activeYB =
     active != null && points[active]?.b != null
       ? yB(points[active]!.b!)
-      : null;
+    : null;
 
   function indexFromClientX(clientX: number) {
     const svg = svgRef.current;
@@ -248,7 +248,7 @@ export function LineChart({
                 {" "}
                 · vs {prior!.label}
               </span>
-            </p>
+          </p>
           ) : (
             <p className="mt-2 text-sm text-mute">{latest!.label}</p>
           )}
@@ -272,12 +272,12 @@ export function LineChart({
           onPointerLeave={() => setActive(null)}
           onPointerDown={onPointerMove}
         >
-          <defs>
+        <defs>
             <linearGradient id={`area-${uid}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.38" />
               <stop offset="55%" stopColor="var(--accent)" stopOpacity="0.1" />
               <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
-            </linearGradient>
+          </linearGradient>
             <pattern
               id={`dots-${uid}`}
               width="14"
@@ -286,7 +286,7 @@ export function LineChart({
             >
               <circle cx="1" cy="1" r="1" fill="var(--line)" fillOpacity="0.55" />
             </pattern>
-          </defs>
+        </defs>
 
           <rect
             x={pad.l}
@@ -300,9 +300,9 @@ export function LineChart({
             const y = yA(tick);
             return (
               <g key={tick}>
-                <line
-                  x1={pad.l}
-                  x2={width - pad.r}
+          <line
+            x1={pad.l}
+            x2={width - pad.r}
                   y1={y}
                   y2={y}
                   stroke="var(--line)"
@@ -340,10 +340,10 @@ export function LineChart({
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeOpacity="0.9"
-            />
-          ) : null}
+          />
+        ) : null}
 
-          {points.map((p, i) => (
+        {points.map((p, i) => (
             <text
               key={p.label}
               x={xAt(i)}
@@ -399,8 +399,8 @@ export function LineChart({
               fill="transparent"
               onPointerEnter={() => setActive(i)}
             />
-          ))}
-        </svg>
+        ))}
+      </svg>
 
         {active != null && activePoint ? (
           <div
@@ -423,7 +423,7 @@ export function LineChart({
             ) : null}
           </div>
         ) : null}
-      </div>
+    </div>
     </ChartShell>
   );
 }

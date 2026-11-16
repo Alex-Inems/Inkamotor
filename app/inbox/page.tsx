@@ -924,17 +924,17 @@ export default function InboxPage() {
               {t("pages.inbox.messages")}
             </h1>
             {unreadTotal > 0 ? <CountBadge count={unreadTotal} /> : null}
-          </div>
+      </div>
         )}
 
         <div className="px-3 pt-2 sm:px-4 sm:pt-3">
-          <input
+        <input
             className="w-full rounded-full border border-line bg-ash px-3.5 py-2 text-sm outline-none placeholder:text-mute/70 focus:border-gold sm:rounded-none sm:px-3"
             placeholder={t("pages.inbox.search")}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
 
         <div className="flex gap-0 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(
@@ -961,9 +961,9 @@ export default function InboxPage() {
               },
             ] as const
           ).map((tab) => (
-            <button
+                        <button
               key={tab.id}
-              type="button"
+                          type="button"
               onClick={() => setFilter(tab.id)}
               title={
                 tab.id === "promos"
@@ -987,9 +987,9 @@ export default function InboxPage() {
               {tab.count > 0 ? (
                 <CountBadge count={tab.count} tone={tab.alert ? "gold" : "mute"} />
               ) : null}
-            </button>
-          ))}
-        </div>
+                        </button>
+                  ))}
+            </div>
 
         {conn && !conn.namecheap.ready ? (
           <p className="border-y border-line bg-gold/10 px-4 py-2 text-xs text-gold">
@@ -1102,7 +1102,7 @@ export default function InboxPage() {
                         {t("topbar.websiteForm")}
                         <span className="font-normal text-white/55"> · </span>
                       </span>
-                    ) : null}
+              ) : null}
                     {active.email}
                   </p>
                 </div>
@@ -1293,22 +1293,22 @@ export default function InboxPage() {
               className="flex h-11 w-11 shrink-0 items-center justify-center text-white/90 hover:text-white"
             >
               <BackIcon />
-            </button>
+              </button>
             <p className="min-w-0 flex-1 truncate px-2 text-[15px] font-semibold text-white">
               {t("pages.inbox.details")}
             </p>
           </div>
           <div className="hidden items-center justify-between gap-2 border-b border-line px-4 py-2.5 lg:flex">
             <p className="text-sm font-semibold">{t("pages.inbox.details")}</p>
-            <button
-              type="button"
+                <button
+                  type="button"
               aria-label={t("pages.inbox.closeDetails")}
               onClick={() => setDetailsOpen(false)}
               className="px-2 py-1 text-mute hover:text-ink"
             >
               <CloseIcon />
-            </button>
-          </div>
+                </button>
+            </div>
 
           <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
             <div className="flex items-center gap-3">
@@ -1316,7 +1316,7 @@ export default function InboxPage() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">{activeName}</p>
                 <p className="truncate text-xs text-mute">{active.email}</p>
-              </div>
+          </div>
             </div>
 
             <dl className="space-y-2 text-xs">

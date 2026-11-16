@@ -2,6 +2,7 @@ import {
   clampPriority,
   completenessScore,
   contactWriteFromLead,
+  emptyContactWrite,
   leadSearchText,
   parseLeadDetails,
   serializeContactNotes,
@@ -11,9 +12,15 @@ import {
   type ContactWrite,
   type LeadPriority,
 } from "@/lib/crm/contact-details";
+import {
+  applyCsvRowToWrite,
+  csvRowHasIdentity,
+  parseLeadSource,
+  type LeadCsvRow,
+} from "@/lib/crm/lead-csv";
 import { isValidStageId } from "@/lib/crm/pipeline";
 import { mapLead } from "@/lib/crm/repository";
-import type { Lead, LeadStatus } from "@/lib/demo-data";
+import type { Lead, LeadSource, LeadStatus } from "@/lib/demo-data";
 import { getSupabase } from "@/lib/supabase/server";
 
 export type LeadTableRow = {
@@ -35,6 +42,9 @@ export type LeadListQuery = {
   limit?: number;
   /** Balanced sample per stage for the pipeline board */
   kanban?: boolean;
+  active?: "all" | "active" | "archived";
+  highPriority?: boolean;
+  ids?: string[];
 };
 
 type CachedLead = LeadTableRow & { haystack: string };
@@ -128,6 +138,36 @@ async function buildCatalog() {
   });
 }
 
+function applyListFilters(all: CachedLead[], input: LeadListQuery) {
+  const q = input.q ? safeFilter(input.q).toLowerCase() : "";
+  const country =
+    input.country && input.country !== "all" ? input.country.trim() : "";
+  const tag =
+    input.tag && input.tag !== "all" ? input.tag.trim().toLowerCase() : "";
+  const ids = input.ids?.length
+    ? new Set(input.ids.map((id) => id.trim()).filter(Boolean))
+    : null;
+
+  return all.filter((row) => {
+    if (ids && !ids.has(row.lead.id)) return false;
+    if (input.stage && input.stage !== "all" && row.lead.status !== input.stage) {
+      return false;
+    }
+    if (country && row.details.country !== country) return false;
+    if (tag) {
+      const tags = tagList(row.details.tags).map((name) => name.toLowerCase());
+      if (!tags.includes(tag)) return false;
+    }
+    if (input.kind === "company" && !row.details.isCompany) return false;
+    if (input.kind === "person" && row.details.isCompany) return false;
+    if (input.active === "archived" && row.details.active !== false) return false;
+    if (input.active === "active" && row.details.active === false) return false;
+    if (input.highPriority && row.details.priority !== 3) return false;
+    if (q && !row.haystack.includes(q)) return false;
+    return true;
+  });
+}
+
 export async function listLeadPage(input: LeadListQuery): Promise<{
   rows: LeadTableRow[];
   total: number;
@@ -144,27 +184,9 @@ export async function listLeadPage(input: LeadListQuery): Promise<{
   const page = Math.max(input.page ?? 0, 0);
   const sort = input.sort ?? "completeness";
   const dir = input.dir === "desc" ? "desc" : "asc";
-  const q = input.q ? safeFilter(input.q).toLowerCase() : "";
-  const country =
-    input.country && input.country !== "all" ? input.country.trim() : "";
-  const tag =
-    input.tag && input.tag !== "all" ? input.tag.trim().toLowerCase() : "";
 
   const all = await loadCatalog();
-  const filtered = all.filter((row) => {
-    if (input.stage && input.stage !== "all" && row.lead.status !== input.stage) {
-      return false;
-    }
-    if (country && row.details.country !== country) return false;
-    if (tag) {
-      const tags = tagList(row.details.tags).map((name) => name.toLowerCase());
-      if (!tags.includes(tag)) return false;
-    }
-    if (input.kind === "company" && !row.details.isCompany) return false;
-    if (input.kind === "person" && row.details.isCompany) return false;
-    if (q && !row.haystack.includes(q)) return false;
-    return true;
-  });
+  const filtered = applyListFilters(all, input);
 
   filtered.sort((a, b) => compareRows(a, b, sort, dir));
 
@@ -274,6 +296,157 @@ function putCatalog(lead: Lead) {
   if (index >= 0) catalog.rows[index] = item;
   else catalog.rows.unshift(item);
   return item;
+}
+
+function dropCatalog(ids: string[]) {
+  if (!catalog || ids.length === 0) return;
+  const remove = new Set(ids);
+  catalog.rows = catalog.rows.filter((row) => !remove.has(row.lead.id));
+}
+
+export async function collectLeadsForExport(
+  input: LeadListQuery,
+): Promise<LeadTableRow[]> {
+  const all = await loadCatalog();
+  const filtered = applyListFilters(all, input);
+  const sort = input.sort ?? "name";
+  const dir = input.dir === "desc" ? "desc" : "asc";
+  filtered.sort((a, b) => compareRows(a, b, sort, dir));
+  return filtered.map(({ lead, details, score }) => ({ lead, details, score }));
+}
+
+export type LeadImportResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: { row: number; message: string }[];
+};
+
+export async function importLeadCsvRows(
+  rows: LeadCsvRow[],
+): Promise<LeadImportResult> {
+  const result: LeadImportResult = {
+    created: 0,
+    updated: 0,
+    skipped: 0,
+    errors: [],
+  };
+  if (!rows.length) return result;
+
+  const catalogRows = await loadCatalog();
+  const byId = new Map(catalogRows.map((row) => [row.lead.id, row]));
+  const byEmail = new Map<string, CachedLead>();
+  for (const row of catalogRows) {
+    const email = row.lead.email.trim().toLowerCase();
+    if (email && !byEmail.has(email)) byEmail.set(email, row);
+  }
+  const taken = new Set(byId.keys());
+  const day = new Date().toISOString().slice(0, 10);
+  const records: { row: Record<string, unknown>; created: boolean }[] = [];
+
+  rows.forEach((csv, index) => {
+    const line = index + 2;
+    if (!csvRowHasIdentity(csv)) {
+      result.skipped += 1;
+      return;
+    }
+    try {
+      const idHint = csv.id?.trim() ?? "";
+      const email = (csv.email ?? "").trim().toLowerCase();
+      const existing =
+        (idHint ? byId.get(idHint) : undefined) ??
+        (email ? byEmail.get(email) : undefined);
+      const base = existing
+        ? contactWriteFromLead(existing.lead, existing.details)
+        : emptyContactWrite();
+      const input = applyCsvRowToWrite(csv, base);
+      if (!input.name.trim()) {
+        result.errors.push({ row: line, message: "Name is required" });
+        return;
+      }
+      const leadId = existing?.lead.id ?? nextLeadId(input.email, taken);
+      taken.add(leadId);
+      const source = parseLeadSource(
+        csv.source,
+        existing?.lead.source ?? "manual",
+      ) as LeadSource;
+      const company = companyForWrite(input);
+      const preamble = /Imported from (Odoo )?contacts\./.test(
+        existing?.lead.notes ?? "",
+      )
+        ? "Imported from contacts."
+        : existing
+          ? ""
+          : "Imported from CSV.";
+      const notes = serializeContactNotes(input, day, preamble);
+      const record = {
+        id: leadId,
+        name: input.name.trim(),
+        email: input.email.trim().toLowerCase(),
+        phone: input.phone.trim(),
+        company,
+        source,
+        status: input.status,
+        value:
+          typeof input.value === "number" && Number.isFinite(input.value)
+            ? Math.max(0, input.value)
+            : (existing?.lead.value ?? 0),
+        currency: "USD",
+        owner: existing?.lead.owner ?? "Team",
+        created_at: existing?.lead.createdAt ?? day,
+        last_contact: day,
+        notes,
+      };
+      records.push({ row: record, created: !existing });
+      const cachedLead: Lead = {
+        id: leadId,
+        name: record.name,
+        email: record.email,
+        phone: record.phone,
+        company,
+        source,
+        status: record.status,
+        value: record.value,
+        currency: "USD",
+        owner: record.owner,
+        createdAt: record.created_at,
+        lastContact: day,
+        notes,
+      };
+      const cached = cachedFromLead(cachedLead);
+      byId.set(leadId, cached);
+      if (cachedLead.email) byEmail.set(cachedLead.email, cached);
+    } catch (err) {
+      result.errors.push({
+        row: line,
+        message: err instanceof Error ? err.message : "Could not import row",
+      });
+    }
+  });
+
+  const sb = getSupabase();
+  const chunk = 200;
+  for (let i = 0; i < records.length; i += chunk) {
+    const batch = records.slice(i, i + chunk).map((item) => item.row);
+    const { error } = await sb.from("leads").upsert(batch, { onConflict: "id" });
+    if (error) throw new Error(error.message);
+  }
+  for (const item of records) {
+    if (item.created) result.created += 1;
+    else result.updated += 1;
+  }
+  catalog = null;
+  return result;
+}
+
+export async function deleteLeads(ids: string[]): Promise<string[]> {
+  const unique = [...new Set(ids.map((id) => id.trim()).filter(Boolean))];
+  if (!unique.length) return [];
+  const sb = getSupabase();
+  const { error } = await sb.from("leads").delete().in("id", unique);
+  if (error) throw new Error(error.message);
+  dropCatalog(unique);
+  return unique;
 }
 
 function nextLeadId(email: string, ids: Set<string>) {

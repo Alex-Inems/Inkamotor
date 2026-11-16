@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LEAD_FORM_DRAFT_KEY } from "@/components/contacts/contact-detail";
+import { LeadImportExportButtons } from "@/components/contacts/lead-import-export";
+import { MessageSelectionBar } from "@/components/inbox/chatter-message";
 import { BulkQuoteByTagModal } from "@/components/sales/bulk-quote-by-tag-modal";
 import { OdooControlPanel } from "@/components/sales/odoo-control-panel";
 import {
@@ -29,12 +31,15 @@ import {
   writePipelineToStorage,
   type PipelineStage,
 } from "@/lib/crm/pipeline";
+import { deleteLeadRecords } from "@/lib/crm/delete-leads-client";
+import { exportLeadRecords } from "@/lib/crm/lead-csv-client";
 import { useConfirm } from "@/lib/confirm";
 import { useCrm } from "@/lib/crm-store";
 import { type Lead, type LeadStatus } from "@/lib/demo-data";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
-import { useLocale } from "@/lib/i18n";
+import { useLocale, type Locale } from "@/lib/i18n";
 import { leadTone } from "@/lib/status";
+import { useLongPressSelect } from "@/lib/ui/long-press-select";
 
 const PAGE_SIZE = 75;
 const KANBAN_LIMIT = 600;
@@ -44,7 +49,7 @@ type SortKey = "completeness" | "name" | "email" | "updated";
 
 export default function LeadsPage() {
   const router = useRouter();
-  const { pushToast } = useCrm();
+  const { pushToast, refreshCrm } = useCrm();
   const { t, locale } = useLocale();
   const confirm = useConfirm();
   const [view, setView] = useState<ViewMode>("kanban");
@@ -71,6 +76,8 @@ export default function LeadsPage() {
   const [dropStage, setDropStage] = useState<LeadStatus | null>(null);
   const [movingId, setMovingId] = useState<string | null>(null);
   const [activityRow, setActivityRow] = useState<LeadRow | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   const stageIds = useMemo(() => pipeline.map((s) => s.id), [pipeline]);
 
@@ -198,7 +205,80 @@ export default function LeadsPage() {
   }, [priorityFilter, rows]);
 
   function openLead(row: LeadRow) {
+    setSelectedIds([]);
     router.push(`/leads/${encodeURIComponent(row.lead.id)}`);
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((row) => row !== id) : [...prev, id],
+    );
+  }
+
+  function exportFilters() {
+    return {
+      q: query,
+      stage: view === "list" ? stage : "all",
+      country,
+      tag,
+      kind,
+      highPriority: priorityFilter,
+    };
+  }
+
+  async function exportSelected() {
+    if (selectedIds.length === 0) return;
+    setExporting(true);
+    try {
+      await exportLeadRecords({
+        ids: selectedIds,
+        filename: "leads-selected.csv",
+      });
+      pushToast({ message: t("pages.leads.exported"), tone: "success" });
+    } catch (err) {
+      pushToast({
+        message: err instanceof Error ? err.message : t("pages.leads.exportFailed"),
+        tone: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function deleteSelected() {
+    if (selectedIds.length === 0) return;
+    const ids = [...selectedIds];
+    const ok = await confirm({
+      title: t("pages.leads.deleteLead"),
+      message: t("pages.leads.deleteLeadsConfirm", { n: ids.length }),
+      confirmLabel: t("common.delete"),
+      danger: true,
+      run: async () => {
+        await deleteLeadRecords(ids);
+        const remove = new Set(ids);
+        setRows((prev) => {
+          const next = prev.filter((row) => !remove.has(row.lead.id));
+          setStageTotals((counts) => {
+            const copy = { ...counts };
+            for (const row of prev) {
+              if (!remove.has(row.lead.id)) continue;
+              const status = row.lead.status;
+              copy[status] = Math.max(0, (copy[status] ?? 0) - 1);
+            }
+            return copy;
+          });
+          return next;
+        });
+        setTotal((prev) => Math.max(0, prev - ids.length));
+        setSelectedIds([]);
+        pushToast({
+          message: t("pages.leads.leadsDeleted", { n: ids.length }),
+          tone: "success",
+        });
+        void refreshCrm();
+      },
+    });
+    if (!ok) return;
   }
 
   const byStage = useMemo(() => {
@@ -405,8 +485,8 @@ export default function LeadsPage() {
       input.email.trim();
     pushToast({
       message: t("toast.leadAdded", { name: label }),
-      tone: "success",
-    });
+        tone: "success",
+      });
     await load();
     return true;
   }
@@ -517,18 +597,40 @@ export default function LeadsPage() {
 
   return (
     <div>
+      {selectedIds.length > 0 ? (
+        <div className="mb-3 overflow-hidden rounded-xl">
+          <MessageSelectionBar
+            count={selectedIds.length}
+            canCopy={false}
+            exporting={exporting}
+            onClear={() => setSelectedIds([])}
+            onExport={() => void exportSelected()}
+            onDelete={() => void deleteSelected()}
+          />
+        </div>
+      ) : null}
       <PageHeader
         title={t("pages.leads.title")}
         description={t("pages.leads.pipelineDescription", { n: shownTotal })}
         action={
-          <button
-            type="button"
-            className={btnSecondary}
-            disabled={tags.length === 0}
-            onClick={() => setBulkQuoteOpen(true)}
-          >
-            {t("pages.sales.bulkQuoteTitle")}
-          </button>
+          <>
+            <LeadImportExportButtons
+              scope="leads"
+              filters={exportFilters()}
+              onImported={() => {
+                setLoading(true);
+                void load();
+              }}
+            />
+            <button
+              type="button"
+              className={btnSecondary}
+              disabled={tags.length === 0}
+              onClick={() => setBulkQuoteOpen(true)}
+            >
+              {t("pages.sales.bulkQuoteTitle")}
+            </button>
+          </>
         }
       />
 
@@ -656,10 +758,12 @@ export default function LeadsPage() {
                 onAddStage={addStage}
                 onDeleteStage={(stageRow) => void deleteStage(stageRow)}
                 onScheduleActivity={setActivityRow}
+                selectedIds={selectedIds}
+                onToggleSelect={toggleSelect}
               />
             </>
           )}
-        </div>
+                    </div>
       ) : (
         <div className="mt-4 border border-line bg-panel">
           <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
@@ -669,7 +773,7 @@ export default function LeadsPage() {
                 total: shownTotal,
               })}
             </h2>
-          </div>
+                    </div>
           <div className="px-4 py-4 sm:px-5 sm:py-5">
             {loading && visibleRows.length === 0 ? (
               <EmptyHint>{t("common.loading")}</EmptyHint>
@@ -687,7 +791,10 @@ export default function LeadsPage() {
                       key={row.lead.id}
                       lead={row.lead}
                       details={row.details}
+                      selected={selectedIds.includes(row.lead.id)}
+                      selectionActive={selectedIds.length > 0}
                       onOpen={() => openLead(row)}
+                      onToggleSelect={() => toggleSelect(row.lead.id)}
                       stageLabelShort={stageLabelShort}
                     />
                   ))}
@@ -722,86 +829,25 @@ export default function LeadsPage() {
                         />
                         <th>{t("pages.leads.nextActivity")}</th>
                         <th>{t("pages.leads.stage")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  </tr>
+                </thead>
+                <tbody>
                       {visibleRows.map(({ lead, details }) => (
-                        <tr
-                          key={lead.id}
-                          className="cursor-pointer"
-                          onClick={() => openLead({ lead, details })}
-                        >
-                          <td className="font-medium">{lead.name || "—"}</td>
-                          <td>
-                            {lead.email ? (
-                              <a
-                                href={`mailto:${lead.email}`}
-                                className="text-sand hover:text-gold"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {lead.email}
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap">
-                            {lead.phone ? (
-                              <a
-                                href={`tel:${lead.phone}`}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {lead.phone}
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td>{lead.company || "—"}</td>
-                          <td className="whitespace-nowrap">
-                            {lead.value
-                              ? formatMoney(lead.value, lead.currency, false, locale)
-                              : "—"}
-                          </td>
-                          <td>{details.city || "—"}</td>
-                          <td>{details.country || "—"}</td>
-                          <td>
-                            {details.tags ? (
-                              <span className="flex flex-wrap gap-1">
-                                {tagList(details.tags).map((tagItem) => (
-                                  <span
-                                    key={tagItem}
-                                    className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sand"
-                                  >
-                                    {tagItem}
-                                  </span>
-                                ))}
-                              </span>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td className="whitespace-nowrap text-mute">
-                            {formatDate(
-                              (details.updated || lead.lastContact).slice(0, 10),
-                              locale,
-                            )}
-                          </td>
-                          <td className="max-w-[14rem]">
-                            <span className="line-clamp-2">
-                              {details.nextActivity || details.activityStatus || "—"}
-                            </span>
-                          </td>
-                          <td>
-                            <StatusBadge compact tone={leadTone(lead.status)}>
-                              {stageLabelShort(lead.status)}
-                            </StatusBadge>
-                          </td>
-                        </tr>
+                      <LeadTableRow
+                        key={lead.id}
+                        lead={lead}
+                        details={details}
+                        selected={selectedIds.includes(lead.id)}
+                        selectionActive={selectedIds.length > 0}
+                        onOpen={() => openLead({ lead, details })}
+                        onToggleSelect={() => toggleSelect(lead.id)}
+                        stageLabelShort={stageLabelShort}
+                        locale={locale}
+                      />
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                </tbody>
+              </table>
+            </div>
                 <div className="mt-4 flex flex-col gap-3 text-sm text-mute sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                   <p>
                     {t("pages.leads.pageOf", {
@@ -811,28 +857,28 @@ export default function LeadsPage() {
                     })}
                   </p>
                   <div className="grid grid-cols-2 gap-2 sm:flex">
-                    <button
-                      type="button"
-                      className={btnSecondary}
+                        <button
+                          type="button"
+                          className={btnSecondary}
                       disabled={page === 0}
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    >
+                        >
                       {t("common.back")}
-                    </button>
-                    <button
-                      type="button"
+                        </button>
+                          <button
+                            type="button"
                       className={btnSecondary}
                       disabled={page >= pageCount - 1}
                       onClick={() => setPage((p) => p + 1)}
                     >
                       {t("pages.leads.nextPage")}
-                    </button>
-                  </div>
-                </div>
-              </>
+                          </button>
+                      </div>
+          </div>
+        </>
             )}
           </div>
-        </div>
+                </div>
       )}
 
       <BulkQuoteByTagModal
@@ -854,31 +900,52 @@ export default function LeadsPage() {
         }
         relatedType="lead"
         relatedId={activityRow?.lead.id ?? ""}
-      />
-    </div>
+            />
+          </div>
   );
 }
 
 function ListCard({
   lead,
   details,
+  selected,
+  selectionActive,
   onOpen,
+  onToggleSelect,
   stageLabelShort,
 }: {
   lead: Lead;
   details: ContactDetails;
+  selected: boolean;
+  selectionActive: boolean;
   onOpen: () => void;
+  onToggleSelect: () => void;
   stageLabelShort: (id: string) => string;
 }) {
   const { t, locale } = useLocale();
   const tags = tagList(details.tags);
+  const press = useLongPressSelect({ onToggle: onToggleSelect });
 
   return (
     <article>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="w-full border border-line bg-canvas px-3.5 py-3 text-left transition-colors active:bg-ash"
+            <button
+              type="button"
+        ref={press.setNode}
+        aria-selected={selected}
+        onClick={() => {
+          if (press.consumeLongPress()) return;
+          if (selectionActive) {
+            onToggleSelect();
+            return;
+          }
+          onOpen();
+        }}
+        {...press.handlers}
+        className={`w-full border px-3.5 py-3 text-left transition-colors ${
+          selected
+            ? "border-[#00a884] bg-[#00a884]/12"
+            : "border-line bg-canvas active:bg-ash"
+        }`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -916,10 +983,113 @@ function ListCard({
                 {tagItem}
               </span>
             ))}
-          </div>
-        ) : null}
-      </button>
+            </div>
+              ) : null}
+              </button>
     </article>
+  );
+}
+
+function LeadTableRow({
+  lead,
+  details,
+  selected,
+  selectionActive,
+  onOpen,
+  onToggleSelect,
+  stageLabelShort,
+  locale,
+}: {
+  lead: Lead;
+  details: ContactDetails;
+  selected: boolean;
+  selectionActive: boolean;
+  onOpen: () => void;
+  onToggleSelect: () => void;
+  stageLabelShort: (id: string) => string;
+  locale: Locale;
+}) {
+  const press = useLongPressSelect({ onToggle: onToggleSelect });
+
+  return (
+    <tr
+      ref={press.setNode}
+      aria-selected={selected}
+      className={`cursor-pointer ${selected ? "bg-[#00a884]/12" : ""}`}
+      onClick={() => {
+        if (press.consumeLongPress()) return;
+        if (selectionActive) {
+          onToggleSelect();
+          return;
+        }
+        onOpen();
+      }}
+      {...press.handlers}
+    >
+      <td className="font-medium">{lead.name || "—"}</td>
+      <td>
+        {lead.email ? (
+          <a
+            href={`mailto:${lead.email}`}
+            className="text-sand hover:text-gold"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {lead.email}
+          </a>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td className="whitespace-nowrap">
+        {lead.phone ? (
+          <a href={`tel:${lead.phone}`} onClick={(e) => e.stopPropagation()}>
+            {lead.phone}
+          </a>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td>{lead.company || "—"}</td>
+      <td className="whitespace-nowrap">
+        {lead.value
+          ? formatMoney(lead.value, lead.currency, false, locale)
+          : "—"}
+      </td>
+      <td>{details.city || "—"}</td>
+      <td>{details.country || "—"}</td>
+      <td>
+        {details.tags ? (
+          <span className="flex flex-wrap gap-1">
+            {tagList(details.tags).map((tagItem) => (
+              <span
+                key={tagItem}
+                className="bg-ash px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sand"
+              >
+                {tagItem}
+              </span>
+            ))}
+          </span>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td className="whitespace-nowrap text-mute">
+        {formatDate(
+          (details.updated || lead.lastContact).slice(0, 10),
+          locale,
+        )}
+      </td>
+      <td className="max-w-[14rem]">
+        <span className="line-clamp-2">
+          {details.nextActivity || details.activityStatus || "—"}
+        </span>
+      </td>
+      <td>
+        <StatusBadge compact tone={leadTone(lead.status)}>
+          {stageLabelShort(lead.status)}
+        </StatusBadge>
+      </td>
+    </tr>
   );
 }
 
@@ -936,14 +1106,14 @@ function SortHead({
 }) {
   return (
     <th>
-      <button
-        type="button"
+                <button
+                  type="button"
         onClick={onClick}
         className={`uppercase tracking-[0.12em] ${active ? "text-gold" : "text-mute"}`}
       >
         {label}
         {active ? (dir === "asc" ? " ↑" : " ↓") : ""}
-      </button>
+                </button>
     </th>
   );
 }
