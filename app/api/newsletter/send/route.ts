@@ -4,6 +4,10 @@ import {
   sendCampaignWaves,
   sendTransactionalEmail,
 } from "@/lib/brevo";
+import {
+  listSendableAudienceEmails,
+  listTomorrowPriorityEmails,
+} from "@/lib/crm/subscribers";
 import { wrapCampaignHtml } from "@/lib/newsletter/html";
 import { DAILY_NEWSLETTER_CAP } from "@/lib/newsletter/waves";
 
@@ -16,6 +20,9 @@ type Body = {
   htmlContent?: string;
   previewText?: string;
   emails?: string[];
+  /** Resolve recipients on the server so the client never posts thousands of emails. */
+  audience?: "all" | "tag" | "picked";
+  tag?: string;
   scheduledAt?: string;
   /** If true, send as one transactional email to `toEmail` instead of a campaign */
   transactional?: boolean;
@@ -80,7 +87,12 @@ export async function POST(request: Request) {
       return Response.json({ ok: true, mode: "transactional" });
     }
 
-    const emails = cleanEmails(body.emails);
+    let emails = cleanEmails(body.emails);
+    if (body.audience === "all" || body.audience === "tag") {
+      emails = await listSendableAudienceEmails(
+        body.audience === "tag" ? body.tag : null,
+      );
+    }
     if (emails.length === 0) {
       return jsonError(400, {
         error: "Select at least one recipient.",
@@ -95,6 +107,8 @@ export async function POST(request: Request) {
       previewText: body.previewText,
       emails,
       origin: new URL(request.url).origin,
+      tomorrowFirst:
+        body.audience === "all" ? await listTomorrowPriorityEmails() : [],
       firstAtLocal: body.scheduledAt?.trim() || undefined,
     });
     return Response.json({

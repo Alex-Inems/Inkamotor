@@ -5,6 +5,7 @@ import { unsubscribeLink } from "@/lib/newsletter/unsubscribe";
 import {
   addDays,
   chunkEmails,
+  orderForTomorrowPriority,
   waveCampaignName,
 } from "@/lib/newsletter/waves";
 
@@ -349,6 +350,69 @@ export async function importContactsToList(
 
 const CAMPAIGN_PAGE = 50;
 
+export async function getBrevoCampaign(id: number) {
+  return brevo<BrevoCampaign>(
+    `/emailCampaigns/${id}?statistics=globalStats`,
+  );
+}
+
+export function campaignListIds(campaign: BrevoCampaign): number[] {
+  const recipients = campaign.recipients as
+    | {
+        listIds?: number[];
+        lists?: Array<number | { id?: number }>;
+      }
+    | undefined;
+  if (!recipients) return [];
+  if (Array.isArray(recipients.listIds) && recipients.listIds.length) {
+    return recipients.listIds.filter((id) => Number.isFinite(id));
+  }
+  if (Array.isArray(recipients.lists)) {
+    return recipients.lists
+      .map((row) => (typeof row === "number" ? row : Number(row?.id)))
+      .filter((id) => Number.isFinite(id));
+  }
+  return [];
+}
+
+export async function listBrevoListEmails(listId: number): Promise<string[]> {
+  const emails: string[] = [];
+  const limit = 500;
+  let offset = 0;
+  for (;;) {
+    const data = await brevo<{ contacts?: { email?: string }[] }>(
+      `/contacts/lists/${listId}/contacts?limit=${limit}&offset=${offset}`,
+    );
+    const batch = data?.contacts ?? [];
+    for (const row of batch) {
+      const email = String(row.email ?? "")
+        .trim()
+        .toLowerCase();
+      if (email.includes("@")) emails.push(email);
+    }
+    if (batch.length < limit) break;
+    offset += limit;
+    if (offset > 8000) break;
+  }
+  return [...new Set(emails)];
+}
+
+export async function setCampaignRecipientEmails(
+  campaignId: number,
+  emails: string[],
+) {
+  const listId = await createBrevoList(
+    `wave ${campaignId} ${new Date().toISOString().slice(0, 16).replace("T", " ")}`,
+  );
+  await addEmailsToList(listId, emails);
+  await waitForListCount(listId, emails.length);
+  await brevo(`/emailCampaigns/${campaignId}`, {
+    method: "PUT",
+    body: JSON.stringify({ recipients: { listIds: [listId] } }),
+  });
+  return listId;
+}
+
 export async function listBrevoCampaigns() {
   const campaigns: BrevoCampaign[] = [];
   let offset = 0;
@@ -496,6 +560,7 @@ async function waitForListCount(listId: number, expected: number) {
     await sleep(delay);
     delay = Math.min(4000, delay + 250);
   }
+  if (last > 0) return last;
   throw new Error(
     `Only ${last} of ${expected} people were added in Brevo. Try again in a minute.`,
   );
@@ -621,10 +686,15 @@ export async function sendCampaignWaves(input: {
   previewText?: string;
   emails: string[];
   origin: string;
+  /** Put these addresses on tomorrow’s wave (after today’s cap). */
+  tomorrowFirst?: string[];
   /** datetime-local for the first wave. Omit to send wave 1 now. */
   firstAtLocal?: string;
 }) {
-  const chunks = chunkEmails(input.emails);
+  const ordered = input.tomorrowFirst?.length
+    ? orderForTomorrowPriority(input.emails, input.tomorrowFirst)
+    : input.emails;
+  const chunks = chunkEmails(ordered);
   if (chunks.length === 0) {
     throw new Error("Select at least one recipient.");
   }
@@ -642,24 +712,15 @@ export async function sendCampaignWaves(input: {
     for (let i = 0; i < chunks.length; i++) {
       const emails = chunks[i]!;
       const sendNow = i === 0 && !input.firstAtLocal;
-      if (sendNow) {
-        await sendNewsletterSmtp({
-          subject: input.subject,
-          htmlContent: input.htmlContent,
-          textContent: input.previewText,
-          emails,
-          origin: input.origin,
-        });
-        results.push({ id: 0, scheduled: false, recipients: emails.length });
-        continue;
-      }
       const created = await createAndSendCampaign({
         name: waveCampaignName(baseName, i + 1, total),
         subject: input.subject,
         htmlContent: input.htmlContent,
         previewText: input.previewText,
         emails,
-        scheduledAt: formatBrevoUtc(addDays(firstAt, i)),
+        scheduledAt: sendNow
+          ? undefined
+          : formatBrevoUtc(addDays(firstAt, i)),
       });
       results.push({
         id: created.id,
@@ -755,15 +816,18 @@ export function mapBrevoCampaign(c: BrevoCampaign) {
   const list = c.statistics?.campaignStats?.[0];
   const delivered = stats?.delivered || list?.delivered || 0;
   const raw = (c.status || "draft").toLowerCase().replace(/[_-]/g, "");
+  const scheduledAt = c.scheduledAt ?? null;
+  const future =
+    Boolean(scheduledAt) && Date.parse(scheduledAt) > Date.now() + 60_000;
   const status =
-    raw.includes("archive") || raw.includes("suspend") || raw.includes("cancel")
-      ? "archived"
-      : c.sentDate || delivered > 0 || raw === "sent"
-        ? "sent"
-        : raw.includes("queue") || raw.includes("process") || raw.includes("review")
-          ? "sending"
-          : raw.includes("schedule")
-            ? "scheduled"
+    c.sentDate || delivered > 0 || raw === "sent"
+      ? "sent"
+      : future || raw.includes("schedule")
+        ? "scheduled"
+        : raw.includes("archive") || raw.includes("suspend") || raw.includes("cancel")
+          ? "archived"
+          : raw.includes("queue") || raw.includes("process") || raw.includes("review")
+            ? "sending"
             : "draft";
 
   return {

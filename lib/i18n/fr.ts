@@ -1395,6 +1395,13 @@ export const fr: Messages = {
       colClickedShort: "Clic",
       colRepliedShort: "Rép.",
       sentSummary: "{count} emails ont été envoyés.",
+      waveProgress: "Vague {current} sur {total} · {sent} / {n} envoyés",
+      waveTomorrow:
+        "Demain ({date}) : {n} personnes, contacts Barcelonnette en premier",
+      waveNext: "Ensuite : {date} · vague {i}/{total} · {n} personnes",
+      wavePriorityOk:
+        "La vague de demain place d’abord les contacts tagués Barcelonnette.",
+      wavePriorityFailed: "Impossible de réordonner la vague de demain",
       colUpdated: "Mis à jour",
       colStatus: "Statut",
       colAudience: "Audience",
@@ -1439,6 +1446,10 @@ export const fr: Messages = {
       recipientsClear: "Effacer",
       recipientsNone: "Aucun abonné ne correspond.",
       needRecipients: "Choisissez au moins un destinataire.",
+      sendAllConfirm:
+        "Envoyer ce mailing à {n} contacts ? Les {cap} premiers partent maintenant ; le reste suit par vagues quotidiennes.",
+      sendAgainConfirm:
+        "Ce mailing est déjà marqué comme envoyé. L’envoyer à nouveau à l’audience choisie ?",
       sendingNow: "Envoi à {n} personnes…",
       sentOk: "Envoyé à {n} personnes.",
       scheduledOk: "Planifié pour {n} personnes.",

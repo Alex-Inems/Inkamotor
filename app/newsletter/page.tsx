@@ -626,7 +626,10 @@ function NewsletterPageInner() {
 
   const sent = campaigns.filter((c) => c.status === "sent");
   const pendingWaves = hasScheduledWaves(campaigns);
-  const selectedCount = selectedEmails.length;
+  const selectedCount =
+    recipientTag === "all" && selectedEmails.length === 0
+      ? sendable.length
+      : selectedEmails.length;
   const daysNeeded = waveCount(selectedCount);
   const multiDay = isMultiDaySend(selectedCount);
   const avgOpen =
@@ -647,7 +650,13 @@ function NewsletterPageInner() {
       });
       return;
     }
-    if (selectedEmails.length === 0) {
+    const outgoing =
+      recipientTag === "all"
+        ? selectedEmails.length > 0
+          ? selectedEmails
+          : sendable.map((s) => s.email)
+        : selectedEmails;
+    if (outgoing.length === 0) {
       setComposerNotice({
         tone: "error",
         title: t("pages.newsletter.needRecipient"),
@@ -663,7 +672,7 @@ function NewsletterPageInner() {
     }
     setComposerNotice({
       tone: "info",
-      title: t("pages.newsletter.sendingInForm", { n: selectedEmails.length }),
+      title: t("pages.newsletter.sendingInForm", { n: outgoing.length }),
     });
     setSending(true);
     try {
@@ -678,7 +687,9 @@ function NewsletterPageInner() {
       subject: form.subject.trim(),
           previewText: form.preview.trim(),
           htmlContent: html,
-          emails: selectedEmails,
+          audience: recipientTag === "all" ? "all" : "picked",
+          tag: recipientTag !== "all" ? recipientTag : undefined,
+          emails: recipientTag === "all" ? undefined : outgoing,
           scheduledAt: when === "later" ? scheduleAt : undefined,
         }),
       });
@@ -692,7 +703,7 @@ function NewsletterPageInner() {
       }
       const days = Number((json as { days?: number }).days ?? 1);
       const n = Number(
-        (json as { recipients?: number }).recipients ?? selectedEmails.length,
+        (json as { recipients?: number }).recipients ?? outgoing.length,
       );
       const scheduled = Boolean((json as { scheduled?: boolean }).scheduled);
       const title =
@@ -1230,7 +1241,10 @@ function NewsletterPageInner() {
                     onChange={(e) => {
                       const next = e.target.value;
                       setRecipientTag(next);
-                      if (next === "all") return;
+                      if (next === "all") {
+                        setSelectedEmails([]);
+                        return;
+                      }
                       const want = next.toLowerCase();
                       const emails = sendable
                         .filter((s) =>
@@ -1350,7 +1364,12 @@ function NewsletterPageInner() {
                 <button
                   type="submit"
                   className={btnPrimary}
-                  disabled={sending || selectedEmails.length === 0}
+                  disabled={
+                    sending ||
+                    (recipientTag === "all"
+                      ? sendable.length === 0
+                      : selectedEmails.length === 0)
+                  }
                 >
                   {sending
                     ? t("common.sending")

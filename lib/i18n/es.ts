@@ -1394,6 +1394,13 @@ export const es: Messages = {
       colClickedShort: "Clic",
       colRepliedShort: "Resp.",
       sentSummary: "Se enviaron {count} emails.",
+      waveProgress: "Oleada {current} de {total} · {sent} de {n} enviados",
+      waveTomorrow:
+        "Mañana ({date}): {n} personas, contactos Barcelonnette primero",
+      waveNext: "Siguiente: {date} · oleada {i}/{total} · {n} personas",
+      wavePriorityOk:
+        "La oleada de mañana pone primero a los contactos con etiqueta Barcelonnette.",
+      wavePriorityFailed: "No se pudo reordenar la oleada de mañana",
       colUpdated: "Actualizado",
       colStatus: "Estado",
       colAudience: "Audiencia",
@@ -1438,6 +1445,10 @@ export const es: Messages = {
       recipientsClear: "Limpiar",
       recipientsNone: "Ningún suscriptor coincide.",
       needRecipients: "Elige al menos un destinatario.",
+      sendAllConfirm:
+        "¿Enviar este mailing a {n} contactos? Los primeros {cap} salen ahora; el resto sigue en oleadas diarias.",
+      sendAgainConfirm:
+        "Este mailing ya está marcado como enviado. ¿Enviarlo de nuevo a la audiencia elegida?",
       sendingNow: "Enviando a {n} personas…",
       sentOk: "Enviado a {n} personas.",
       scheduledOk: "Programado para {n} personas.",

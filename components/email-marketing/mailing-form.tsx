@@ -52,6 +52,7 @@ import {
   pullOrphansIntoMainContent,
   findMainContentEl,
 } from "@/lib/newsletter/html";
+import { DAILY_NEWSLETTER_CAP } from "@/lib/newsletter/waves";
 
 type Template = {
   id: string;
@@ -65,6 +66,24 @@ type Template = {
 type Subscriber = {
   email: string;
   tags?: string[];
+  blocked?: boolean;
+};
+
+type WaveProgress = {
+  currentWave: number;
+  totalWaves: number;
+  sentPeople: number;
+  totalPeople: number;
+  nextAt: string | null;
+  nextIndex: number | null;
+  tomorrowPriority?: number;
+  waves: {
+    index: number;
+    status: string;
+    scheduledAt: string | null;
+    recipients: number;
+    tomorrowPriority: boolean;
+  }[];
 };
 
 type FormTab = "body" | "settings";
@@ -553,6 +572,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [sendingBusy, setSendingBusy] = useState(false);
+  const [waveProgress, setWaveProgress] = useState<WaveProgress | null>(null);
   const [mailing, setMailing] = useState<NewsletterMailing | null>(null);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
@@ -648,16 +669,18 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         }
         const row = json.mailing;
         setMailing(row);
+        const storedEmails = (row.emails ?? [])
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean);
+        const hugeList = storedEmails.length > 200;
         setForm({
           name: row.name,
           subject: row.subject,
           preview: row.preview,
           html: pullOrphansIntoMainContent(row.html || ""),
           status: row.status,
-          recipientTag: row.emails?.length ? "" : row.recipientTag ?? "",
-          recipientEmails: (row.emails ?? [])
-            .map((e) => e.trim().toLowerCase())
-            .filter(Boolean),
+          recipientTag: hugeList || !storedEmails.length ? row.recipientTag ?? "" : "",
+          recipientEmails: hugeList ? [] : storedEmails,
           templateId: row.templateId ?? "",
           responsible: isGenericActorName(row.responsible)
             ? sessionUser.firstName ||
@@ -666,7 +689,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
               "Team"
             : row.responsible || "Team",
         });
-        setPickingPeople((row.emails?.length ?? 0) > 0);
+        setPickingPeople(!hugeList && storedEmails.length > 0);
         setEditorKey(`${row.id}-${Date.now()}`);
         if (row.scheduledAt) {
           const d = new Date(row.scheduledAt);
@@ -711,6 +734,58 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     void load();
   }, [load]);
 
+  const refreshWaves = useCallback(
+    async (opts?: { prioritize?: boolean }) => {
+      if (isNew) return;
+      const path = `/api/newsletter/waves?mailingId=${encodeURIComponent(mailingId)}`;
+      const res = await fetch(path);
+      const json = (await res.json()) as WaveProgress & { error?: string };
+      if (!res.ok) {
+        if (opts?.prioritize) {
+          pushToast({
+            message: json.error || t("pages.emailMarketing.wavePriorityFailed"),
+            tone: "error",
+          });
+        }
+        return;
+      }
+      setWaveProgress(json);
+      const next = json.waves?.find((wave) => wave.status === "scheduled");
+      if (!opts?.prioritize || !next || next.tomorrowPriority) return;
+      const post = await fetch("/api/newsletter/waves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mailingId }),
+      });
+      const body = (await post.json()) as WaveProgress & { error?: string };
+      if (!post.ok) {
+        pushToast({
+          message: body.error || t("pages.emailMarketing.wavePriorityFailed"),
+          tone: "error",
+        });
+        return;
+      }
+      setWaveProgress(body);
+      pushToast({
+        message: t("pages.emailMarketing.wavePriorityOk"),
+        tone: "success",
+      });
+    },
+    [isNew, mailingId, pushToast, t],
+  );
+
+  useEffect(() => {
+    if (isNew) return;
+    if (
+      form.status !== "sent" &&
+      form.status !== "sending" &&
+      form.status !== "in_queue"
+    ) {
+      return;
+    }
+    void refreshWaves();
+  }, [form.status, isNew, refreshWaves]);
+
   useEffect(() => {
     if (!bodyDirty) return;
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -721,20 +796,27 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [bodyDirty]);
 
+  const sendableSubscribers = useMemo(
+    () => subscribers.filter((s) => !s.blocked),
+    [subscribers],
+  );
+
+  const pickedAudience = pickingPeople || form.recipientEmails.length > 0;
+
   const audienceCount = useMemo(() => {
-    if (pickingPeople || form.recipientEmails.length > 0) {
+    if (pickedAudience) {
       return form.recipientEmails.length;
     }
-    if (!form.recipientTag) return subscribers.length;
+    if (!form.recipientTag) return sendableSubscribers.length;
     const tag = form.recipientTag.toLowerCase();
-    return subscribers.filter((s) =>
+    return sendableSubscribers.filter((s) =>
       (s.tags ?? []).some((x) => x.toLowerCase() === tag),
     ).length;
   }, [
-    subscribers,
+    sendableSubscribers,
     form.recipientTag,
     form.recipientEmails,
-    pickingPeople,
+    pickedAudience,
   ]);
 
   const sortedSubscribers = useMemo(
@@ -777,10 +859,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       : linkedTemplate?.name) || "";
   const isInTemplates = Boolean(linkedTemplate);
 
-  /** Can't send/schedule again once already sent or mid-send. */
-  const sendLocked = form.status === "sent" || form.status === "sending";
-  /** Body/images stay editable on sent mailings so you can tweak & re-use. */
-  const contentLocked = form.status === "sending";
+  /** In-flight send only — a mailing marked sent can still go out to the full list. */
+  const sendLocked = sendingBusy;
+  /** Body/images stay editable unless a send is running. */
+  const contentLocked = sendingBusy;
   const activeStage = stageIndex(form.status);
 
   function resolveImageWidth(): ImageWidth {
@@ -1860,7 +1942,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     const usePicked =
       explicitEmails !== undefined
         ? explicitEmails.length > 0
-        : pickingPeople || form.recipientEmails.length > 0;
+        : pickedAudience;
     const emails =
       explicitEmails ??
       (usePicked
@@ -1909,6 +1991,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         return null;
       }
       setMailing(json.mailing);
+      const storedEmails = (json.mailing.emails ?? [])
+        .map((e) => e.trim().toLowerCase())
+        .filter(Boolean);
+      const hugeList = storedEmails.length > 200;
       setForm((prev) => ({
         ...prev,
         status: json.mailing!.status,
@@ -1916,17 +2002,18 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         subject: json.mailing!.subject,
         preview: json.mailing!.preview,
         html: json.mailing!.html,
-        recipientTag: json.mailing!.emails?.length
-          ? ""
-          : json.mailing!.recipientTag ?? "",
-        recipientEmails: (json.mailing!.emails ?? [])
-          .map((e) => e.trim().toLowerCase())
-          .filter(Boolean),
+        recipientTag:
+          hugeList || !storedEmails.length
+            ? json.mailing!.recipientTag ?? ""
+            : "",
+        recipientEmails: hugeList ? [] : storedEmails,
         responsible: json.mailing!.responsible || prev.responsible,
       }));
-      setPickingPeople((json.mailing!.emails?.length ?? 0) > 0);
-      setEditorKey(`saved-${json.mailing.id}-${Date.now()}`);
-      clearEditHistory();
+      setPickingPeople(!hugeList && storedEmails.length > 0);
+      if (!opts?.quiet) {
+        setEditorKey(`saved-${json.mailing.id}-${Date.now()}`);
+        clearEditHistory();
+      }
       if (!opts?.quiet) {
         pushToast({
           message: t("pages.emailMarketing.saved"),
@@ -1943,7 +2030,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   }
 
   function resolveAudienceEmails(): string[] {
-    if (pickingPeople || form.recipientEmails.length > 0) {
+    if (pickedAudience) {
       return [
         ...new Set(
           form.recipientEmails
@@ -1956,7 +2043,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       const tag = form.recipientTag.toLowerCase();
       return [
         ...new Set(
-          subscribers
+          sendableSubscribers
             .filter((s) =>
               (s.tags ?? []).some((x) => x.toLowerCase() === tag),
             )
@@ -1967,11 +2054,17 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     }
     return [
       ...new Set(
-        subscribers
+        sendableSubscribers
           .map((s) => s.email.trim().toLowerCase())
           .filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)),
       ),
     ];
+  }
+
+  function sendAudienceKind(): "all" | "tag" | "picked" {
+    if (pickedAudience) return "picked";
+    if (form.recipientTag) return "tag";
+    return "all";
   }
 
   async function deleteMailing() {
@@ -1999,23 +2092,49 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
   }
 
   async function sendNow() {
-    const emails = resolveAudienceEmails();
-    if (emails.length === 0) {
+    const audience = sendAudienceKind();
+    const emails = audience === "picked" ? resolveAudienceEmails() : [];
+    if (audience === "picked" && emails.length === 0) {
       pushToast({
         message: t("pages.emailMarketing.needRecipients"),
         tone: "error",
       });
       return;
     }
+    if (audience !== "picked" && audienceCount === 0) {
+      pushToast({
+        message: t("pages.emailMarketing.needRecipients"),
+        tone: "error",
+      });
+      return;
+    }
+    if (form.status === "sent") {
+      const ok = await confirm({
+        title: t("pages.emailMarketing.actionSend"),
+        message: t("pages.emailMarketing.sendAgainConfirm"),
+        confirmLabel: t("pages.emailMarketing.actionSend"),
+      });
+      if (!ok) return;
+    }
+    if (audience === "all") {
+      const ok = await confirm({
+        title: t("pages.emailMarketing.actionSend"),
+        message: t("pages.emailMarketing.sendAllConfirm")
+          .replace("{n}", String(audienceCount))
+          .replace("{cap}", String(DAILY_NEWSLETTER_CAP)),
+        confirmLabel: t("pages.emailMarketing.actionSend"),
+      });
+      if (!ok) return;
+    }
     const html = bodyMode === "edit" ? flushPreviewHtml() : undefined;
+    const recipientTag =
+      audience === "tag" ? form.recipientTag || null : null;
+    const persistEmails = audience === "picked" ? emails : [];
     const saved = await saveMailing(
       {
         status: "sending",
-        emails,
-        recipientTag:
-          pickingPeople || form.recipientEmails.length > 0
-            ? null
-            : form.recipientTag || null,
+        emails: persistEmails,
+        recipientTag,
       },
       html,
       { quiet: true },
@@ -2025,11 +2144,12 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
     pushToast({
       message: t("pages.emailMarketing.sendingNow").replace(
         "{n}",
-        String(emails.length),
+        String(audience === "picked" ? emails.length : audienceCount),
       ),
       tone: "info",
     });
 
+    setSendingBusy(true);
     try {
       const res = await fetch("/api/newsletter/send", {
         method: "POST",
@@ -2039,7 +2159,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           subject: saved.subject,
           previewText: saved.preview,
           htmlContent: saved.html,
-          emails,
+          audience,
+          tag: audience === "tag" ? form.recipientTag : undefined,
+          emails: audience === "picked" ? emails : undefined,
         }),
       });
       const json = (await res.json()) as {
@@ -2048,7 +2170,11 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       };
       if (!res.ok) {
         await saveMailing(
-          { status: "draft", emails, recipientTag: saved.recipientTag },
+          {
+            status: "draft",
+            emails: persistEmails,
+            recipientTag,
+          },
           saved.html,
           { quiet: true },
         );
@@ -2058,12 +2184,15 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         });
         return;
       }
-      const n = Number(json.recipients ?? emails.length);
+      const n = Number(
+        json.recipients ??
+          (audience === "picked" ? emails.length : audienceCount),
+      );
       await saveMailing(
         {
           status: "sent",
-          emails,
-          recipientTag: null,
+          emails: persistEmails,
+          recipientTag: audience === "all" ? null : recipientTag,
           sentCount: n,
           scheduledAt: null,
         },
@@ -2076,7 +2205,11 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       });
     } catch (err) {
       await saveMailing(
-        { status: "draft", emails, recipientTag: saved.recipientTag },
+        {
+          status: "draft",
+          emails: persistEmails,
+          recipientTag,
+        },
         saved.html,
         { quiet: true },
       );
@@ -2087,6 +2220,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
             : t("pages.emailMarketing.sendFailed"),
         tone: "error",
       });
+    } finally {
+      setSendingBusy(false);
     }
   }
 
@@ -2106,8 +2241,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       });
       return;
     }
-    const emails = resolveAudienceEmails();
-    if (emails.length === 0) {
+    const audience = sendAudienceKind();
+    const emails = audience === "picked" ? resolveAudienceEmails() : [];
+    if (audience === "picked" && emails.length === 0) {
+      pushToast({
+        message: t("pages.emailMarketing.needRecipients"),
+        tone: "error",
+      });
+      return;
+    }
+    if (audience !== "picked" && audienceCount === 0) {
       pushToast({
         message: t("pages.emailMarketing.needRecipients"),
         tone: "error",
@@ -2115,15 +2258,15 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       return;
     }
     const html = bodyMode === "edit" ? flushPreviewHtml() : undefined;
+    const recipientTag =
+      audience === "tag" ? form.recipientTag || null : null;
+    const persistEmails = audience === "picked" ? emails : [];
     const saved = await saveMailing(
       {
         status: "in_queue",
         scheduledAt: d.toISOString(),
-        emails,
-        recipientTag:
-          pickingPeople || form.recipientEmails.length > 0
-            ? null
-            : form.recipientTag || null,
+        emails: persistEmails,
+        recipientTag,
       },
       html,
       { quiet: true },
@@ -2139,7 +2282,9 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           subject: saved.subject,
           previewText: saved.preview,
           htmlContent: saved.html,
-          emails,
+          audience,
+          tag: audience === "tag" ? form.recipientTag : undefined,
+          emails: audience === "picked" ? emails : undefined,
           scheduledAt: scheduleAt,
         }),
       });
@@ -2151,8 +2296,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         await saveMailing(
           {
             status: "draft",
-            emails,
-            recipientTag: saved.recipientTag,
+            emails: persistEmails,
+            recipientTag,
             scheduledAt: null,
           },
           saved.html,
@@ -2165,7 +2310,10 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         return;
       }
       setScheduleOpen(false);
-      const n = Number(json.recipients ?? emails.length);
+      const n = Number(
+        json.recipients ??
+          (audience === "picked" ? emails.length : audienceCount),
+      );
       pushToast({
         message: t("pages.emailMarketing.scheduledOk").replace(
           "{n}",
@@ -2177,8 +2325,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
       await saveMailing(
         {
           status: "draft",
-          emails,
-          recipientTag: saved.recipientTag,
+          emails: persistEmails,
+          recipientTag,
           scheduledAt: null,
         },
         saved.html,
@@ -2480,7 +2628,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         <button
           type="button"
           className={`${btnToolbarPrimary} gap-1.5 bg-[#714B67]! border-[#714B67]! hover:bg-[#5c3d54]!`}
-          disabled={saving || sendLocked}
+          disabled={saving || sendingBusy || sendLocked}
           onClick={() => void sendNow()}
         >
           <FaPaperPlane className="h-3.5 w-3.5" />
@@ -2489,7 +2637,7 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
         <button
           type="button"
           className={`${btnToolbar} gap-1.5`}
-          disabled={saving || sendLocked}
+          disabled={saving || sendingBusy || sendLocked}
           onClick={() => setScheduleOpen(true)}
         >
           <FaClock className="h-3.5 w-3.5" />
@@ -2710,7 +2858,16 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                     type="button"
                     className="text-xs font-semibold text-mute underline-offset-2 hover:text-ink hover:underline disabled:opacity-40"
                     disabled={contentLocked || visiblePeople.length === 0}
-                    onClick={() =>
+                    onClick={() => {
+                      if (!peopleQuery.trim()) {
+                        setPickingPeople(false);
+                        setForm((prev) => ({
+                          ...prev,
+                          recipientTag: "",
+                          recipientEmails: [],
+                        }));
+                        return;
+                      }
                       setForm((prev) => ({
                         ...prev,
                         recipientEmails: [
@@ -2721,8 +2878,8 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
                             ),
                           ]),
                         ],
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     {t("pages.emailMarketing.recipientsSelectVisible")}
                   </button>
@@ -2788,36 +2945,123 @@ export function MailingForm({ mailingId }: { mailingId: string }) {
           </div>
         </div>
 
-        {form.status === "sent" && mailing ? (
+        {(form.status === "sent" ||
+          form.status === "sending" ||
+          form.status === "in_queue") &&
+        mailing ? (
           <>
-            <div className="grid grid-cols-2 border-b border-line bg-ash/20 sm:flex sm:flex-wrap sm:items-stretch sm:divide-x sm:divide-line">
-              {(
-                [
-                  ["colOpened", formatRatio(mailing.openPct)],
-                  ["colReplied", formatRatio(mailing.replyPct)],
-                  ["colClicked", formatRatio(mailing.clickPct)],
-                  ["colSent", formatNumber(mailing.sentCount, false, locale)],
-                ] as const
-              ).map(([labelKey, value]) => (
-                <div
-                  key={labelKey}
-                  className="min-w-0 border-b border-line px-3 py-3 text-center even:border-l sm:min-w-[6.5rem] sm:flex-1 sm:border-b-0 sm:border-l-0 sm:px-4"
-                >
-                  <p className="text-lg font-semibold tabular-nums text-ink sm:text-xl">
-                    {value}
-                  </p>
-                  <p className="mt-0.5 text-[11px] uppercase tracking-wide text-mute">
-                    {t(`pages.emailMarketing.${labelKey}`)}
-                  </p>
+            {waveProgress && waveProgress.totalWaves > 1 ? (
+              <div className="border-b border-line bg-[#e7f3f4] px-4 py-3 dark:bg-[#1a3336]">
+                <p className="text-sm font-medium text-[#1a4a4e] dark:text-[#b7d7da]">
+                  {t("pages.emailMarketing.waveProgress")
+                    .replace(
+                      "{current}",
+                      String(waveProgress.currentWave || 1),
+                    )
+                    .replace("{total}", String(waveProgress.totalWaves))
+                    .replace(
+                      "{sent}",
+                      formatNumber(waveProgress.sentPeople, false, locale),
+                    )
+                    .replace(
+                      "{n}",
+                      formatNumber(
+                        waveProgress.totalPeople || mailing.sentCount,
+                        false,
+                        locale,
+                      ),
+                    )}
+                </p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/70 dark:bg-black/20">
+                  <div
+                    className="h-full bg-[#714B67]"
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        waveProgress.totalPeople
+                          ? (waveProgress.sentPeople /
+                              waveProgress.totalPeople) *
+                            100
+                          : 0,
+                      )}%`,
+                    }}
+                  />
                 </div>
-              ))}
-            </div>
-            <div className="border-b border-line bg-[#e7f3f4] px-4 py-3 text-sm text-[#1a4a4e] dark:bg-[#1a3336] dark:text-[#b7d7da]">
-              {t("pages.emailMarketing.sentSummary").replace(
-                "{count}",
-                formatNumber(mailing.sentCount, false, locale),
-              )}
-            </div>
+                {waveProgress.nextAt ? (
+                  <p className="mt-2 text-sm text-[#1a4a4e] dark:text-[#b7d7da]">
+                    {t("pages.emailMarketing.waveTomorrow")
+                      .replace(
+                        "{date}",
+                        new Date(waveProgress.nextAt).toLocaleDateString(
+                          locale === "fr"
+                            ? "fr-FR"
+                            : locale === "es"
+                              ? "es-ES"
+                              : "en-GB",
+                          {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          },
+                        ),
+                      )
+                      .replace(
+                        "{n}",
+                        formatNumber(
+                          waveProgress.waves.find(
+                            (wave) => wave.index === waveProgress.nextIndex,
+                          )?.recipients || 250,
+                          false,
+                          locale,
+                        ),
+                      )}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {form.status === "sent" ? (
+              <>
+                <div className="grid grid-cols-2 border-b border-line bg-ash/20 sm:flex sm:flex-wrap sm:items-stretch sm:divide-x sm:divide-line">
+                  {(
+                    [
+                      ["colOpened", formatRatio(mailing.openPct)],
+                      ["colReplied", formatRatio(mailing.replyPct)],
+                      ["colClicked", formatRatio(mailing.clickPct)],
+                      [
+                        "colSent",
+                        formatNumber(
+                          waveProgress?.sentPeople || mailing.sentCount,
+                          false,
+                          locale,
+                        ),
+                      ],
+                    ] as const
+                  ).map(([labelKey, value]) => (
+                    <div
+                      key={labelKey}
+                      className="min-w-0 border-b border-line px-3 py-3 text-center even:border-l sm:min-w-[6.5rem] sm:flex-1 sm:border-b-0 sm:border-l-0 sm:px-4"
+                    >
+                      <p className="text-lg font-semibold tabular-nums text-ink sm:text-xl">
+                        {value}
+                      </p>
+                      <p className="mt-0.5 text-[11px] uppercase tracking-wide text-mute">
+                        {t(`pages.emailMarketing.${labelKey}`)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-b border-line bg-[#e7f3f4] px-4 py-3 text-sm text-[#1a4a4e] dark:bg-[#1a3336] dark:text-[#b7d7da]">
+                  {t("pages.emailMarketing.sentSummary").replace(
+                    "{count}",
+                    formatNumber(
+                      waveProgress?.sentPeople || mailing.sentCount,
+                      false,
+                      locale,
+                    ),
+                  )}
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
 

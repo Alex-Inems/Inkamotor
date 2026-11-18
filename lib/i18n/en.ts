@@ -1388,6 +1388,13 @@ export const en = {
       colClickedShort: "Click",
       colRepliedShort: "Reply",
       sentSummary: "{count} emails were sent.",
+      waveProgress: "Wave {current} of {total} · {sent} of {n} sent",
+      waveTomorrow:
+        "Tomorrow ({date}): {n} people, Barcelonnette contacts first",
+      waveNext: "Next: {date} · wave {i}/{total} · {n} people",
+      wavePriorityOk:
+        "Tomorrow’s wave now puts Barcelonnette-tagged contacts first.",
+      wavePriorityFailed: "Could not reorder tomorrow’s wave",
       colUpdated: "Updated",
       colStatus: "Status",
       colAudience: "Audience",
@@ -1432,6 +1439,10 @@ export const en = {
       recipientsClear: "Clear",
       recipientsNone: "No subscribers match.",
       needRecipients: "Pick at least one recipient first.",
+      sendAllConfirm:
+        "Send this mailing to all {n} contacts? The first {cap} go out now; the rest follow in daily waves.",
+      sendAgainConfirm:
+        "This mailing is already marked sent. Send it again to the selected audience?",
       sendingNow: "Sending to {n} people…",
       sentOk: "Sent to {n} people.",
       scheduledOk: "Scheduled for {n} people.",

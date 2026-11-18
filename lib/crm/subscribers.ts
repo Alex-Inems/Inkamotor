@@ -1,5 +1,6 @@
 import type { Subscriber } from "@/lib/brevo";
 import { parseLeadDetails, tagList } from "@/lib/crm/contact-details";
+import { isTomorrowPriorityTag } from "@/lib/newsletter/waves";
 import { getSupabase, missingSupabaseEnv } from "@/lib/supabase/server";
 
 const PAGE = 1000;
@@ -222,6 +223,41 @@ export async function setDbSubscriberBlocked(email: string, blocked: boolean) {
     source: "manual",
   });
   if (insertErr) throw new Error(insertErr.message);
+}
+
+export async function listSendableAudienceEmails(
+  tag?: string | null,
+): Promise<string[]> {
+  const { subscribers } = await listDbSubscribers();
+  const want = tag?.trim().toLowerCase() || "";
+  return [
+    ...new Set(
+      subscribers
+        .filter((person) => !person.blocked)
+        .filter((person) =>
+          want
+            ? (person.tags ?? []).some((item) => item.toLowerCase() === want)
+            : true,
+        )
+        .map((person) => person.email.trim().toLowerCase())
+        .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)),
+    ),
+  ];
+}
+
+export async function listTomorrowPriorityEmails(): Promise<string[]> {
+  const { subscribers } = await listDbSubscribers();
+  return [
+    ...new Set(
+      subscribers
+        .filter((person) => !person.blocked)
+        .filter((person) =>
+          (person.tags ?? []).some((tag) => isTomorrowPriorityTag(tag)),
+        )
+        .map((person) => person.email.trim().toLowerCase())
+        .filter((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)),
+    ),
+  ];
 }
 
 export async function blockedSubscriberEmails(): Promise<Set<string>> {
