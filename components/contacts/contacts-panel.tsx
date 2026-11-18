@@ -11,7 +11,10 @@ import {
   type ContactDetails,
 } from "@/lib/crm/contact-details";
 import { deleteLeadRecords } from "@/lib/crm/delete-leads-client";
-import { exportLeadRecords } from "@/lib/crm/lead-csv-client";
+import {
+  exportLeadRecords,
+  type LeadExportFilters,
+} from "@/lib/crm/lead-csv-client";
 import { useConfirm } from "@/lib/confirm";
 import { useCrm } from "@/lib/crm-store";
 import { type Lead } from "@/lib/demo-data";
@@ -136,7 +139,7 @@ export function ContactsPanel() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
 
-  const kindParam =
+  const kindParam: NonNullable<LeadExportFilters["kind"]> =
     filter === "person" || filter === "company" ? filter : "all";
 
   const load = useCallback(async () => {
@@ -257,19 +260,19 @@ export function ContactsPanel() {
     );
   }
 
-  function exportFilters() {
+  function exportFilters(): LeadExportFilters {
     return {
       q: query,
-      stage: "all" as const,
+      stage: "all",
       country,
       tag,
       kind: kindParam,
       active:
         filter === "archived"
-          ? ("archived" as const)
+          ? "archived"
           : filter === "all"
-            ? ("all" as const)
-            : ("active" as const),
+            ? "all"
+            : "active",
     };
   }
 

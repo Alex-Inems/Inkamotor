@@ -56,7 +56,7 @@ export async function GET(req: Request) {
   if (!validLangs.has(targetLang)) {
     return jsonError(400, {
       error: "Invalid lang parameter. Use en, fr, es, or all.",
-      code: "invalid_param",
+      code: "bad_request",
     });
   }
 
@@ -155,8 +155,10 @@ export async function GET(req: Request) {
           lead.status,
           lead.value,
           msgCount,
-          lead.created_at,
-          lead.last_contact,
+          lead.createdAt ||
+            String((lead as Lead & { created_at?: string }).created_at ?? ""),
+          lead.lastContact ||
+            String((lead as Lead & { last_contact?: string }).last_contact ?? ""),
         ]),
       );
     }
@@ -184,6 +186,6 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Export failed";
-    return jsonError(500, { error: message, code: "export_error" });
+    return jsonError(500, { error: message, code: "db_error" });
   }
 }

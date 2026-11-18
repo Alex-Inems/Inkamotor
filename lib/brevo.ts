@@ -818,7 +818,7 @@ export function mapBrevoCampaign(c: BrevoCampaign) {
   const raw = (c.status || "draft").toLowerCase().replace(/[_-]/g, "");
   const scheduledAt = c.scheduledAt ?? null;
   const future =
-    Boolean(scheduledAt) && Date.parse(scheduledAt) > Date.now() + 60_000;
+    scheduledAt != null && Date.parse(scheduledAt) > Date.now() + 60_000;
   const status =
     c.sentDate || delivered > 0 || raw === "sent"
       ? "sent"
